@@ -1,0 +1,7 @@
+PySide6-Essentials>=6.8,<7
+pyqtgraph>=0.13,<0.15
+numpy>=2,<3
+pyserial==3.5
+pyte==0.8.2
+mcp>=1.30,<2
+uvicorn>=0.30,<1

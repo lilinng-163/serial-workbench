@@ -1,0 +1,30 @@
+[
+  {
+    "name": "AT 探测",
+    "payload": "AT",
+    "hex_mode": false,
+    "encoding": "utf-8",
+    "newline": 3
+  },
+  {
+    "name": "Modbus RTU 读 2 个保持寄存器（站号 1）",
+    "payload": "01 03 00 00 00 02 C4 0B",
+    "hex_mode": true,
+    "encoding": "utf-8",
+    "newline": 0
+  },
+  {
+    "name": "CSV 波形样本",
+    "payload": "0.5,1.2,3.3",
+    "hex_mode": false,
+    "encoding": "utf-8",
+    "newline": 1
+  },
+  {
+    "name": "JSON 状态报文",
+    "payload": "{\"temperature\":25.6,\"voltage\":3.3}",
+    "hex_mode": false,
+    "encoding": "utf-8",
+    "newline": 1
+  }
+]

@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+.pytest_cache/
+build/
+dist/
+.codebase-memory/
+*.spec
+!SerialWorkbench.spec
+!SerialWorkbenchMCP.spec
+*.log
+settings.json
