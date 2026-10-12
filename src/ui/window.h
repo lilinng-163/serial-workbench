@@ -151,6 +151,8 @@ public:
     QLabel *mcpSummary = nullptr;
     QList<Pane *> panes;
     Pane *active = nullptr;
+    QPointer<Pane> parameterPane;
+    QJsonObject parameterConfig;
 
     Pane *newConnection();
     Pane *newInstrument(const QString &kind, Channel *source = nullptr, bool activate = true, const QString &sourceKey = {});
@@ -162,6 +164,7 @@ public:
     void adjustTabs();
     void syncConnections();
     void updateStatus();
+    void syncParameterPane(bool force = false);
     void connectionAction();
     void applyBaud();
     Config form() const;

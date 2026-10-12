@@ -11,6 +11,7 @@ class TearTabBar : public QTabBar
     QPoint pressPosition;
     QPointer<QObject> pressedPage;
     QObject *identity(int index) const;
+    void initStyleOption(QStyleOptionTab *option, int index) const override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;

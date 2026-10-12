@@ -851,7 +851,9 @@ private slots:
         QVERIFY(wavePage->instrument);
         QCOMPARE(window.tabs->count(), 2);
         QCOMPARE(window.stack->currentWidget(), wavePage);
-        QVERIFY(!window.sidebar->isVisible());
+        QVERIFY(window.sidebar->isVisible());
+        QVERIFY(window.parameterToggle->isEnabled());
+        QCOMPARE(window.parameterPane, receive);
         QVERIFY(wavePage->instrument->source->isVisible());
         QVERIFY(engine.channels.isEmpty());
         QVERIFY(!wavePage->channel);
@@ -871,8 +873,16 @@ private slots:
         window.tabs->setCurrentIndex(pageIndex(&window, wavePage));
         first->receive("temp=23\n");
         QTRY_VERIFY(!wavePage->instrument->plot->series.isEmpty());
-        window.connectionAction(); // Widget pages cannot toggle their source connection.
+        QCOMPARE(window.parameterPane, receive);
+        window.connectionAction();
+        QCOMPARE(first->state, "closed");
+        QCOMPARE(window.active, wavePage);
+        window.connectionAction();
         QCOMPARE(first->state, "connected");
+        QCOMPARE(window.active, wavePage);
+        window.baud->setCurrentText("1200");
+        window.applyBaud();
+        QCOMPARE(first->appliedBaud, 1200);
 
         sw::Config otherConfig;
         otherConfig.kind = "demo";
@@ -882,6 +892,7 @@ private slots:
         picker->setCurrentIndex(otherIndex);
         QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, otherIndex));
         QCOMPARE(wavePage->channel, other);
+        QCOMPARE(window.parameterPane, window.findPane(other));
         QCOMPARE(window.findPane(first), receive);
         other->receive("voltage=3.3\n");
         QTRY_VERIFY(wavePage->instrument->plot->series.contains("voltage"));
@@ -889,6 +900,9 @@ private slots:
         engine.remove(other->id);
         QVERIFY(!wavePage->channel);
         QCOMPARE(wavePage->sourceKey, otherConfig.key());
+        QVERIFY(!window.parameterPane);
+        QVERIFY(!window.configStack->isEnabled());
+        QCOMPARE(first->state, "connected");
         QVERIFY(picker->currentText().contains("未建立连接"));
         other = engine.open(otherConfig);
         QCOMPARE(wavePage->channel, other);
@@ -944,6 +958,15 @@ private slots:
         QVERIFY(!xml->channel);
         QCOMPARE(window.tabs->count(), 1);
         QCOMPARE(window.stack->currentWidget(), xml);
+        QVERIFY(!window.parameterPane);
+        QVERIFY(!window.configStack->isEnabled());
+        QCOMPARE(window.connectButton->text(), QString("新建收发页面"));
+        window.connectionAction();
+        QVERIFY(!window.active->isInstrument());
+        QCOMPARE(window.parameterPane, window.active);
+        QVERIFY(window.configStack->isEnabled());
+        window.closeTab(pageIndex(&window, window.active));
+        QCOMPARE(window.stack->currentWidget(), xml);
         window.closeTab(0);
         QCOMPARE(window.tabs->count(), 1);
         QVERIFY(!window.active->isInstrument());
@@ -978,6 +1001,84 @@ private slots:
         const auto saved = QJsonDocument::fromJson(file.readAll()).object();
         QCOMPARE(saved["widget_pages"].toArray().size(), 4);
         QVERIFY(!saved["appearance"].toObject().contains("instruments"));
+        window.close();
+    }
+
+    void tabLabelFollowsPaintRectangle()
+    {
+        sw::TearTabBar bar;
+        bar.setStyleSheet(sw::Theme::make(false).stylesheet());
+        bar.resize(700, 48);
+        bar.addTab(sw::icon("wave", QColor("#668077")), "数值波形");
+        bar.addTab("JSON / XML");
+        bar.setCurrentIndex(1);
+        bar.show();
+        QTest::qWait(30);
+        QStyleOptionTab option;
+        bar.initStyleOption(&option, 0);
+        const auto render = [&](const QStyleOptionTab &tab)
+        {
+            QImage image(700, 80, QImage::Format_ARGB32_Premultiplied);
+            image.fill(Qt::transparent);
+            QPainter painter(&image);
+            painter.setFont(bar.font());
+            bar.style()->drawControl(QStyle::CE_TabBarTab, &tab, &painter, &bar);
+            return image.copy(tab.rect);
+        };
+        const QImage stationary = render(option);
+        option.rect.translate(60, 0);
+        QCOMPARE(render(option), stationary);
+    }
+
+    void widgetSidebarTracksSource()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        window.show();
+        window.port->setCurrentText("loop://");
+        window.connectionAction();
+        auto first = window.active;
+        auto second = window.newConnection();
+        window.protocol->setCurrentIndex(3);
+        window.bindPort->setValue(0);
+        window.connectionAction();
+        auto page = window.newInstrument("structured", first->channel);
+        QCOMPARE(window.parameterPane, first);
+        QCOMPARE(window.protocol->currentIndex(), 0);
+        QCOMPARE(window.port->currentText(), QString("loop://"));
+        auto picker = page->instrument->source;
+        const int index = picker->findData(second->channel->config.key());
+        QVERIFY(index > 0);
+        picker->setCurrentIndex(index);
+        QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, index));
+        QCOMPARE(window.parameterPane, second);
+        QCOMPARE(window.protocol->currentIndex(), 3);
+        window.parameterToggle->setChecked(false);
+        QVERIFY(!window.findChild<QScrollArea *>("parameterScroll")->isVisible());
+        window.tabs->setCurrentIndex(pageIndex(&window, first));
+        window.tabs->setCurrentIndex(pageIndex(&window, page));
+        QVERIFY(!window.findChild<QScrollArea *>("parameterScroll")->isVisible());
+        window.parameterToggle->setChecked(true);
+        QVERIFY(window.findChild<QScrollArea *>("parameterScroll")->isVisible());
+        auto detached = window.detachConnection(pageIndex(&window, page), QPoint(180, 180));
+        QCOMPARE(detached->parameterPane, second);
+        QCOMPARE(detached->protocol->currentIndex(), 3);
+        const int firstIndex = picker->findData(first->channel->config.key());
+        picker->setCurrentIndex(firstIndex);
+        QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, firstIndex));
+        window.tabs->setCurrentIndex(pageIndex(&window, first));
+        detached->baud->setCurrentText("9600");
+        detached->applyBaud();
+        QCOMPARE(first->channel->appliedBaud, 9600);
+        QCOMPARE(window.baud->currentText(), QString("9600"));
+        picker->setCurrentIndex(index);
+        QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, index));
+        detached->connectionAction();
+        QCOMPARE(second->channel->state, "closed");
+        QCOMPARE(detached->active, page);
+        detached->close();
         window.close();
     }
 

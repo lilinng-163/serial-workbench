@@ -31,6 +31,14 @@ TearTabBar::TearTabBar(QWidget *parent) : QTabBar(parent)
     setElideMode(Qt::ElideRight);
 }
 
+void TearTabBar::initStyleOption(QStyleOptionTab *option, int index) const
+{
+    QTabBar::initStyleOption(option, index);
+    // Qt's stylesheet text layout otherwise resolves the stationary tabRect,
+    // while the shape and icon already use the animated rectangle.
+    option->position = QStyleOptionTab::Moving;
+}
+
 QObject *TearTabBar::identity(int index) const
 {
     if (index < 0)

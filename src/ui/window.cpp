@@ -406,6 +406,7 @@ Pane::Pane(Window *owner, const QString &instrumentKind) : QWidget(owner), windo
         {
             sourceKey = instrument->source->itemData(index).toString();
             refreshSource();
+            if (window->active == this) { window->syncParameterPane(true); }
             window->updateStatus();
         });
         if (instrument->parser)
@@ -1145,7 +1146,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
         auto scroll = findChild<QScrollArea *>("parameterScroll");
         if (scroll)
         {
-            scroll->setVisible(visible && active && !active->isInstrument());
+            scroll->setVisible(visible && active);
             if (visible) { scroll->raise(); }
         }
     });
@@ -1339,10 +1340,10 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     connect(rts, &QCheckBox::toggled, this, [this] { applyBaud(); });
     connect(connectionName, &QLineEdit::editingFinished, this, [this]
     {
-        if (active && !active->isInstrument() && active->channel && !connectionName->text().trimmed().isEmpty())
+        if (parameterPane && parameterPane->channel && !connectionName->text().trimmed().isEmpty())
         {
-            active->channel->name = connectionName->text().trimmed();
-            active->channel->config.name = connectionName->text().trimmed();
+            parameterPane->channel->name = connectionName->text().trimmed();
+            parameterPane->channel->config.name = connectionName->text().trimmed();
             syncConnections();
         }
     });
@@ -1654,11 +1655,11 @@ void Window::activate(int index)
     {
         return;
     }
-    if (active && panes.contains(active) && !active->isInstrument() && !active->channel)
+    if (parameterPane && !parameterPane->channel)
     {
         try
         {
-            active->draft = form();
+            parameterPane->draft = form();
         }
         catch (...)
         {
@@ -1670,11 +1671,53 @@ void Window::activate(int index)
     }
     active = pane;
     stack->setCurrentWidget(pane);
-    if (!pane->isInstrument()) { loadForm(pane->channel ? pane->channel->config : pane->draft); }
+    syncParameterPane(true);
     auto parameters = findChild<QScrollArea *>("parameterScroll");
-    parameters->setVisible(!pane->isInstrument() && parameterToggle->isChecked());
-    parameterToggle->setEnabled(!pane->isInstrument());
+    parameters->setVisible(parameterToggle->isChecked());
+    parameterToggle->setEnabled(true);
     updateStatus();
+}
+
+void Window::syncParameterPane(bool force)
+{
+    Pane *target = active && !active->isInstrument() ? active : nullptr;
+    Pane *fallback = nullptr;
+    for (auto hostWindow : rootWindow()->hosts)
+    {
+        if (!hostWindow) { continue; }
+        for (auto candidate : hostWindow->panes)
+        {
+            if (candidate->isInstrument()) { continue; }
+            if (!fallback || candidate == parameterPane) { fallback = candidate; }
+            if (!target && active && active->isInstrument())
+            {
+                const auto key = candidate->channel ? candidate->channel->config.key() : candidate->draft.key();
+                if ((active->channel && candidate->channel == active->channel)
+                    || (!active->sourceKey.isEmpty() && key == active->sourceKey))
+                {
+                    target = candidate;
+                }
+            }
+        }
+    }
+    if (!target && (!active || !active->isInstrument() || active->sourceKey.isEmpty()))
+    {
+        target = fallback;
+    }
+    const bool configChanged = target && target->channel && target->channel->config.json() != parameterConfig;
+    if (target != parameterPane || force || configChanged)
+    {
+        if (parameterPane && parameterPane != target && !parameterPane->channel)
+        {
+            try { parameterPane->draft = form(); }
+            catch (const std::exception &) { }
+        }
+        parameterPane = target;
+        if (target) { loadForm(target->channel ? target->channel->config : target->draft); }
+    }
+    protocol->setEnabled(target);
+    configStack->setEnabled(target);
+    connectionName->setEnabled(target);
 }
 
 Config Window::form() const
@@ -1705,14 +1748,15 @@ Config Window::form() const
 void Window::loadForm(const Config &c)
 {
     syncing = true;
+    parameterConfig = c.json();
     connectionName->setText(c.name);
     const int portIndex = port->findText(c.port, Qt::MatchFixedString);
     const QString selectedPort = portIndex >= 0 ? port->itemText(portIndex)
         : !portsLoaded || c.port == "loop://" || holdsSerialPort(c.port) ? c.port : "NULL";
     port->setCurrentText(selectedPort);
-    if (active && !active->isInstrument() && !active->channel)
+    if (parameterPane && !parameterPane->channel)
     {
-        active->draft.port = selectedPort;
+        parameterPane->draft.port = selectedPort;
     }
     baud->setCurrentText(QString::number(c.baudrate));
     bits->setCurrentText(QString::number(c.bytesize));
@@ -1751,7 +1795,7 @@ void Window::protocolChanged()
 
 bool Window::holdsSerialPort(const QString &name) const
 {
-    auto channel = active && !active->isInstrument() ? active->channel.data() : nullptr;
+    auto channel = parameterPane ? parameterPane->channel.data() : nullptr;
     return channel && channel->config.kind == "serial" && channel->config.port == name
         && !channel->manualClose && (channel->state == "connected" || channel->state == "reconnecting");
 }
@@ -1828,37 +1872,40 @@ void Window::refreshPorts()
         edit->setCursorPosition(cursor);
         if (start >= 0) { edit->setSelection(start, length); }
     }
-    if (active && !active->isInstrument() && !active->channel)
+    if (parameterPane && !parameterPane->channel)
     {
-        active->draft.port = next;
+        parameterPane->draft.port = next;
     }
     updateStatus();
 }
 
 void Window::connectionAction()
 {
-    if (!active || active->isInstrument()) { return; }
+    if (!active) { return; }
+    syncParameterPane();
+    if (!parameterPane) { newConnection(); return; }
+    QPointer<Pane> widgetPage = active->isInstrument() ? active : nullptr;
+    auto draft = parameterPane.data();
     try
     {
         refreshPorts();
         const auto config = form();
-        auto current = active->channel;
+        auto current = draft->channel;
         const bool missingActivePort = current && current->config.kind == "serial"
             && config.kind == "serial" && config.port == "NULL";
         if (current && (current->config.key() == config.key() || missingActivePort) && (current->state == "connected" || current->state == "listening" || current->state == "connecting" || current->state == "reconnecting"))
         {
-            active->repeat->setChecked(false);
+            draft->repeat->setChecked(false);
             current->close();
         }
         else
         {
-            auto draft = active;
             const QSignalBlocker engineBlocker(engine);
             syncing = true;
             auto channel = engine->open(config);
             syncing = false;
             Pane *existing = findPane(channel);
-            if (existing)
+            if (existing && !widgetPage)
             {
                 auto hostWindow = existing->window;
                 hostWindow->tabs->setCurrentIndex(paneIndex(hostWindow->tabs, existing));
@@ -1867,7 +1914,7 @@ void Window::connectionAction()
                 hostWindow->raise();
                 hostWindow->activateWindow();
             }
-            else if (!draft->channel)
+            else if (!existing && !draft->channel)
             {
                 draft->setChannel(channel);
                 if (rootWindow()->viewSettings.contains(config.key()))
@@ -1875,7 +1922,7 @@ void Window::connectionAction()
                     draft->restore(rootWindow()->viewSettings[config.key()].toObject());
                 }
             }
-            else
+            else if (!existing)
             {
                 auto pane = newConnection();
                 pane->setChannel(channel);
@@ -1884,6 +1931,13 @@ void Window::connectionAction()
                     pane->restore(rootWindow()->viewSettings[config.key()].toObject());
                 }
                 loadForm(config);
+            }
+            if (widgetPage)
+            {
+                widgetPage->sourceKey = channel->config.key();
+                widgetPage->refreshSource();
+                tabs->setCurrentIndex(paneIndex(tabs, widgetPage));
+                activate(paneIndex(tabs, widgetPage));
             }
             for (auto hostWindow : rootWindow()->hosts)
             {
@@ -1901,23 +1955,28 @@ void Window::connectionAction()
 
 void Window::applyBaud()
 {
-    if (syncing || !active || active->isInstrument() || !active->channel || active->channel->state != "connected" || active->channel->config.kind != "serial")
+    auto channel = parameterPane ? parameterPane->channel.data() : nullptr;
+    if (syncing || !channel || channel->state != "connected" || channel->config.kind != "serial")
     {
         return;
     }
     try
     {
         const auto config = form();
-        if (config.key() == active->channel->config.key() && config.json() != active->channel->config.json())
+        if (config.key() == channel->config.key() && config.json() != channel->config.json())
         {
-            active->channel->applySerial(config);
-            statusBar()->showMessage(QString("驱动已确认波特率：%1 bps").arg(active->channel->appliedBaud), 4000);
+            channel->applySerial(config);
+            for (auto hostWindow : rootWindow()->hosts)
+            {
+                if (hostWindow) { hostWindow->syncParameterPane(); }
+            }
+            statusBar()->showMessage(QString("驱动已确认波特率：%1 bps").arg(channel->appliedBaud), 4000);
         }
     }
     catch (const std::exception &exception)
     {
         const QString message = QString::fromUtf8(exception.what());
-        loadForm(active->channel->config);
+        loadForm(channel->config);
         error(message);
     }
     updateStatus();
@@ -2003,6 +2062,7 @@ void Window::syncConnections()
         active = nullptr;
         activate(tabs->currentIndex());
     }
+    syncParameterPane();
     adjustTabs();
     updateStatus();
 }
@@ -2046,14 +2106,15 @@ void Window::updateStatus()
         return;
     }
     auto channel = active->channel;
-    const bool same = channel && channel->config.kind == QStringList {"serial", "tcp-client", "tcp-server", "udp"}[protocol->currentIndex()]
-        && (channel->config.kind != "serial" || channel->config.port == port->currentText() || port->currentText() == "NULL");
-    const bool ready = channel && (channel->state == "connected" || channel->state == "listening" || channel->state == "connecting" || channel->state == "reconnecting");
-    QString actionText = "建立连接";
+    auto parameterChannel = parameterPane ? parameterPane->channel.data() : nullptr;
+    const bool same = parameterChannel && parameterChannel->config.kind == QStringList {"serial", "tcp-client", "tcp-server", "udp"}[protocol->currentIndex()]
+        && (parameterChannel->config.kind != "serial" || parameterChannel->config.port == port->currentText() || port->currentText() == "NULL");
+    const bool ready = parameterChannel && (parameterChannel->state == "connected" || parameterChannel->state == "listening" || parameterChannel->state == "connecting" || parameterChannel->state == "reconnecting");
+    QString actionText = parameterPane ? "建立连接" : "新建收发页面";
     if (same && ready)
     {
-        actionText = channel->state == "reconnecting" ? "停止重连"
-            : channel->state == "listening" ? "停止监听" : "断开连接";
+        actionText = parameterChannel->state == "reconnecting" ? "停止重连"
+            : parameterChannel->state == "listening" ? "停止监听" : "断开连接";
     }
     connectButton->setText(actionText);
     if (channel)
@@ -2079,14 +2140,14 @@ void Window::updateStatus()
     {
         metadata = {};
     }
-    const bool serialConnection = channel && same && !active->isInstrument() && channel->config.kind == "serial";
+    const bool serialConnection = parameterChannel && same && parameterChannel->config.kind == "serial";
     if (serialConnection && !metadata.isEmpty())
     {
-        active->portMetadata = metadata;
+        parameterPane->portMetadata = metadata;
     }
-    else if (serialConnection && active->portMetadata["port"].toString().compare(selectedPort, Qt::CaseInsensitive) == 0)
+    else if (serialConnection && parameterPane->portMetadata["port"].toString().compare(selectedPort, Qt::CaseInsensitive) == 0)
     {
-        metadata = active->portMetadata;
+        metadata = parameterPane->portMetadata;
     }
     const auto details = portDescription(metadata);
     portDetails->setText(details);
@@ -2097,8 +2158,8 @@ void Window::updateStatus()
     portDetails->setToolTip(tooltip);
 
     QString serialText = selectedPort == "NULL" ? "尚未选择串口"
-        : serialConnection && channel->state == "reconnecting" ? QString("%1 已断开，等待设备恢复").arg(channel->config.port)
-        : serialConnection && channel->appliedBaud ? QString("驱动已确认 %1 bps").arg(channel->appliedBaud) : QString();
+        : serialConnection && parameterChannel->state == "reconnecting" ? QString("%1 已断开，等待设备恢复").arg(parameterChannel->config.port)
+        : serialConnection && parameterChannel->appliedBaud ? QString("驱动已确认 %1 bps").arg(parameterChannel->appliedBaud) : QString();
     if (metadata["usb_serial_jtag"].toBool())
     {
         if (!serialText.isEmpty())
@@ -2274,7 +2335,7 @@ void Window::saveSettings()
     QJsonObject connection = saved["connection"].toObject();
     try
     {
-        if (active && !active->isInstrument()) { connection = form().json(); }
+        if (parameterPane) { connection = form().json(); }
         else if (receivePage) { connection = (receivePage->channel ? receivePage->channel->config : receivePage->draft).json(); }
     }
     catch (...)
@@ -2324,7 +2385,7 @@ void Window::arrangeParameters()
     else if (!narrow && floating)
     {
         body->insertWidget(1, scroll);
-        scroll->setVisible(parametersVisible && active && !active->isInstrument());
+        scroll->setVisible(parametersVisible && active);
         const QSignalBlocker blocker(parameterToggle);
         parameterToggle->setChecked(parametersVisible);
     }
