@@ -372,16 +372,29 @@ private slots:
         QCOMPARE(reset.count(), 0);
         window.port->hidePopup();
 
-        window.port->lineEdit()->setFocus();
-        QTest::keyClick(window.port->lineEdit(), Qt::Key_A, Qt::ControlModifier);
-        QTest::keyClicks(window.port->lineEdit(), "COM");
+        // Mouse/keyboard editing must never erase NULL or alter a selected COM.
+        for (const QString &selected : {QString("NULL"), QString("COM10")})
+        {
+            window.port->setCurrentIndex(window.port->findText(selected));
+            QTest::mouseClick(window.port->lineEdit(), Qt::LeftButton);
+            QTest::keyClick(window.port->lineEdit(), Qt::Key_A, Qt::ControlModifier);
+            QTest::keyClick(window.port->lineEdit(), Qt::Key_Backspace);
+            QTest::keyClick(window.port->lineEdit(), Qt::Key_Delete);
+            QTest::keyClicks(window.port->lineEdit(), "COM99");
+            QVERIFY(!window.port->testAttribute(Qt::WA_InputMethodEnabled));
+            QVERIFY(!window.port->lineEdit()->testAttribute(Qt::WA_InputMethodEnabled));
+            QCOMPARE(window.port->currentText(), selected);
+        }
         available.append(QJsonObject {{"port", "COM11"}});
         window.refreshPorts();
-        QCOMPARE(window.port->currentText(), "COM");
-        QCOMPARE(window.port->lineEdit()->cursorPosition(), 3);
-        QTest::keyClick(window.port->lineEdit(), Qt::Key_Return);
-        QCOMPARE(window.port->currentText(), "NULL");
-        QCOMPARE(window.port->findText("COM"), -1);
+        QCOMPARE(window.port->currentText(), "COM10");
+        QCOMPARE(window.port->findText("COM99"), -1);
+        window.port->showPopup();
+        QTRY_VERIFY(window.port->view()->isVisible());
+        const auto item = window.port->model()->index(window.port->findText("COM11"), 0);
+        QTest::mouseClick(window.port->view()->viewport(), Qt::LeftButton, Qt::NoModifier,
+            window.port->view()->visualRect(item).center());
+        QCOMPARE(window.port->currentText(), QString("COM11"));
 
         window.port->setCurrentText("COM8");
         window.refreshPorts();

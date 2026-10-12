@@ -2,7 +2,7 @@
 
 一个面向嵌入式开发的 Windows 串口与网络调试助手。人在界面查看数据，Codex、Claude、OpenCode 等 AI 通过 MCP 同时读取同一份数据，无需再次打开串口。
 
-当前版本：0.10.3，Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
+当前版本：0.10.4，Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
 
 ![像素掌机主题工作台](docs/pixel-workspace.png)
 
@@ -44,7 +44,7 @@
 
 | 功能 | 使用方式 |
 | --- | --- |
-| 串口 | 自动检测设备插拔，列表与端口字段同步更新；设备移除后回到 NULL，扫描不打断手动输入；波特率可直接编辑，范围 1～12000000，实际支持取决于设备和驱动 |
+| 串口 | 自动检测设备插拔，列表与端口字段同步更新；端口只读，从实时列表选择；草稿端口移除后回到 NULL，已建立连接保留原 COM 等待恢复；波特率可直接编辑，范围 1～12000000，实际支持取决于设备和驱动 |
 | 串口参数 | 5/6/7/8 数据位，N/E/O/M/S 校验，1/1.5/2 停止位，RTS/CTS 或 XON/XOFF 流控，初始 DTR/RTS |
 | TCP 客户端 | 填写远端 IP/主机名和端口 |
 | TCP 服务端 | 填写本地 IPv4 和端口；支持最多 16 个客户端，发送时可选择目标客户端 |
@@ -57,7 +57,7 @@
 
 串口已连接时，选择波特率或输入后移开焦点立即应用；数据位、校验、停止位、流控和 DTR/RTS 的修改也立即应用。状态栏显示驱动确认的实际波特率。Windows 通过 `GetCommState` 回读，驱动拒绝参数或回读不一致时会断开并明确报错。重新连接沿用已应用参数。软件回环不能验证实体 UART 的速率。TCP/UDP 默认绑定 `127.0.0.1`，局域网设备需要绑定本机局域网 IP 或 `0.0.0.0`。远端报文的应用协议内容由你自行构造，首版不包含 MQTT、Modbus 专用解析器或自动 CRC 计算。
 
-开发时可手动输入 `loop://` 测试软件回环；默认端口列表仅包含 `NULL` 和发现的串口。
+界面的端口字段只读，仅可选择 `NULL` 或实时发现的串口，不能输入、删除或改写端口名称。开发时可通过 MCP 的 `open_connection` 使用 `loop://` 测试软件回环。
 
 Espressif USB Serial/JTAG（VID `303A` / PID `1001`）会显示 USB 速率提示。这是 USB 通道，改变 COM 波特率后仍能正常读取文本不意味着设置失败；其没有 UART 物理波特率。通过 USB 转 UART 桥测试时，波特率才需要与固件 UART 一致。参考 [Espressif 官方说明](https://docs.espressif.com/projects/esp-brookesia/en/latest/system/usb_cli.html)。
 
@@ -230,7 +230,7 @@ $env:MINGW_BIN = 'D:/lib/Qt/Tools/mingw1310_64/bin'
 .\scripts\build.ps1
 
 # 打包后的 HTTP / STDIO 集成测试，需要 Python MCP SDK
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.10.3
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.10.4
 ```
 
 测试覆盖独立读取与分页、真实 TCP/UDP socket、软件串口回环及重配置、UTF-8/GBK 分片解析、ANSI 颜色与终端、连接标签和布局、设置恢复、MCP HTTP/STDIO、权限、非阻塞等待和错误参数。实际 COM 硬件、USB 设备的实际线速及各 AI 客户端的完整对话需要在对应环境验证。

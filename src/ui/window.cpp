@@ -1135,6 +1135,10 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     port->setObjectName("serialPort");
     port->setInsertPolicy(QComboBox::NoInsert);
     port->setCompleter(nullptr);
+    port->lineEdit()->setReadOnly(true);
+    port->setAttribute(Qt::WA_InputMethodEnabled, false);
+    port->lineEdit()->setFocusPolicy(Qt::NoFocus);
+    port->lineEdit()->setCursor(Qt::ArrowCursor);
     port->setFixedHeight(38);
     serialBody->addWidget(port);
     serialBody->addSpacing(7);
@@ -1263,17 +1267,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     connect(baud, &QComboBox::activated, this, [this] { applyBaud(); });
     connect(baud->lineEdit(), &QLineEdit::editingFinished, this, &Window::applyBaud);
     connect(port, &QComboBox::currentTextChanged, this, [this] { updateStatus(); });
-    connect(port->lineEdit(), &QLineEdit::textEdited, this, [this] { portEditing = true; });
-    connect(port->lineEdit(), &QLineEdit::editingFinished, this, [this]
-    {
-        portEditing = false;
-        refreshPorts();
-    });
-    connect(port, &QComboBox::activated, this, [this]
-    {
-        portEditing = false;
-        refreshPorts();
-    });
+    connect(port, &QComboBox::activated, this, [this] { refreshPorts(); });
     for (auto control : {bits, parity, stopbits, flow})
     {
         connect(control, &QComboBox::activated, this, [this] { applyBaud(); });
@@ -1525,7 +1519,6 @@ void Window::loadForm(const Config &c)
 {
     syncing = true;
     connectionName->setText(c.name);
-    portEditing = false;
     const int portIndex = port->findText(c.port, Qt::MatchFixedString);
     const QString selectedPort = portIndex >= 0 ? port->itemText(portIndex)
         : !portsLoaded || c.port == "loop://" || holdsSerialPort(c.port) ? c.port : "NULL";
@@ -1635,8 +1628,7 @@ void Window::refreshPorts()
     }
 
     const int selectedIndex = port->findText(selected, Qt::MatchFixedString);
-    const bool editing = portEditing && edit->hasFocus();
-    const bool missing = selectedIndex < 0 && selected != "loop://" && !editing && !holdsSerialPort(selected);
+    const bool missing = selectedIndex < 0 && selected != "loop://" && !holdsSerialPort(selected);
     const auto next = missing || selected.isEmpty() ? QString("NULL")
         : selectedIndex >= 0 ? port->itemText(selectedIndex) : selected;
     if (port->currentText() != next)
@@ -1659,7 +1651,6 @@ void Window::connectionAction()
 {
     try
     {
-        portEditing = false;
         refreshPorts();
         const auto config = form();
         auto current = active->channel;
