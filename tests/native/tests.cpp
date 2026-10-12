@@ -4,6 +4,15 @@
 #include <windows.h>
 #endif
 
+static int pageIndex(sw::Window *window, sw::Pane *page)
+{
+    for (int i = 0; i < window->tabs->count(); ++i)
+    {
+        if (window->tabs->tabData(i).value<QObject *>() == page) { return i; }
+    }
+    return -1;
+}
+
 class NativeTests : public QObject
 {
     Q_OBJECT
@@ -246,9 +255,10 @@ private slots:
         QApplication::sendEvent(window.gear, &leave);
         QTest::qWait(190);
         QVERIFY(window.gear->progress < 0.1);
-        auto instrument = first->addInstrument("waveform");
-        QVERIFY(instrument->plot);
-        first->pages->setCurrentIndex(0);
+        auto page = window.newInstrument("waveform", nullptr, false);
+        QVERIFY(page->instrument->plot);
+        window.tabs->setCurrentIndex(pageIndex(&window, first));
+        QVERIFY(first->findChildren<QTabWidget *>().isEmpty());
         const auto original = first->splitter->sizes();
         first->splitter->setSizes({250, 250});
         QVERIFY(first->splitter->sizes() != original);
@@ -275,8 +285,9 @@ private slots:
             window.baud->setCurrentText("1200");
             window.applyBaud();
             QCOMPARE(window.active->channel->appliedBaud, 1200);
-            window.active->addInstrument("waveform");
-            window.active->addInstrument("structured");
+            auto source = window.active->channel;
+            window.newInstrument("waveform", source, false);
+            window.newInstrument("structured", source, false);
             window.active->setTerminal(true);
             window.active->setTerminal(false);
             QVERIFY(!window.active->modeButton->isChecked());
@@ -293,7 +304,11 @@ private slots:
             QCOMPARE(window.baud->currentText(), "1200");
             QVERIFY(engine.allowControl);
             QVERIFY(window.theme.dark);
-            QCOMPARE(window.active->instruments.size(), 2);
+            QCOMPARE(window.panes.size(), 3);
+            QCOMPARE(window.panes[1]->instrument->kind, "waveform");
+            QCOMPARE(window.panes[2]->instrument->kind, "structured");
+            QCOMPARE(window.panes[1]->sourceKey, "serial:loop://");
+            QVERIFY(!window.panes[1]->channel);
             QVERIFY(engine.channels.isEmpty());
         }
     }
@@ -566,9 +581,11 @@ private slots:
         auto channel = pane->channel;
         const auto id = channel->id;
         pane->payload->setPlainText("preserved draft");
-        auto wave = pane->addInstrument("waveform");
-        auto structured = pane->addInstrument("structured");
-        auto detached = window.detachConnection(window.tabs->currentIndex(), QPoint(180, 160));
+        auto wavePage = window.newInstrument("waveform", channel, false);
+        auto parsePage = window.newInstrument("structured", channel, false);
+        auto wave = wavePage->instrument;
+        auto structured = parsePage->instrument;
+        auto detached = window.detachConnection(pageIndex(&window, pane), QPoint(180, 160));
         QVERIFY(detached);
         QTest::qWait(100);
         QCOMPARE(detached->active, pane);
@@ -576,30 +593,28 @@ private slots:
         QCOMPARE(channel->id, id);
         QCOMPARE(engine.channels.size(), 1);
         window.syncConnections();
-        QCOMPARE(window.panes.size(), 1);
-        QVERIFY(!window.active->channel);
         QCOMPARE(window.findPane(channel), pane);
-        auto waveWindow = pane->pages->detachPage(pane->pages->indexOf(wave), QPoint(250, 200));
-        auto parseWindow = pane->pages->detachPage(pane->pages->indexOf(structured), QPoint(300, 220));
-        auto monitorWindow = pane->pages->detachPage(pane->pages->indexOf(pane->monitorPage), QPoint(350, 240));
-        QVERIFY(waveWindow && parseWindow && monitorWindow);
+        auto waveWindow = window.detachConnection(pageIndex(&window, wavePage), QPoint(250, 200));
+        auto parseWindow = window.detachConnection(pageIndex(&window, parsePage), QPoint(300, 220));
+        QVERIFY(waveWindow && parseWindow);
         detached->newConnection();
         QVERIFY(pane->isHidden());
-        QVERIFY2(wave->isVisible(), "Detached waveform must stay visible when its source tab is hidden");
+        QVERIFY2(wave->isVisible(), "Detached waveform must update while its receive page is hidden");
         QVERIFY(parseWindow->isVisible());
-        QVERIFY(monitorWindow->isVisible());
         channel->receive("temp=23,voltage=3.3\n{\"answer\":42}\n");
-        QVERIFY(!channel->waveform()["sources"].toObject().isEmpty());
         QTRY_VERIFY(!wave->plot->series.isEmpty());
         QTRY_VERIFY(structured->table->topLevelItemCount() > 0);
-        QTRY_VERIFY(pane->log->toPlainText().contains("answer"));
         QCOMPARE(pane->payload->toPlainText(), "preserved draft");
+        detached->tabs->setCurrentIndex(pageIndex(detached, pane));
+        QTRY_VERIFY(pane->log->toPlainText().contains("answer"));
         window.saveSettings();
-        QVERIFY(window.viewSettings[channel->config.key()].toObject()["instruments"].toArray().size() == 2);
+        QFile savedFile(directory.filePath("settings.json"));
+        QVERIFY(savedFile.open(QIODevice::ReadOnly));
+        QCOMPARE(QJsonDocument::fromJson(savedFile.readAll()).object()["widget_pages"].toArray().size(), 2);
 #ifdef Q_OS_WIN
         if (QGuiApplication::platformName() == "windows")
         {
-            for (auto host : QList<QWidget *> {detached, waveWindow, parseWindow, monitorWindow})
+            for (auto host : QList<QWidget *> {detached, waveWindow, parseWindow})
             {
                 const auto style = GetWindowLongPtr(reinterpret_cast<HWND>(host->winId()), GWL_STYLE);
                 QVERIFY(style & WS_MAXIMIZEBOX);
@@ -608,19 +623,20 @@ private slots:
             }
         }
 #endif
-        monitorWindow->close();
-        QVERIFY(pane->pages->indexOf(pane->monitorPage) >= 0);
-        QVERIFY(!pane->pages->tabBar()->tabButton(pane->pages->indexOf(pane->monitorPage), QTabBar::RightSide));
         waveWindow->close();
-        QVERIFY(pane->pages->tabBar()->tabButton(pane->pages->indexOf(wave), QTabBar::RightSide));
-        pane->pages->tabBar()->moveTab(pane->pages->indexOf(wave), 0);
-        pane->closeInstrument(0);
-        QVERIFY(!pane->instruments.contains(wave));
+        QCOMPARE(wavePage->window, &window);
+        const int waveIndex = pageIndex(&window, wavePage);
+        QVERIFY(window.tabs->tabButton(waveIndex, QTabBar::RightSide));
+        window.tabs->moveTab(waveIndex, 0);
+        QCOMPARE(window.tabs->tabData(0).value<QObject *>(), wavePage);
+        window.closeTab(0);
+        QCOMPARE(channel->state, "connected");
+        QCOMPARE(engine.channels.size(), 1);
         detached->close();
         QCOMPARE(pane->window, &window);
         QCOMPARE(channel->state, "connected");
-        QCOMPARE(engine.channels.size(), 1);
         parseWindow->close();
+        window.tabs->setCurrentIndex(pageIndex(&window, pane));
         window.resize(480, 640);
         QTest::qWait(100);
         QCOMPARE(window.width(), 480);
@@ -657,16 +673,167 @@ private slots:
         QCOMPARE(draft->window, detached);
         QCOMPARE(detached->panes.size(), 1);
         QVERIFY(!window.active->channel);
-        auto waveform = draft->addInstrument("waveform");
-        auto waveWindow = draft->pages->detachPage(draft->pages->indexOf(waveform), QPoint(250, 180));
-        QPointer<sw::FloatingPage> guarded(waveWindow);
+        auto waveform = detached->newInstrument("waveform", draft->channel, false);
+        auto waveWindow = detached->detachConnection(pageIndex(detached, waveform), QPoint(250, 180));
+        QPointer<sw::Window> guarded(waveWindow);
         window.close();
         QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
         QVERIFY(guarded.isNull());
         QFile file(directory.filePath("settings.json"));
         QVERIFY(file.open(QIODevice::ReadOnly));
         const auto saved = QJsonDocument::fromJson(file.readAll()).object();
-        QCOMPARE(saved["views"].toObject()["serial:loop://"].toObject()["instruments"].toArray().size(), 1);
+        QCOMPARE(saved["widget_pages"].toArray().size(), 1);
+    }
+
+    void newPageMenuAndSources()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        window.show();
+        QTest::qWait(150);
+        auto receive = window.active;
+        QTest::mouseClick(window.plus, Qt::LeftButton);
+        auto menu = qobject_cast<QMenu *>(QApplication::activePopupWidget());
+        QVERIFY(menu);
+        QCOMPARE(window.tabs->count(), 1);
+        auto waveAction = menu->findChild<QAction *>("new_waveform");
+        QVERIFY(waveAction);
+        waveAction->trigger();
+        menu->close();
+        auto wavePage = window.active;
+        QVERIFY(wavePage->instrument);
+        QCOMPARE(window.tabs->count(), 2);
+        QCOMPARE(window.stack->currentWidget(), wavePage);
+        QVERIFY(!window.sidebar->isVisible());
+        QVERIFY(wavePage->instrument->source->isVisible());
+        QVERIFY(engine.channels.isEmpty());
+        QVERIFY(!wavePage->channel);
+
+        window.tabs->setCurrentIndex(pageIndex(&window, receive));
+        QVERIFY(window.sidebar->isVisible());
+        window.port->setCurrentText("loop://");
+        window.connectionAction();
+        auto first = receive->channel;
+        auto picker = wavePage->instrument->source;
+        const int sourceIndex = picker->findData(first->config.key());
+        QVERIFY(sourceIndex > 0);
+        picker->setCurrentIndex(sourceIndex);
+        QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, sourceIndex));
+        QCOMPARE(wavePage->channel, first);
+        QCOMPARE(engine.channels.size(), 1);
+        window.tabs->setCurrentIndex(pageIndex(&window, wavePage));
+        first->receive("temp=23\n");
+        QTRY_VERIFY(!wavePage->instrument->plot->series.isEmpty());
+        window.connectionAction(); // Widget pages cannot toggle their source connection.
+        QCOMPARE(first->state, "connected");
+
+        sw::Config otherConfig;
+        otherConfig.kind = "demo";
+        otherConfig.name = "第二数据源";
+        auto other = engine.open(otherConfig);
+        const int otherIndex = picker->findData(other->config.key());
+        picker->setCurrentIndex(otherIndex);
+        QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, otherIndex));
+        QCOMPARE(wavePage->channel, other);
+        QCOMPARE(window.findPane(first), receive);
+        other->receive("voltage=3.3\n");
+        QTRY_VERIFY(wavePage->instrument->plot->series.contains("voltage"));
+        QVERIFY(!wavePage->instrument->plot->series.contains("temp"));
+        engine.remove(other->id);
+        QVERIFY(!wavePage->channel);
+        QCOMPARE(wavePage->sourceKey, otherConfig.key());
+        QVERIFY(picker->currentText().contains("未建立连接"));
+        other = engine.open(otherConfig);
+        QCOMPARE(wavePage->channel, other);
+        window.closeTab(pageIndex(&window, wavePage));
+        QCOMPARE(engine.channels.size(), 2);
+        QCOMPARE(first->state, "connected");
+        QCOMPARE(other->state, "connected");
+
+        auto newMenu = window.newPageMenu();
+        const int count = window.tabs->count();
+        newMenu->findChild<QAction *>("newReceivePage")->trigger();
+        QCOMPARE(window.tabs->count(), count + 1);
+        QVERIFY(!window.active->isInstrument());
+        QVERIFY(!window.active->channel);
+        delete newMenu;
+        window.close();
+    }
+
+    void independentWidgetPages()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        window.show();
+        window.port->setCurrentText("loop://");
+        window.connectionAction();
+        auto receive = window.active;
+        auto channel = receive->channel;
+        auto json = window.newInstrument("structured", channel);
+        json->instrument->parser->setCurrentIndex(1);
+        json->instrument->freeze->setChecked(true);
+        auto detached = window.detachConnection(pageIndex(&window, json), QPoint(200, 180));
+        auto xml = window.newInstrument("structured", channel);
+        xml->instrument->parser->setCurrentIndex(2);
+        QVERIFY(json->pageTitle != xml->pageTitle);
+        QCOMPARE(channel->parserMode, "auto");
+        channel->receive("{\"temperature\":24}\n<device><voltage>3.3</voltage></device>\n");
+        QTRY_COMPARE(xml->instrument->table->topLevelItemCount(), 1);
+        QCOMPARE(json->instrument->table->topLevelItemCount(), 0);
+        json->instrument->freeze->setChecked(false);
+        QTRY_COMPARE(json->instrument->table->topLevelItemCount(), 1);
+        QCOMPARE(json->instrument->table->topLevelItem(0)->text(1), "JSON");
+        QCOMPARE(xml->instrument->table->topLevelItem(0)->text(1), "XML");
+        detached->close();
+        window.closeTab(pageIndex(&window, json));
+        QCOMPARE(channel->state, "connected");
+        QCOMPARE(channel->parserMode, "auto");
+        channel->receive("<device><voltage>3.4</voltage></device>\n");
+        QTRY_COMPARE(xml->instrument->table->topLevelItemCount(), 2);
+        window.closeTab(pageIndex(&window, receive));
+        QVERIFY(engine.channels.isEmpty());
+        QVERIFY(!xml->channel);
+        QCOMPARE(window.tabs->count(), 1);
+        QCOMPARE(window.stack->currentWidget(), xml);
+        window.closeTab(0);
+        QCOMPARE(window.tabs->count(), 1);
+        QVERIFY(!window.active->isInstrument());
+        QVERIFY(!window.active->channel);
+        window.close();
+    }
+
+    void legacyInstrumentMigration()
+    {
+        QTemporaryDir directory;
+        const auto path = directory.filePath("settings.json");
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(R"({"connection":{"kind":"serial","port":"COM77"},"appearance":{"instruments":[{"kind":"waveform","points":1500},{"kind":"waveform","points":2000},{"kind":"structured","parser":2}]},"views":{"serial:com88":{"instruments":[{"kind":"values","frozen":true}]}}})");
+        file.close();
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, path);
+        QCOMPARE(window.tabs->count(), 5);
+        QVERIFY(!window.active->isInstrument());
+        QCOMPARE(window.panes[1]->instrument->points->value(), 1500);
+        QCOMPARE(window.panes[2]->instrument->points->value(), 2000);
+        QVERIFY(window.panes[1]->pageTitle != window.panes[2]->pageTitle);
+        QCOMPARE(window.panes[3]->instrument->parser->currentIndex(), 2);
+        QCOMPARE(window.panes[1]->sourceKey, "serial:com77");
+        QCOMPARE(window.panes[4]->sourceKey, "serial:com88");
+        QCOMPARE(window.panes[4]->instrument->kind, "values");
+        QVERIFY(window.panes[4]->instrument->freeze->isChecked());
+        QVERIFY(engine.channels.isEmpty());
+        window.saveSettings();
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        const auto saved = QJsonDocument::fromJson(file.readAll()).object();
+        QCOMPARE(saved["widget_pages"].toArray().size(), 4);
+        QVERIFY(!saved["appearance"].toObject().contains("instruments"));
+        window.close();
     }
 
     void tearGestureAndSettings()

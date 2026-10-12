@@ -70,10 +70,7 @@ int main(int argc, char *argv[])
         }
         for (const auto &kind : QStringList {"waveform", "values", "structured"})
         {
-            if (std::none_of(window.active->instruments.cbegin(), window.active->instruments.cend(), [&](auto instrument) { return instrument->kind == kind; }))
-            {
-                window.active->addInstrument(kind, false);
-            }
+            window.newInstrument(kind, channel, false);
         }
         channel->receive("\x1b[32m[INFO]\x1b[0m 设备已就绪 · 示例数据\r\n");
         channel->receive("\x1b[36m[RX]\x1b[0m temperature=24.8,voltage=3.3,current=0.12\r\n");
@@ -115,29 +112,29 @@ int main(int argc, char *argv[])
         {
             window.protocol->showPopup();
         }
-        else if (view == "detached" || view == "floating-wave")
+        else if (view == "detached")
         {
-            auto pane = window.active;
-            auto detached = window.detachConnection(window.tabs->currentIndex(), QPoint(160, 120));
-            previewTarget = detached;
-            if (view == "floating-wave")
-            {
-                for (auto instrument : pane->instruments)
-                {
-                    if (instrument->kind == "waveform")
-                    {
-                        previewTarget = pane->pages->detachPage(pane->pages->indexOf(instrument), QPoint(250, 180));
-                    }
-                }
-            }
+            previewTarget = window.detachConnection(window.tabs->currentIndex(), QPoint(160, 120));
         }
         else
         {
-            for (auto instrument : window.active->instruments)
+            for (auto page : window.panes)
             {
-                if (instrument->kind == view)
+                if (page->instrument && page->instrument->kind == (view == "floating-wave" ? "waveform" : view))
                 {
-                    window.active->pages->setCurrentWidget(instrument);
+                    for (int i = 0; i < window.tabs->count(); ++i)
+                    {
+                        if (window.tabs->tabData(i).value<QObject *>() == page)
+                        {
+                            window.tabs->setCurrentIndex(i);
+                            if (view == "floating-wave")
+                            {
+                                previewTarget = window.detachConnection(i, QPoint(250, 180));
+                            }
+                            break;
+                        }
+                    }
+                    break;
                 }
             }
         }

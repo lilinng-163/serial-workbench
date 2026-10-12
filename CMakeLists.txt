@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(SerialWorkbench
-    VERSION 0.10.5
+    VERSION 0.11.0
     DESCRIPTION "Native serial and network workbench with shared MCP access"
     LANGUAGES CXX
 )

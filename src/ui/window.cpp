@@ -78,6 +78,15 @@ Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), 
     setObjectName("page");
     auto body = new QVBoxLayout(this);
     body->setContentsMargins(16, 12, 16, 8);
+    auto sourceRow = horizontal();
+    sourceRow->addWidget(label("数据来源", "muted"));
+    source = new Combo();
+    source->setObjectName("instrumentSource");
+    source->setMinimumWidth(180);
+    source->setMaximumWidth(360);
+    sourceRow->addWidget(source, 1);
+    sourceRow->addStretch();
+    body->addLayout(sourceRow);
     auto tools = horizontal();
     freeze = new QCheckBox("冻结显示");
     tools->addWidget(freeze);
@@ -129,10 +138,12 @@ Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), 
         else
         {
             parser = combo({"JSON / XML", "仅 JSON", "仅 XML"});
+            parser->setMinimumWidth(145);
             filter = new SearchBox();
             filter->setPlaceholderText("筛选解析记录");
+            filter->setMinimumWidth(100);
             filter->setMaximumWidth(210);
-            tools->insertWidget(1, filter);
+            sourceRow->addWidget(filter);
             connect(filter, &QLineEdit::textChanged, this, [this](const QString &text)
             {
                 for (int i = 0; i < table->topLevelItemCount(); ++i)
@@ -166,7 +177,7 @@ Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), 
 
 QJsonObject Instrument::settings() const
 {
-    QJsonObject result {{"kind", kind}};
+    QJsonObject result {{"kind", kind}, {"frozen", freeze->isChecked()}};
     if (points)
     {
         result["points"] = points->value();
@@ -273,27 +284,31 @@ public:
     }
 };
 
-Pane::Pane(Window *owner) : QWidget(owner), window(owner)
+Pane::Pane(Window *owner, const QString &instrumentKind) : QWidget(owner), window(owner)
 {
     setObjectName("workspace");
     auto body = new QVBoxLayout(this);
     body->setContentsMargins(0, 0, 0, 0);
     body->setSpacing(0);
-    pages = new DetachableTabs();
-    pages->setDocumentMode(true);
-    pages->tabBar()->setDrawBase(false);
-    pages->setTabsClosable(true);
-    pages->tabBar()->setElideMode(Qt::ElideRight);
-    connect(pages, &QTabWidget::tabCloseRequested, this, &Pane::closeInstrument);
-    controls = new IconButton("widgets", "添加控件 · 图表与数据");
-    auto widgetsMenu = controlMenu();
-    connect(controls, &QAbstractButton::clicked, this, [this, widgetsMenu]
+    if (!instrumentKind.isEmpty())
     {
-        widgetsMenu->popup(controls->mapToGlobal(QPoint(0, controls->height() + 4)));
-    });
-    connect(pages, &DetachableTabs::pageAttached, this, &Pane::decoratePage);
-    pages->setCornerWidget(controls);
-    body->addWidget(pages, 1);
+        instrument = new Instrument(instrumentKind, this);
+        instrument->helpWindow = window->rootWindow();
+        body->addWidget(instrument, 1);
+        connect(instrument->source, &QComboBox::activated, this, [this](int index)
+        {
+            sourceKey = instrument->source->itemData(index).toString();
+            refreshSource();
+            window->updateStatus();
+        });
+        if (instrument->parser)
+        {
+            // Parse both formats once; each page filters independently.
+            connect(instrument->parser, &QComboBox::currentIndexChanged, this, [this] { enableParser(); });
+        }
+        applyAppearance();
+        return;
+    }
     monitorPage = new QWidget();
     monitorPage->setObjectName("page");
     auto monitor = new QVBoxLayout(monitorPage);
@@ -435,9 +450,7 @@ Pane::Pane(Window *owner) : QWidget(owner), window(owner)
     splitter->addWidget(sender);
     splitter->setStretchFactor(0, 1);
     splitter->setSizes(senderSizes);
-    pages->addTab(monitorPage, "收发");
-    pages->tabBar()->setTabButton(0, QTabBar::RightSide, nullptr);
-    pages->tabBar()->setTabButton(0, QTabBar::LeftSide, nullptr);
+    body->addWidget(monitorPage, 1);
 
     connect(timestamps, &QAbstractButton::toggled, this, [this](bool checked) { log->timestamps = checked; replay(); });
     connect(hexDisplay, &QAbstractButton::toggled, this, [this](bool checked) { log->hex = checked; replay(); });
@@ -460,11 +473,12 @@ Pane::Pane(Window *owner) : QWidget(owner), window(owner)
     {
         log->encoding = value;
         replay();
-        for (auto instrument : instruments)
+        for (auto host : window->rootWindow()->hosts)
         {
-            if (instrument->parser && channel)
+            if (!host) { continue; }
+            for (auto page : host->panes)
             {
-                channel->configureParser(QStringList {"auto", "json", "xml"}[instrument->parser->currentIndex()], value);
+                if (page->channel == channel) { page->enableParser(); }
             }
         }
     });
@@ -539,15 +553,61 @@ Pane::Pane(Window *owner) : QWidget(owner), window(owner)
 
 void Pane::setChannel(Channel *value)
 {
-    channel = value;
-    draft = value->config;
-    for (auto instrument : instruments)
+    if (instrument && channel != value)
     {
-        if (instrument->parser)
+        instrument->cursors = {};
+        if (instrument->table) { instrument->table->clear(); }
+        if (instrument->detail) { instrument->detail->clear(); }
+        if (instrument->plot) { instrument->plot->setSamples({}); }
+        instrument->info->setText(value ? "等待设备数据" : "等待数据来源连接");
+    }
+    channel = value;
+    if (value)
+    {
+        draft = value->config;
+        if (instrument) { sourceKey = value->config.key(); }
+    }
+    enableParser();
+}
+
+void Pane::enableParser()
+{
+    if (instrument && instrument->parser && channel)
+    {
+        auto sourcePane = window->findPane(channel);
+        const QString encoding = sourcePane ? sourcePane->encoding->currentText() : "utf-8";
+        channel->configureParser("auto", encoding);
+    }
+}
+
+void Pane::refreshSource()
+{
+    if (!instrument)
+    {
+        return;
+    }
+    auto source = instrument->source;
+    const QSignalBlocker blocker(source);
+    source->clear();
+    source->addItem("选择已有连接", QString());
+    Channel *selected = nullptr;
+    for (auto candidate : window->engine->channels)
+    {
+        source->addItem(candidate->name + " · " + stateText(candidate->state), candidate->config.key());
+        if (candidate->config.key() == sourceKey)
         {
-            channel->configureParser(QStringList {"auto", "json", "xml"}[instrument->parser->currentIndex()], encoding->currentText());
+            selected = candidate;
+            source->setCurrentIndex(source->count() - 1);
         }
     }
+    if (!sourceKey.isEmpty() && !selected)
+    {
+        const auto name = sourceKey.startsWith("serial:") ? sourceKey.mid(7).toUpper() : sourceKey;
+        source->addItem(name + " · 未建立连接", sourceKey);
+        source->setCurrentIndex(source->count() - 1);
+    }
+    source->setToolTip(sourceKey.isEmpty() ? "从收发页面建立连接后，在这里选择数据来源" : sourceKey);
+    if (channel != selected) { setChannel(selected); }
 }
 
 bool Pane::eventFilter(QObject *object, QEvent *event)
@@ -568,6 +628,19 @@ bool Pane::eventFilter(QObject *object, QEvent *event)
 
 void Pane::applyAppearance()
 {
+    if (instrument)
+    {
+        if (instrument->plot)
+        {
+            instrument->plot->theme = window->theme;
+            instrument->plot->update();
+        }
+        if (instrument->detail)
+        {
+            instrument->detail->setFont(window->dataFont);
+        }
+        return;
+    }
     log->theme = window->theme;
     terminal->theme = window->theme;
     const QString fontStyle = QString("font-family: '%1'; font-size: %2pt;").arg(window->dataFont.family()).arg(window->dataFont.pointSizeF());
@@ -578,39 +651,20 @@ void Pane::applyAppearance()
     terminal->setFont(window->dataFont);
     terminal->setStyleSheet(fontStyle);
     terminal->update();
-    for (auto instrument : instruments)
-    {
-        if (instrument->plot)
-        {
-            instrument->plot->theme = window->theme;
-            instrument->plot->update();
-        }
-        if (instrument->detail)
-        {
-            instrument->detail->setFont(window->dataFont);
-            instrument->detail->setStyleSheet(fontStyle);
-        }
-    }
     for (auto control : findChildren<IconButton *>())
     {
         control->theme = window->theme;
         control->update();
     }
-    for (auto detached : pages->floating)
-    {
-        if (!detached) { continue; }
-        detached->setStyleSheet(window->theme.stylesheet());
-        detached->setPalette(window->palette());
-        for (auto control : detached->findChildren<IconButton *>())
-        {
-            control->theme = window->theme;
-            control->update();
-        }
-    }
 }
 
 void Pane::tick()
 {
+    if (instrument)
+    {
+        if (isVisible()) { instrument->tick(channel); }
+        return;
+    }
     const bool ready = channel && (channel->state == "connected" || channel->state == "listening");
     sendButton->setEnabled(ready && channel->config.kind != "demo");
     repeat->setEnabled(ready && channel->config.kind != "demo");
@@ -621,8 +675,7 @@ void Pane::tick()
         repeat->setChecked(false);
     }
     peer->setVisible(channel && (channel->config.kind == "tcp-server" || channel->config.kind == "udp"));
-    if (!channel || (!isVisible() && !monitorPage->isVisible()
-        && std::none_of(instruments.cbegin(), instruments.cend(), [](auto item) { return item->isVisible(); })))
+    if (!channel || !isVisible())
     {
         return;
     }
@@ -668,17 +721,12 @@ void Pane::tick()
             }
         }
     }
-    for (auto instrument : instruments)
-    {
-        if (instrument->isVisible())
-        {
-            instrument->tick(channel);
-        }
-    }
+
 }
 
 void Pane::sendCurrent()
 {
+    if (instrument) { return; }
     try
     {
         if (!channel)
@@ -695,6 +743,7 @@ void Pane::sendCurrent()
 
 void Pane::setTerminal(bool enabled)
 {
+    if (instrument) { return; }
     if (enabled && !sender->isHidden())
     {
         const auto sizes = splitter->sizes();
@@ -730,6 +779,7 @@ void Pane::setTerminal(bool enabled)
 
 void Pane::clearView()
 {
+    if (instrument) { return; }
     cursor = window->engine->journal.sequence;
     viewStart = cursor;
     log->reset();
@@ -738,6 +788,7 @@ void Pane::clearView()
 
 void Pane::replay()
 {
+    if (instrument) { return; }
     cursor = viewStart;
     log->reset();
     terminal->reset(encoding->currentText());
@@ -745,6 +796,7 @@ void Pane::replay()
 
 void Pane::exportLog()
 {
+    if (instrument) { return; }
     if (!channel)
     {
         return;
@@ -775,6 +827,7 @@ void Pane::exportLog()
 
 void Pane::templateMenu()
 {
+    if (instrument) { return; }
     QMenu menu(this);
     for (const auto &value : window->rootWindow()->templates)
     {
@@ -843,168 +896,42 @@ void Pane::templateMenu()
     menu.exec(QCursor::pos());
 }
 
-QMenu *Pane::controlMenu()
-{
-    auto menu = new QMenu(this);
-    auto charts = menu->addMenu("图表");
-    charts->setIcon(icon("wave", window->theme.muted));
-    charts->addAction("数值波形", this, [this] { addInstrument("waveform"); });
-    auto data = menu->addMenu("数据");
-    data->setIcon(icon("template", window->theme.muted));
-    data->addAction("实时数值", this, [this] { addInstrument("values"); });
-    data->addAction("JSON / XML", this, [this] { addInstrument("structured"); });
-    return menu;
-}
-
-Instrument *Pane::addInstrument(const QString &kind, bool activate)
-{
-    if (!QStringList {"waveform", "values", "structured"}.contains(kind))
-    {
-        return nullptr;
-    }
-    if (kind == "structured")
-    {
-        for (auto instrument : instruments)
-        {
-            if (instrument->kind == kind)
-            {
-                if (activate)
-                {
-                    pages->activatePage(instrument);
-                }
-                return instrument;
-            }
-        }
-    }
-    auto instrument = new Instrument(kind);
-    instrument->helpWindow = window->rootWindow();
-    instruments.append(instrument);
-    const QString title = kind == "waveform" ? "数值波形" : kind == "values" ? "实时数值" : "JSON / XML";
-    int number = 1;
-    QStringList titles;
-    for (int i = 0; i < pages->count(); ++i)
-    {
-        titles.append(pages->tabText(i));
-    }
-    for (auto detached : pages->floating)
-    {
-        if (detached)
-        {
-            titles.append(detached->title);
-        }
-    }
-    while (titles.contains(title + " " + QString::number(number)))
-    {
-        ++number;
-    }
-    pages->addTab(instrument, kind == "structured" ? title : title + " " + QString::number(number));
-    decoratePage(instrument);
-
-    if (instrument->parser)
-    {
-        connect(instrument->parser, &QComboBox::currentIndexChanged, this, [this, instrument](int mode)
-        {
-            if (channel)
-            {
-                channel->configureParser(QStringList {"auto", "json", "xml"}[mode], encoding->currentText());
-            }
-        });
-        if (channel)
-        {
-            channel->configureParser("auto", encoding->currentText());
-        }
-    }
-    applyAppearance();
-    if (activate)
-    {
-        pages->activatePage(instrument);
-    }
-    return instrument;
-}
-
-void Pane::decoratePage(QWidget *page)
-{
-    const int index = pages->indexOf(page);
-    if (index < 0)
-    {
-        return;
-    }
-    if (page == monitorPage)
-    {
-        pages->tabBar()->setTabButton(index, QTabBar::RightSide, nullptr);
-        pages->tabBar()->setTabButton(index, QTabBar::LeftSide, nullptr);
-        return;
-    }
-    auto close = new IconButton("close", "关闭控件");
-    close->setFixedSize(22, 22);
-    close->theme = window->theme;
-    connect(close, &QAbstractButton::clicked, this, [this, page] { closeInstrument(pages->indexOf(page)); });
-    pages->tabBar()->setTabButton(index, QTabBar::RightSide, tabCloseSlot(close));
-}
-
-void Pane::closeInstrument(int index)
-{
-    auto instrument = qobject_cast<Instrument *>(pages->widget(index));
-    if (!instrument)
-    {
-        return;
-    }
-    if (instrument->parser && channel)
-    {
-        channel->configureParser("off");
-    }
-    pages->removeTab(index);
-    instruments.removeOne(instrument);
-    instrument->deleteLater();
-}
-
 QJsonObject Pane::settings() const
 {
-    QJsonArray controls;
-    for (auto instrument : instruments)
+    if (instrument)
     {
-        controls.append(instrument->settings());
+        auto settings = instrument->settings();
+        settings["source_key"] = sourceKey;
+        settings["title"] = pageTitle;
+        return settings;
     }
     const auto sizes = terminalMode ? senderSizes : splitter->sizes();
     return {{"timestamps", log->timestamps}, {"hex_display", log->hex}, {"block_cursor", terminal->blockCursor},
         {"terminal_mode", terminalMode}, {"encoding", encoding->currentText()},
-        {"instruments", controls}, {"sender_sizes", QJsonArray {sizes.value(0, 600), sizes.value(1, 150)}}};
+        {"sender_sizes", QJsonArray {sizes.value(0, 600), sizes.value(1, 150)}}};
 }
 
 void Pane::restore(const QJsonObject &settings)
 {
-    pages->restoreAll();
-    for (auto instrument : QList<Instrument *>(instruments))
+    if (instrument)
     {
-        closeInstrument(pages->indexOf(instrument));
+        instrument->freeze->setChecked(settings["frozen"].toBool());
+        if (instrument->points) { instrument->points->setValue(settings["points"].toInt(1000)); }
+        if (instrument->parser) { instrument->parser->setCurrentIndex(qBound(0, settings["parser"].toInt(), 2)); }
+        sourceKey = settings["source_key"].toString();
+        if (!settings["title"].toString().isEmpty())
+        {
+            pageTitle = settings["title"].toString();
+            window->tabs->setTabText(paneIndex(window->tabs, this), pageTitle);
+        }
+        refreshSource();
+        return;
     }
     log->timestamps = settings.value("timestamps").toBool(true);
     timestamps->setChecked(log->timestamps);
     hexDisplay->setChecked(settings["hex_display"].toBool());
     cursorShape->setChecked(settings.value("block_cursor").toBool(true));
     encoding->setCurrentText(settings.value("encoding").toString("utf-8"));
-    auto list = settings.value("instruments").toArray();
-    if (!settings.contains("instruments") && settings["show_wave"].toBool())
-    {
-        list.append(QJsonObject {{"kind", "waveform"}});
-    }
-    if (settings["parser"].toInt() && std::none_of(list.begin(), list.end(), [](const auto &value) { return value.toObject()["kind"] == "structured"; }))
-    {
-        list.append(QJsonObject {{"kind", "structured"}, {"parser", settings["parser"].toInt() - 1}});
-    }
-    for (const auto &value : list)
-    {
-        const auto object = value.toObject();
-        auto instrument = addInstrument(object["kind"].toString(), false);
-        if (instrument && instrument->points)
-        {
-            instrument->points->setValue(object["points"].toInt(1000));
-        }
-        if (instrument && instrument->parser)
-        {
-            instrument->parser->setCurrentIndex(qBound(0, object["parser"].toInt(), 2));
-        }
-    }
     const auto sizes = settings["sender_sizes"].toArray();
     if (sizes.size() == 2 && sizes[0].toInt() > 0 && sizes[1].toInt() > 0)
     {
@@ -1012,7 +939,7 @@ void Pane::restore(const QJsonObject &settings)
         QTimer::singleShot(0, this, [this] { splitter->setSizes(senderSizes); });
     }
     setTerminal(settings["terminal_mode"].toBool());
-    pages->setCurrentWidget(monitorPage);
+    window->restoreInstruments(settings, channel ? channel->config.key() : Config::fromJson(window->saved["connection"].toObject()).key());
 }
 
 class AdaptiveStack : public QStackedWidget
@@ -1102,7 +1029,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
         auto scroll = findChild<QScrollArea *>("parameterScroll");
         if (scroll)
         {
-            scroll->setVisible(visible);
+            scroll->setVisible(visible && active && !active->isInstrument());
             if (visible) { scroll->raise(); }
         }
     });
@@ -1252,15 +1179,20 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
         detachConnection(index, position, true);
     });
     header->addWidget(tabs);
-    plus = new IconButton("plus", "新建连接");
-    plus->setObjectName("newConnection");
+    plus = new IconButton("plus", "新建页面");
+    plus->setObjectName("newPage");
     plus->setFixedSize(26, 34);
-    connect(plus, &QAbstractButton::clicked, this, [this] { newConnection(); });
+    connect(plus, &QAbstractButton::clicked, this, [this]
+    {
+        auto menu = newPageMenu();
+        menu->setAttribute(Qt::WA_DeleteOnClose);
+        menu->popup(plus->mapToGlobal(QPoint(0, plus->height() + 4)));
+    });
     header->addWidget(plus);
     header->addStretch();
     if (primary)
     {
-        auto dock = new IconButton("dock", "将本窗口的连接返回主工作台");
+        auto dock = new IconButton("dock", "将本窗口的页面返回主工作台");
         connect(dock, &QAbstractButton::clicked, this, &QWidget::close);
         header->addWidget(dock);
     }
@@ -1288,7 +1220,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     connect(rts, &QCheckBox::toggled, this, [this] { applyBaud(); });
     connect(connectionName, &QLineEdit::editingFinished, this, [this]
     {
-        if (active && active->channel && !connectionName->text().trimmed().isEmpty())
+        if (active && !active->isInstrument() && active->channel && !connectionName->text().trimmed().isEmpty())
         {
             active->channel->name = connectionName->text().trimmed();
             active->channel->config.name = connectionName->text().trimmed();
@@ -1303,7 +1235,23 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     }
     active->draft = initial;
     loadForm(initial);
-    active->restore(appearance);
+    auto initialPane = active;
+    if (!primary)
+    {
+        active->restore(appearance);
+        for (auto view = viewSettings.begin(); view != viewSettings.end(); ++view)
+        {
+            restoreInstruments(view.value().toObject(), view.key());
+        }
+        for (const auto &value : saved["widget_pages"].toArray())
+        {
+            const auto settings = value.toObject();
+            auto page = newInstrument(settings["kind"].toString(), nullptr, false, settings["source_key"].toString());
+            if (page) { page->restore(settings); }
+        }
+    }
+    tabs->setCurrentIndex(paneIndex(tabs, initialPane));
+    activate(tabs->currentIndex());
     applyLocalTheme(theme.dark);
     connect(engine, &Engine::channelsChanged, this, &Window::syncConnections);
     timer.setInterval(40);
@@ -1363,7 +1311,7 @@ Pane *Window::findPane(Channel *channel)
         }
         for (auto pane : hostWindow->panes)
         {
-            if (pane->channel == channel)
+            if (!pane->isInstrument() && pane->channel == channel)
             {
                 return pane;
             }
@@ -1408,7 +1356,7 @@ void Window::transferPane(Pane *pane, Window *target)
     {
         return;
     }
-    if (active == pane && !pane->channel)
+    if (active == pane && !pane->isInstrument() && !pane->channel)
     {
         try
         {
@@ -1418,7 +1366,7 @@ void Window::transferPane(Pane *pane, Window *target)
         {
         }
     }
-    pane->repeat->setChecked(false);
+    if (pane->repeat) { pane->repeat->setChecked(false); }
     const QSignalBlocker blocker(tabs);
     tabs->removeTab(paneIndex(tabs, pane));
     panes.removeOne(pane);
@@ -1450,15 +1398,120 @@ Pane *Window::newConnection()
     return pane;
 }
 
+Pane *Window::newInstrument(const QString &kind, Channel *source, bool activatePage, const QString &pendingKey)
+{
+    if (!QStringList {"waveform", "values", "structured"}.contains(kind))
+    {
+        return nullptr;
+    }
+    auto previous = active;
+    auto page = new Pane(this, kind);
+    const QString baseTitle = kind == "waveform" ? "数值波形" : kind == "values" ? "实时数值" : "JSON / XML";
+    QStringList titles;
+    for (auto host : rootWindow()->hosts)
+    {
+        if (!host) { continue; }
+        for (auto existing : host->panes)
+        {
+            if (existing->instrument) { titles.append(existing->pageTitle); }
+        }
+    }
+    page->pageTitle = baseTitle;
+    int number = 2;
+    while (titles.contains(page->pageTitle))
+    {
+        page->pageTitle = baseTitle + " " + QString::number(number++);
+    }
+    page->sourceKey = source ? source->config.key() : pendingKey;
+    attachPane(page);
+    if (!activatePage && previous && panes.contains(previous))
+    {
+        tabs->setCurrentIndex(paneIndex(tabs, previous));
+        activate(tabs->currentIndex());
+    }
+    return page;
+}
+
+QMenu *Window::newPageMenu()
+{
+    auto menu = new QMenu(this);
+    menu->setObjectName("newPageMenu");
+    auto receive = menu->addAction(icon("port", theme.text), "新建收发页面", this, [this] { newConnection(); });
+    receive->setObjectName("newReceivePage");
+    menu->addSeparator();
+    auto widgets = menu->addMenu(icon("widgets", theme.text), "新建控件页面");
+    widgets->setObjectName("newWidgetPage");
+    const QStringList kinds {"waveform", "values", "structured"};
+    const QStringList titles {"数值波形", "实时数值", "JSON / XML"};
+    for (int i = 0; i < kinds.size(); ++i)
+    {
+        const auto kind = kinds[i];
+        auto action = widgets->addAction(titles[i], this, [this, kind]
+        {
+            newInstrument(kind, active ? active->channel.data() : nullptr);
+        });
+        action->setObjectName("new_" + kind);
+    }
+    return menu;
+}
+
+void Window::restoreInstruments(const QJsonObject &settings, const QString &sourceKey)
+{
+    if (primary || saved.contains("widget_pages"))
+    {
+        return;
+    }
+    auto controls = settings["instruments"].toArray();
+    if (!settings.contains("instruments") && settings["show_wave"].toBool())
+    {
+        controls.append(QJsonObject {{"kind", "waveform"}});
+    }
+    if (settings["parser"].toInt() && std::none_of(controls.begin(), controls.end(), [](const auto &value)
+        { return value.toObject()["kind"] == "structured"; }))
+    {
+        controls.append(QJsonObject {{"kind", "structured"}, {"parser", settings["parser"].toInt() - 1}});
+    }
+    // Preserve repeated widgets while avoiding duplicate migrations on reconnect.
+    QMap<QString, int> occurrences;
+    for (const auto &value : controls)
+    {
+        auto object = value.toObject();
+        const auto kind = object["kind"].toString();
+        const int ordinal = ++occurrences[kind];
+        int existing = 0;
+        for (auto host : rootWindow()->hosts)
+        {
+            if (!host) { continue; }
+            for (auto pane : host->panes)
+            {
+                if (pane->instrument && pane->sourceKey == sourceKey && pane->instrument->kind == kind)
+                {
+                    ++existing;
+                }
+            }
+        }
+        if (existing >= ordinal) { continue; }
+        object["source_key"] = sourceKey;
+        auto page = newInstrument(kind, nullptr, false, sourceKey);
+        if (page) { page->restore(object); }
+    }
+}
+
 void Window::attachPane(Pane *pane)
 {
     pane->window = this;
     panes.append(pane);
     stack->addWidget(pane);
     tabs->blockSignals(true);
-    const int index = tabs->addTab("新连接");
+    const QString title = pane->isInstrument() ? pane->pageTitle : "新收发页";
+    const int index = tabs->addTab(title);
+    if (pane->instrument)
+    {
+        tabs->setTabIcon(index, icon(pane->instrument->plot ? "wave" : "widgets", theme.muted));
+        pane->refreshSource();
+    }
     tabs->setTabData(index, QVariant::fromValue(static_cast<QObject *>(pane)));
-    auto close = new IconButton("close", "关闭连接");
+    auto close = new IconButton("close", pane->isInstrument() ? "关闭控件页面" : "关闭收发页面及连接");
     close->setFixedSize(24, 24);
     close->theme = theme;
     connect(close, &QAbstractButton::clicked, this, [this, pane] { closeTab(paneIndex(tabs, pane)); });
@@ -1482,7 +1535,7 @@ void Window::activate(int index)
     {
         return;
     }
-    if (active && panes.contains(active) && !active->channel)
+    if (active && panes.contains(active) && !active->isInstrument() && !active->channel)
     {
         try
         {
@@ -1492,13 +1545,16 @@ void Window::activate(int index)
         {
         }
     }
-    if (active && active != pane && panes.contains(active))
+    if (active && active != pane && panes.contains(active) && active->repeat)
     {
         active->repeat->setChecked(false);
     }
     active = pane;
     stack->setCurrentWidget(pane);
-    loadForm(pane->channel ? pane->channel->config : pane->draft);
+    if (!pane->isInstrument()) { loadForm(pane->channel ? pane->channel->config : pane->draft); }
+    auto parameters = findChild<QScrollArea *>("parameterScroll");
+    parameters->setVisible(!pane->isInstrument() && parameterToggle->isChecked());
+    parameterToggle->setEnabled(!pane->isInstrument());
     updateStatus();
 }
 
@@ -1535,7 +1591,7 @@ void Window::loadForm(const Config &c)
     const QString selectedPort = portIndex >= 0 ? port->itemText(portIndex)
         : !portsLoaded || c.port == "loop://" || holdsSerialPort(c.port) ? c.port : "NULL";
     port->setCurrentText(selectedPort);
-    if (active && !active->channel)
+    if (active && !active->isInstrument() && !active->channel)
     {
         active->draft.port = selectedPort;
     }
@@ -1576,7 +1632,7 @@ void Window::protocolChanged()
 
 bool Window::holdsSerialPort(const QString &name) const
 {
-    auto channel = active ? active->channel.data() : nullptr;
+    auto channel = active && !active->isInstrument() ? active->channel.data() : nullptr;
     return channel && channel->config.kind == "serial" && channel->config.port == name
         && !channel->manualClose && (channel->state == "connected" || channel->state == "reconnecting");
 }
@@ -1652,7 +1708,7 @@ void Window::refreshPorts()
         edit->setCursorPosition(cursor);
         if (start >= 0) { edit->setSelection(start, length); }
     }
-    if (active && !active->channel)
+    if (active && !active->isInstrument() && !active->channel)
     {
         active->draft.port = next;
     }
@@ -1661,6 +1717,7 @@ void Window::refreshPorts()
 
 void Window::connectionAction()
 {
+    if (!active || active->isInstrument()) { return; }
     try
     {
         refreshPorts();
@@ -1724,7 +1781,7 @@ void Window::connectionAction()
 
 void Window::applyBaud()
 {
-    if (syncing || !active || !active->channel || active->channel->state != "connected" || active->channel->config.kind != "serial")
+    if (syncing || !active || active->isInstrument() || !active->channel || active->channel->state != "connected" || active->channel->config.kind != "serial")
     {
         return;
     }
@@ -1754,7 +1811,7 @@ void Window::syncConnections()
     }
     for (auto pane : QList<Pane *>(panes))
     {
-        if (pane->channel && !engine->channels.contains(pane->channel->id))
+        if (!pane->isInstrument() && pane->channel && !engine->channels.contains(pane->channel->id))
         {
             const int index = paneIndex(tabs, pane);
             tabs->blockSignals(true);
@@ -1770,7 +1827,7 @@ void Window::syncConnections()
         Pane *pane = nullptr;
         for (auto item : panes)
         {
-            if (item->channel == channel)
+            if (!item->isInstrument() && item->channel == channel)
             {
                 pane = item;
                 break;
@@ -1784,8 +1841,8 @@ void Window::syncConnections()
             }
             const auto previous = active;
             pane = newConnection();
-            pane->restore(viewSettings[channel->config.key()].toObject());
             pane->setChannel(channel);
+            pane->restore(viewSettings[channel->config.key()].toObject());
             if (previous && panes.contains(previous))
             {
                 tabs->setCurrentIndex(paneIndex(tabs, previous));
@@ -1805,6 +1862,16 @@ void Window::syncConnections()
         tabs->setTabIcon(index, QIcon(pixmap));
         tabs->setTabText(index, channel->name);
         tabs->setTabToolTip(index, channel->name + " · " + stateText(channel->state) + "\n" + channel->error);
+    }
+    for (auto pane : panes)
+    {
+        if (pane->instrument)
+        {
+            pane->refreshSource();
+            const int index = paneIndex(tabs, pane);
+            tabs->setTabIcon(index, icon(pane->instrument->plot ? "wave" : "widgets", theme.muted));
+            tabs->setTabToolTip(index, pane->sourceKey.isEmpty() ? "控件页面 · 请选择数据来源" : "数据来源：" + pane->sourceKey);
+        }
     }
     if (panes.isEmpty())
     {
@@ -1827,7 +1894,7 @@ void Window::closeTab(int index)
     {
         return;
     }
-    if (pane->channel)
+    if (!pane->isInstrument() && pane->channel)
     {
         rootWindow()->viewSettings[pane->channel->config.key()] = pane->settings();
         engine->remove(pane->channel->id);
@@ -1871,7 +1938,7 @@ void Window::updateStatus()
     connectButton->setText(actionText);
     if (channel)
     {
-        QString text = stateText(channel->state);
+        QString text = (active->isInstrument() ? channel->name + "    " : QString()) + stateText(channel->state);
         if (channel->config.kind == "serial" && channel->appliedBaud)
         {
             text += QString("    %1 · %2 bps").arg(channel->config.port).arg(channel->appliedBaud);
@@ -1882,7 +1949,9 @@ void Window::updateStatus()
     }
     else
     {
-        status->setText("尚未连接    选择端口开始接收");
+        status->setText(active->isInstrument()
+            ? (active->sourceKey.isEmpty() ? "控件页面    请选择数据来源" : "控件页面    等待数据来源连接")
+            : "尚未连接    选择端口开始接收");
     }
     QString serialText = port->currentText() == "NULL" ? "尚未选择串口"
         : channel && same && channel->state == "reconnecting" ? QString("%1 已断开，等待设备恢复").arg(channel->config.port)
@@ -1986,7 +2055,7 @@ void Window::tabMenu(const QPoint &point)
         return;
     }
     QMenu menu(this);
-    if (pane->channel)
+    if (!pane->isInstrument() && pane->channel)
     {
         auto channel = pane->channel;
         const bool ready = channel->state == "connected" || channel->state == "listening" || channel->state == "connecting" || channel->state == "reconnecting";
@@ -2012,13 +2081,13 @@ void Window::tabMenu(const QPoint &point)
         menu.addSeparator();
         menu.addAction("导出日志…", pane, &Pane::exportLog);
     }
-    menu.addAction("清空显示", pane, &Pane::clearView);
+    if (!pane->isInstrument()) { menu.addAction("清空显示", pane, &Pane::clearView); }
     menu.addAction("移至独立窗口", this, [this, pane]
     {
         detachConnection(paneIndex(tabs, pane), QCursor::pos());
     });
     menu.addSeparator();
-    menu.addAction("关闭连接", this, [this, pane] { closeTab(paneIndex(tabs, pane)); });
+    menu.addAction(pane->isInstrument() ? "关闭控件页面" : "关闭收发页面及连接", this, [this, pane] { closeTab(paneIndex(tabs, pane)); });
     menu.exec(tabs->mapToGlobal(point));
 }
 
@@ -2029,18 +2098,27 @@ void Window::saveSettings()
         primary->saveSettings();
         return;
     }
+    QJsonArray widgetPages;
+    Pane *receivePage = nullptr;
     for (auto hostWindow : hosts)
     {
         if (!hostWindow) { continue; }
         for (auto pane : hostWindow->panes)
         {
+            if (pane->isInstrument())
+            {
+                widgetPages.append(pane->settings());
+                continue;
+            }
+            if (!receivePage || pane == active) { receivePage = pane; }
             if (pane->channel)
             {
                 viewSettings[pane->channel->config.key()] = pane->settings();
             }
         }
     }
-    QJsonObject appearance = active ? active->settings() : QJsonObject();
+    QJsonObject appearance = receivePage ? receivePage->settings() : saved["appearance"].toObject();
+    appearance.remove("instruments");
     appearance["theme"] = theme.dark ? "dark" : "light";
     appearance["pixel_theme"] = true;
     appearance["readable_type"] = true;
@@ -2049,7 +2127,8 @@ void Window::saveSettings()
     QJsonObject connection = saved["connection"].toObject();
     try
     {
-        connection = form().json();
+        if (active && !active->isInstrument()) { connection = form().json(); }
+        else if (receivePage) { connection = (receivePage->channel ? receivePage->channel->config : receivePage->draft).json(); }
     }
     catch (...)
     {
@@ -2059,7 +2138,7 @@ void Window::saveSettings()
     if (file.open(QIODevice::WriteOnly))
     {
         file.write(QJsonDocument(QJsonObject {{"connection", connection}, {"appearance", appearance}, {"views", viewSettings},
-            {"templates", templates}, {"allow_ai_control", engine->allowControl}}).toJson(QJsonDocument::Indented));
+            {"widget_pages", widgetPages}, {"templates", templates}, {"allow_ai_control", engine->allowControl}}).toJson(QJsonDocument::Indented));
         if (!file.commit())
         {
             error(file.errorString());
@@ -2098,7 +2177,7 @@ void Window::arrangeParameters()
     else if (!narrow && floating)
     {
         body->insertWidget(1, scroll);
-        scroll->setVisible(parametersVisible);
+        scroll->setVisible(parametersVisible && active && !active->isInstrument());
         const QSignalBlocker blocker(parameterToggle);
         parameterToggle->setChecked(parametersVisible);
     }

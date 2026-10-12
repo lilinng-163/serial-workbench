@@ -19,6 +19,7 @@ public:
     QTreeWidget *table = nullptr;
     QPlainTextEdit *detail = nullptr;
     Combo *parser = nullptr;
+    Combo *source = nullptr;
     QLabel *info = nullptr;
     QLineEdit *filter = nullptr;
     QJsonObject cursors;
@@ -30,42 +31,42 @@ class Pane : public QWidget
 {
     Q_OBJECT
 public:
-    explicit Pane(Window *window);
+    explicit Pane(Window *window, const QString &instrumentKind = {});
     Window *window;
     QPointer<Channel> channel;
     Config draft;
     qint64 cursor = 0;
     qint64 viewStart = 0;
-    DetachableTabs *pages;
-    QWidget *monitorPage;
-    IconButton *controls;
-    IconButton *modeButton;
-    IconButton *timestamps;
-    IconButton *hexDisplay;
-    IconButton *cursorShape;
-    QStackedWidget *display;
-    LogView *log;
-    TerminalView *terminal;
-    QPlainTextEdit *payload;
-    QWidget *sender;
-    Splitter *splitter;
+    Instrument *instrument = nullptr;
+    QString sourceKey;
+    QString pageTitle;
+    QWidget *monitorPage = nullptr;
+    IconButton *modeButton = nullptr;
+    IconButton *timestamps = nullptr;
+    IconButton *hexDisplay = nullptr;
+    IconButton *cursorShape = nullptr;
+    QStackedWidget *display = nullptr;
+    LogView *log = nullptr;
+    TerminalView *terminal = nullptr;
+    QPlainTextEdit *payload = nullptr;
+    QWidget *sender = nullptr;
+    Splitter *splitter = nullptr;
     QList<int> senderSizes {600, 176};
-    Combo *encoding;
-    Combo *newline;
-    Combo *peer;
-    QCheckBox *sendHex;
-    IconButton *repeat;
-    QSpinBox *interval;
+    Combo *encoding = nullptr;
+    Combo *newline = nullptr;
+    Combo *peer = nullptr;
+    QCheckBox *sendHex = nullptr;
+    IconButton *repeat = nullptr;
+    QSpinBox *interval = nullptr;
     QTimer repeatTimer;
     QByteArray repeatedPayload;
     QString repeatedPeer;
-    QPushButton *sendButton;
-    IconButton *pause;
-    IconButton *follow;
-    IconButton *exportButton;
-    QLineEdit *filter;
+    QPushButton *sendButton = nullptr;
+    IconButton *pause = nullptr;
+    IconButton *follow = nullptr;
+    IconButton *exportButton = nullptr;
+    QLineEdit *filter = nullptr;
     bool terminalMode = false;
-    QList<Instrument *> instruments;
     void setChannel(Channel *channel);
     void tick();
     void sendCurrent();
@@ -77,10 +78,9 @@ public:
     void applyAppearance();
     QJsonObject settings() const;
     void restore(const QJsonObject &settings);
-    Instrument *addInstrument(const QString &kind, bool activate = true);
-    void closeInstrument(int index);
-    void decoratePage(QWidget *page);
-    QMenu *controlMenu();
+    bool isInstrument() const { return instrument != nullptr; }
+    void refreshSource();
+    void enableParser();
     bool eventFilter(QObject *object, QEvent *event) override;
 };
 
@@ -150,6 +150,10 @@ public:
     Pane *active = nullptr;
 
     Pane *newConnection();
+    Pane *newInstrument(const QString &kind, Channel *source = nullptr, bool activate = true, const QString &sourceKey = {});
+    QMenu *newPageMenu();
+    void restoreInstruments(const QJsonObject &settings, const QString &sourceKey);
+
     void activate(int index);
     void closeTab(int index);
     void adjustTabs();
