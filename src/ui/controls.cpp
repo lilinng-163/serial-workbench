@@ -217,12 +217,24 @@ void drawIcon(QPainter &p, const QString &name, QRectF rect, const QColor &color
     };
     if (name == "gear")
     {
-        p.drawRect(4, 4, 8, 8);
-        p.fillRect(6, 0, 4, 4, color);
-        p.fillRect(6, 12, 4, 4, color);
-        p.fillRect(0, 6, 4, 4, color);
-        p.fillRect(12, 6, 4, 4, color);
-        p.drawRect(7, 7, 2, 2);
+        QPainterPath ring;
+        ring.setFillRule(Qt::OddEvenFill);
+        ring.addPolygon(QPolygonF {
+            {5, 3}, {10, 3}, {13, 6}, {13, 9},
+            {10, 12}, {5, 12}, {2, 9}, {2, 6}
+        });
+        ring.closeSubpath();
+        ring.addRect(6, 6, 4, 4);
+        p.fillPath(ring, color);
+        for (const auto &tooth : QList<QRect> {
+            {6, 0, 4, 4}, {6, 12, 4, 4},
+            {0, 6, 4, 4}, {12, 6, 4, 4},
+            {2, 2, 3, 3}, {11, 2, 3, 3},
+            {2, 11, 3, 3}, {11, 11, 3, 3}
+        })
+        {
+            p.fillRect(tooth, color);
+        }
     }
     else if (name == "plus")
     {
@@ -298,23 +310,49 @@ void drawIcon(QPainter &p, const QString &name, QRectF rect, const QColor &color
     }
     else if (name == "pause")
     {
-        p.fillRect(3, 3, 3, 10, color);
-        p.fillRect(10, 3, 3, 10, color);
+        p.fillRect(4, 3, 3, 10, color);
+        p.fillRect(9, 3, 3, 10, color);
     }
     else if (name == "play")
     {
-        for (int i = 0; i < 6; ++i)
+        for (int column = 0; column < 7; ++column)
         {
-            p.fillRect(4 + i, 2 + i, 1, 12 - i * 2, color);
+            p.fillRect(5 + column, 1 + column, 1, 14 - column * 2, color);
         }
     }
     else if (name == "trash")
     {
-        line(1, 3, 13, 3);
-        line(5, 1, 9, 1);
-        p.drawRect(3, 5, 10, 9);
-        line(6, 6, 6, 11);
-        line(9, 6, 9, 11);
+        line(2, 3, 12, 3);
+        line(6, 1, 8, 1);
+        line(3, 5, 3, 12);
+        line(11, 5, 11, 12);
+        line(3, 12, 11, 12);
+        line(7, 6, 7, 10);
+    }
+    else if (name == "follow")
+    {
+        line(7, 1, 7, 9);
+        line(3, 6, 7, 10);
+        line(7, 10, 11, 6);
+        line(2, 14, 12, 14);
+    }
+    else if (name == "export")
+    {
+        line(7, 1, 7, 10);
+        line(3, 5, 7, 1);
+        line(7, 1, 11, 5);
+        line(2, 10, 2, 13);
+        line(2, 13, 12, 13);
+        line(12, 13, 12, 10);
+    }
+    else if (name == "repeat")
+    {
+        line(3, 4, 12, 4);
+        line(9, 1, 12, 4);
+        line(12, 4, 9, 7);
+        line(12, 11, 3, 11);
+        line(6, 8, 3, 11);
+        line(3, 11, 6, 14);
     }
     else if (name == "wave")
     {

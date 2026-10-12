@@ -54,13 +54,15 @@ public:
     Combo *newline;
     Combo *peer;
     QCheckBox *sendHex;
-    QCheckBox *repeat;
+    IconButton *repeat;
     QSpinBox *interval;
     QTimer repeatTimer;
     QByteArray repeatedPayload;
     QString repeatedPeer;
     QPushButton *sendButton;
     IconButton *pause;
+    IconButton *follow;
+    IconButton *exportButton;
     QLineEdit *filter;
     bool terminalMode = false;
     QList<Instrument *> instruments;

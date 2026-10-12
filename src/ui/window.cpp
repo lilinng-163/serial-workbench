@@ -329,26 +329,32 @@ Pane::Pane(Window *owner) : QWidget(owner), window(owner)
     tools->addSpacing(8);
     tools->addStretch();
     filter = new SearchBox();
-    filter->setPlaceholderText("筛选收发内容");
+    filter->setPlaceholderText("筛选内容");
+    filter->setToolTip("按文本筛选当前收发记录");
     tools->addWidget(filter, 1);
     pause = new IconButton("pause", "暂停显示，后台继续接收");
+    pause->setObjectName("pauseDisplay");
     pause->setCheckable(true);
+    connect(pause, &QAbstractButton::toggled, this, [this](bool paused)
+    {
+        pause->setToolTip(paused ? "继续显示，后台仍在接收" : "暂停显示，后台继续接收");
+        pause->setAccessibleName(pause->toolTip());
+    });
     tools->addWidget(pause);
     auto clear = new IconButton("trash", "清空当前显示，保留共享历史");
+    clear->setObjectName("clearDisplay");
     connect(clear, &QAbstractButton::clicked, this, &Pane::clearView);
     tools->addWidget(clear);
-    auto moreMenu = new QMenu(this);
-    auto follow = moreMenu->addAction("跟随最新数据");
+    follow = new IconButton("follow", "跟随最新数据");
+    follow->setObjectName("followLatest");
     follow->setCheckable(true);
     follow->setChecked(true);
-    moreMenu->addSeparator();
-    moreMenu->addAction("导出连接日志…", this, &Pane::exportLog);
-    auto more = new IconButton("more", "显示选项与日志导出");
-    connect(more, &QAbstractButton::clicked, this, [moreMenu, more]
-    {
-        moreMenu->exec(more->mapToGlobal(QPoint(0, more->height())));
-    });
-    tools->addWidget(more);
+    tools->addWidget(follow);
+    exportButton = new IconButton("export", "导出连接日志");
+    exportButton->setObjectName("exportLog");
+    exportButton->setEnabled(false);
+    connect(exportButton, &QAbstractButton::clicked, this, &Pane::exportLog);
+    tools->addWidget(exportButton);
     monitor->addWidget(toolbar);
     splitter = new Splitter(Qt::Vertical);
     display = new QStackedWidget();
@@ -372,7 +378,7 @@ Pane::Pane(Window *owner) : QWidget(owner), window(owner)
     payload = new QPlainTextEdit();
     payload->viewport()->installEventFilter(this);
     payload->setMinimumHeight(54);
-    payload->setPlaceholderText("输入待发送内容…");
+    payload->setPlaceholderText("输入待发送内容");
     sendBody->addWidget(payload, 1);
     auto sendTools = horizontal();
     sendTools->setSpacing(6);
@@ -404,26 +410,20 @@ Pane::Pane(Window *owner) : QWidget(owner), window(owner)
     auto templateButton = new IconButton("template", "报文模板");
     connect(templateButton, &QAbstractButton::clicked, this, &Pane::templateMenu);
     actions->addWidget(templateButton);
-    auto sendOptions = new QMenu(this);
-    auto optionPanel = new QWidget();
-    auto optionBody = new QVBoxLayout(optionPanel);
-    repeat = new QCheckBox("循环发送");
+    repeat = new IconButton("repeat", "循环发送");
+    repeat->setObjectName("repeatSend");
+    repeat->setCheckable(true);
+    repeat->setEnabled(false);
+    actions->addWidget(repeat);
     interval = new QSpinBox();
+    interval->setObjectName("repeatInterval");
     interval->setRange(20, 3600000);
     interval->setValue(1000);
     interval->setSuffix(" ms");
-    optionBody->addWidget(repeat);
-    optionBody->addWidget(label("发送间隔", "muted"));
-    optionBody->addWidget(interval);
-    auto optionAction = new QWidgetAction(sendOptions);
-    optionAction->setDefaultWidget(optionPanel);
-    sendOptions->addAction(optionAction);
-    auto options = new IconButton("more", "循环发送设置");
-    connect(options, &QAbstractButton::clicked, this, [sendOptions, options]
-    {
-        sendOptions->exec(options->mapToGlobal(QPoint(0, options->height())));
-    });
-    actions->addWidget(options);
+    interval->setFixedWidth(126);
+    interval->setToolTip("循环发送间隔 · 毫秒（ms）");
+    connect(interval, &QSpinBox::valueChanged, &repeatTimer, qOverload<int>(&QTimer::setInterval));
+    actions->addWidget(interval);
     sendButton = button("发送", "primary");
     sendButton->setFixedWidth(94);
     connect(sendButton, &QPushButton::clicked, this, &Pane::sendCurrent);
@@ -447,7 +447,14 @@ Pane::Pane(Window *owner) : QWidget(owner), window(owner)
         terminal->update();
     });
     connect(terminal, &TerminalView::cursorShapeChanged, cursorShape, &QAbstractButton::setChecked);
-    connect(follow, &QAction::toggled, this, [this](bool checked) { log->follow = checked; });
+    connect(follow, &QAbstractButton::toggled, this, [this](bool checked)
+    {
+        log->follow = checked;
+        if (checked)
+        {
+            log->verticalScrollBar()->setValue(log->verticalScrollBar()->maximum());
+        }
+    });
     connect(filter, &QLineEdit::textChanged, this, [this](const QString &value) { log->filter = value; replay(); });
     connect(encoding, &QComboBox::currentTextChanged, this, [this](const QString &value)
     {
@@ -461,8 +468,10 @@ Pane::Pane(Window *owner) : QWidget(owner), window(owner)
             }
         }
     });
-    connect(repeat, &QCheckBox::toggled, this, [this](bool checked)
+    connect(repeat, &QAbstractButton::toggled, this, [this](bool checked)
     {
+        repeat->setToolTip(checked ? "停止循环发送" : "循环发送");
+        repeat->setAccessibleName(repeat->toolTip());
         if (!checked)
         {
             repeatTimer.stop();
@@ -604,7 +613,9 @@ void Pane::tick()
 {
     const bool ready = channel && (channel->state == "connected" || channel->state == "listening");
     sendButton->setEnabled(ready && channel->config.kind != "demo");
+    repeat->setEnabled(ready && channel->config.kind != "demo");
     terminal->enabledInput = ready && terminalMode;
+    exportButton->setEnabled(channel);
     if (!ready)
     {
         repeat->setChecked(false);
@@ -703,6 +714,7 @@ void Pane::setTerminal(bool enabled)
     }
     modeButton->setToolTip(enabled ? "返回收发日志" : "切换到交互终端");
     filter->setVisible(!enabled);
+    follow->setVisible(!enabled);
     timestamps->setVisible(!enabled);
     hexDisplay->setVisible(!enabled);
     cursorShape->setVisible(enabled);

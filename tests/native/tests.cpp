@@ -94,6 +94,60 @@ private slots:
         QCOMPARE(journal.read(1)["events"].toArray().size(), 1);
         QCOMPARE(journal.sequence, 2);
     }
+    void directToolbarActions()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        window.show();
+        window.port->setCurrentText("loop://");
+        window.connectionAction();
+        auto pane = window.active;
+        auto channel = pane->channel;
+        channel->receive("first message\n");
+        pane->tick();
+        QVERIFY(pane->log->toPlainText().contains("first message"));
+
+        QTest::mouseClick(pane->pause, Qt::LeftButton);
+        QVERIFY(pane->pause->toolTip().contains("继续显示"));
+        channel->receive("received while paused\n");
+        pane->tick();
+        QVERIFY(!pane->log->toPlainText().contains("received while paused"));
+        QVERIFY(engine.journal.read(0)["events"].toArray().last().toObject()["text"].toString().contains("received while paused"));
+        QTest::mouseClick(pane->pause, Qt::LeftButton);
+        pane->tick();
+        QVERIFY(pane->log->toPlainText().contains("received while paused"));
+
+        QTest::mouseClick(pane->follow, Qt::LeftButton);
+        QVERIFY(!pane->log->follow);
+        QTest::mouseClick(pane->follow, Qt::LeftButton);
+        QVERIFY(pane->log->follow);
+        const auto history = engine.journal.sequence;
+        auto clear = pane->findChild<sw::IconButton *>("clearDisplay");
+        QTest::mouseClick(clear, Qt::LeftButton);
+        QVERIFY(pane->log->toPlainText().isEmpty());
+        QCOMPARE(engine.journal.sequence, history);
+        QVERIFY(pane->exportButton->isEnabled());
+
+        pane->payload->setPlainText("ping");
+        pane->newline->setCurrentIndex(0);
+        pane->interval->setValue(40);
+        const auto sent = channel->tx;
+        QTest::mouseClick(pane->repeat, Qt::LeftButton);
+        QVERIFY(pane->repeatTimer.isActive());
+        QVERIFY(pane->repeat->toolTip().contains("停止"));
+        QTRY_VERIFY(channel->tx >= sent + 8);
+        pane->interval->setValue(60);
+        QCOMPARE(pane->repeatTimer.interval(), 60);
+        QTest::mouseClick(pane->repeat, Qt::LeftButton);
+        QVERIFY(!pane->repeatTimer.isActive());
+        const auto stopped = channel->tx;
+        QTest::qWait(150);
+        QCOMPARE(channel->tx, stopped);
+        window.close();
+    }
+
     void serialReconfiguration()
     {
         sw::Engine engine;

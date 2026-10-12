@@ -2,7 +2,7 @@
 
 一个面向嵌入式开发的 Windows 串口与网络调试助手。人在界面查看数据，Codex、Claude、OpenCode 等 AI 通过 MCP 同时读取同一份数据，无需再次打开串口。
 
-当前版本：0.10.4，Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
+当前版本：0.10.5，Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
 
 ![像素掌机主题工作台](docs/pixel-workspace.png)
 
@@ -230,7 +230,7 @@ $env:MINGW_BIN = 'D:/lib/Qt/Tools/mingw1310_64/bin'
 .\scripts\build.ps1
 
 # 打包后的 HTTP / STDIO 集成测试，需要 Python MCP SDK
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.10.4
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.10.5
 ```
 
 测试覆盖独立读取与分页、真实 TCP/UDP socket、软件串口回环及重配置、UTF-8/GBK 分片解析、ANSI 颜色与终端、连接标签和布局、设置恢复、MCP HTTP/STDIO、权限、非阻塞等待和错误参数。实际 COM 硬件、USB 设备的实际线速及各 AI 客户端的完整对话需要在对应环境验证。
