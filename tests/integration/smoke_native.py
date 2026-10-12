@@ -75,6 +75,12 @@ async def check(url, bridge, allow, expected_version=None):
                     assert updated["id"] == channel_id
                     assert updated["applied_baudrate"] == 1200
                     start = unpack(await client.call_tool("read_events", {}))["next_cursor"]
+                    # Unrelated events advance the global cursor but must not end a channel-filtered wait.
+                    unrelated = unpack(await second.call_tool("open_connection", {"config": {
+                        "kind": "udp", "host": "127.0.0.1", "network_port": 9,
+                        "bind_host": "127.0.0.1", "bind_port": 0,
+                    }}))
+                    unpack(await second.call_tool("close_connection", {"channel_id": unrelated["id"]}))
                     # A pending read must leave the GUI/service free to accept a second reader's write.
                     waiter = asyncio.create_task(client.call_tool("read_events", {
                         "after": start, "channel_id": channel_id, "wait_ms": 2000,

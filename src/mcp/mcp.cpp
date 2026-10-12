@@ -179,8 +179,14 @@ void McpServer::acceptRequest(QTcpSocket *socket, const QByteArray &request)
         const auto params = rpc["params"].toObject();
         const auto args = params["arguments"].toObject();
         const int wait = args["wait_ms"].toInt();
-        if (params["name"].toString() == "read_events" && wait > 0 && wait <= 10000
-            && args["after"].toInteger() == engine->journal.sequence)
+        const auto after = args["after"].toInteger();
+        const bool canWait = params["name"].toString() == "read_events" && wait > 0 && wait <= 10000
+            && after >= 0 && after <= engine->journal.sequence;
+        const auto pending = canWait
+            ? engine->journal.read(after, 1, args["channel_id"].toString()) : QJsonObject {};
+        // Other channels can advance the shared cursor without providing any
+        // events for this reader. Wait for a matching event, unless history was lost.
+        if (canWait && !pending["gap"].toBool() && pending["events"].toArray().isEmpty())
         {
             auto timer = new QTimer(socket);
             auto elapsed = std::make_shared<QElapsedTimer>();
