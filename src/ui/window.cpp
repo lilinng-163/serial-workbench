@@ -1010,6 +1010,10 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     : QMainWindow(main, Qt::Window), primary(main), engine(owner), mcp(service), settingsPath(path)
 {
     rootWindow()->hosts.append(this);
+    if (primary)
+    {
+        portProvider = primary->portProvider;
+    }
     setWindowTitle("Serial Workbench · Native " + Version);
     setWindowIcon(icon("port", Theme::make(false).accent, 32));
     setFont(Theme::interfaceFont());
@@ -1113,13 +1117,14 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     auto portLabel = horizontal();
     portLabel->addWidget(label("端口", "muted"));
     portLabel->addStretch();
-    auto refresh = new IconButton("refresh", "刷新可用串口");
-    refresh->setFixedSize(24, 24);
-    connect(refresh, &QAbstractButton::clicked, this, &Window::refreshPorts);
-    portLabel->addWidget(refresh);
+    auto scanning = label("实时扫描", "muted");
+    scanning->setToolTip("自动检测设备插拔，无需手动刷新；不可用的端口会自动清除。");
+    portLabel->addWidget(scanning);
     serialBody->addLayout(portLabel);
     port = combo({"NULL"}, "NULL", true);
     port->setObjectName("serialPort");
+    port->setInsertPolicy(QComboBox::NoInsert);
+    port->setCompleter(nullptr);
     port->setFixedHeight(38);
     serialBody->addWidget(port);
     serialBody->addSpacing(7);
@@ -1247,6 +1252,17 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     connect(baud, &QComboBox::activated, this, [this] { applyBaud(); });
     connect(baud->lineEdit(), &QLineEdit::editingFinished, this, &Window::applyBaud);
     connect(port, &QComboBox::currentTextChanged, this, [this] { updateStatus(); });
+    connect(port->lineEdit(), &QLineEdit::textEdited, this, [this] { portEditing = true; });
+    connect(port->lineEdit(), &QLineEdit::editingFinished, this, [this]
+    {
+        portEditing = false;
+        refreshPorts();
+    });
+    connect(port, &QComboBox::activated, this, [this]
+    {
+        portEditing = false;
+        refreshPorts();
+    });
     for (auto control : {bits, parity, stopbits, flow})
     {
         connect(control, &QComboBox::activated, this, [this] { applyBaud(); });
@@ -1308,8 +1324,8 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
         }
     });
     timer.start();
-    QTimer::singleShot(150, this, &Window::refreshPorts);
-    portTimer.setInterval(1000);
+    refreshPorts();
+    portTimer.setInterval(500);
     connect(&portTimer, &QTimer::timeout, this, &Window::refreshPorts);
     portTimer.start();
     port->setFocus();
@@ -1498,7 +1514,15 @@ void Window::loadForm(const Config &c)
 {
     syncing = true;
     connectionName->setText(c.name);
-    port->setCurrentText(c.port);
+    portEditing = false;
+    const int portIndex = port->findText(c.port, Qt::MatchFixedString);
+    const QString selectedPort = portIndex >= 0 ? port->itemText(portIndex)
+        : !portsLoaded || c.port == "loop://" ? c.port : "NULL";
+    port->setCurrentText(selectedPort);
+    if (active && !active->channel)
+    {
+        active->draft.port = selectedPort;
+    }
     baud->setCurrentText(QString::number(c.baudrate));
     bits->setCurrentText(QString::number(c.bytesize));
     parity->setCurrentText(c.parity);
@@ -1536,13 +1560,13 @@ void Window::protocolChanged()
 
 void Window::refreshPorts()
 {
+    if (closing) { return; }
     const auto available = portProvider();
-    if ((portsLoaded && available == lastPorts) || port->view()->isVisible())
-    {
-        return;
-    }
+    engine->checkSerialDevices(available);
+    const bool changed = !portsLoaded || available != lastPorts;
     portsLoaded = true;
     lastPorts = available;
+
     const auto selected = port->currentText();
     auto edit = port->lineEdit();
     const int cursor = edit->cursorPosition();
@@ -1550,18 +1574,66 @@ void Window::refreshPorts()
     const int length = edit->selectedText().size();
     const QSignalBlocker blocker(port);
     const QSignalBlocker editBlocker(edit);
-    port->clear();
-    port->addItem("NULL");
-    for (const auto &value : available)
+
+    if (changed)
     {
-        const auto item = value.toObject();
-        port->addItem(item["port"].toString());
-        port->setItemData(port->count() - 1, item["description"].toString(), Qt::ToolTipRole);
-        port->setItemData(port->count() - 1, item["usb_serial_jtag"].toBool(), Qt::UserRole + 1);
+        QStringList names;
+        for (const auto &value : available)
+        {
+            const auto name = value.toObject()["port"].toString();
+            if (!name.isEmpty() && name != "NULL" && !names.contains(name))
+            {
+                names.append(name);
+            }
+        }
+
+        // Keep the model and popup alive; change only affected rows.
+        for (int index = port->count() - 1; index > 0; --index)
+        {
+            if (!names.contains(port->itemText(index)))
+            {
+                port->removeItem(index);
+            }
+        }
+        for (int index = 0; index < names.size(); ++index)
+        {
+            const int row = index + 1;
+            const auto &name = names[index];
+            if (port->itemText(row) != name)
+            {
+                const int previous = port->findText(name);
+                if (previous >= 0) { port->removeItem(previous); }
+                port->insertItem(row, name);
+            }
+        }
+        for (const auto &value : available)
+        {
+            const auto item = value.toObject();
+            const int index = port->findText(item["port"].toString());
+            if (index <= 0) { continue; }
+            port->setItemData(index, item["description"].toString(), Qt::ToolTipRole);
+            port->setItemData(index, item["usb_serial_jtag"].toBool(), Qt::UserRole + 1);
+        }
     }
-    port->setCurrentText(selected.isEmpty() ? "NULL" : selected);
-    edit->setCursorPosition(cursor);
-    if (start >= 0) { edit->setSelection(start, length); }
+
+    const int selectedIndex = port->findText(selected, Qt::MatchFixedString);
+    const bool editing = portEditing && edit->hasFocus();
+    const bool missing = selectedIndex < 0 && selected != "loop://" && !editing;
+    const auto next = missing || selected.isEmpty() ? QString("NULL")
+        : selectedIndex >= 0 ? port->itemText(selectedIndex) : selected;
+    if (port->currentText() != next)
+    {
+        port->setCurrentText(next);
+    }
+    if (next == selected)
+    {
+        edit->setCursorPosition(cursor);
+        if (start >= 0) { edit->setSelection(start, length); }
+    }
+    if (active && !active->channel)
+    {
+        active->draft.port = next;
+    }
     updateStatus();
 }
 
@@ -1569,9 +1641,13 @@ void Window::connectionAction()
 {
     try
     {
+        portEditing = false;
+        refreshPorts();
         const auto config = form();
         auto current = active->channel;
-        if (current && current->config.key() == config.key() && (current->state == "connected" || current->state == "listening" || current->state == "connecting" || current->state == "reconnecting"))
+        const bool missingActivePort = current && current->config.kind == "serial"
+            && config.kind == "serial" && config.port == "NULL";
+        if (current && (current->config.key() == config.key() || missingActivePort) && (current->state == "connected" || current->state == "listening" || current->state == "connecting" || current->state == "reconnecting"))
         {
             active->repeat->setChecked(false);
             current->close();
@@ -1763,7 +1839,7 @@ void Window::updateStatus()
     }
     auto channel = active->channel;
     const bool same = channel && channel->config.kind == QStringList {"serial", "tcp-client", "tcp-server", "udp"}[protocol->currentIndex()]
-        && (channel->config.kind != "serial" || channel->config.port == port->currentText());
+        && (channel->config.kind != "serial" || channel->config.port == port->currentText() || port->currentText() == "NULL");
     const bool ready = channel && (channel->state == "connected" || channel->state == "listening" || channel->state == "connecting" || channel->state == "reconnecting");
     connectButton->setText(same && ready ? channel->state == "listening" ? "停止监听" : "断开连接" : "建立连接");
     if (channel)
@@ -1781,8 +1857,9 @@ void Window::updateStatus()
     {
         status->setText("尚未连接    选择端口开始接收");
     }
-    QString serialText = channel && same && channel->appliedBaud ? QString("驱动已确认 %1 bps").arg(channel->appliedBaud)
-        : port->currentText() == "NULL" ? "尚未选择串口" : port->itemData(port->currentIndex(), Qt::ToolTipRole).toString();
+    QString serialText = port->currentText() == "NULL" ? "尚未选择串口"
+        : channel && same && channel->appliedBaud ? QString("驱动已确认 %1 bps").arg(channel->appliedBaud)
+        : port->itemData(port->currentIndex(), Qt::ToolTipRole).toString();
     if (port->currentText() == port->itemText(port->currentIndex()) && port->itemData(port->currentIndex(), Qt::UserRole + 1).toBool())
     {
         serialText += "\nUSB Serial/JTAG · 速率由 USB 决定";
@@ -2051,6 +2128,10 @@ bool Window::nativeEvent(const QByteArray &type, void *message, qintptr *result)
 {
 #ifdef Q_OS_WIN
     const auto native = static_cast<MSG *>(message);
+    if (native->message == WM_DEVICECHANGE)
+    {
+        QTimer::singleShot(150, this, &Window::refreshPorts);
+    }
     if (primary && native->message == WM_EXITSIZEMOVE)
     {
         for (auto target : primary->hosts)

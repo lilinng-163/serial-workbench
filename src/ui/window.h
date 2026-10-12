@@ -138,6 +138,7 @@ public:
     QTimer portTimer;
     QJsonArray lastPorts;
     bool portsLoaded = false;
+    bool portEditing = false;
     std::function<QJsonArray()> portProvider = [] { return Engine::ports(); };
     QElapsedTimer settingsRefresh;
     QDialog *settingsDialog = nullptr;

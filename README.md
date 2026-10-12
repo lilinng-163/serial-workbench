@@ -2,7 +2,7 @@
 
 一个面向嵌入式开发的 Windows 串口与网络调试助手。人在界面查看数据，Codex、Claude、OpenCode 等 AI 通过 MCP 同时读取同一份数据，无需再次打开串口。
 
-当前版本：0.10.0，Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
+当前版本：0.10.1，Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
 
 ![像素掌机主题工作台](docs/pixel-workspace.png)
 
@@ -44,7 +44,7 @@
 
 | 功能 | 使用方式 |
 | --- | --- |
-| 串口 | 每秒自动扫描 COM 端口，保留手动输入和当前选择；波特率可直接编辑，范围 1～12000000，实际支持取决于设备和驱动 |
+| 串口 | 自动检测设备插拔，列表与端口字段同步更新；设备移除后回到 NULL，扫描不打断手动输入；波特率可直接编辑，范围 1～12000000，实际支持取决于设备和驱动 |
 | 串口参数 | 5/6/7/8 数据位，N/E/O/M/S 校验，1/1.5/2 停止位，RTS/CTS 或 XON/XOFF 流控，初始 DTR/RTS |
 | TCP 客户端 | 填写远端 IP/主机名和端口 |
 | TCP 服务端 | 填写本地 IPv4 和端口；支持最多 16 个客户端，发送时可选择目标客户端 |
@@ -61,7 +61,9 @@
 
 Espressif USB Serial/JTAG（VID `303A` / PID `1001`）会显示 USB 速率提示。这是 USB 通道，改变 COM 波特率后仍能正常读取文本不意味着设置失败；其没有 UART 物理波特率。通过 USB 转 UART 桥测试时，波特率才需要与固件 UART 一致。参考 [Espressif 官方说明](https://docs.espressif.com/projects/esp-brookesia/en/latest/system/usb_cli.html)。
 
-首次使用默认显示 `NULL`，表示尚未选择，不会尝试打开设备；之前保存的实体端口会恢复，旧版保存的软件回环端口会重置为 `NULL`。
+端口旁的「实时扫描」表示正在自动检测设备，无需点击刷新。列表展开时也会同步更新；设备移除后字段回到 `NULL`，已有连接的设备恢复与手动停止仍可使用。详情见 [实时端口发现](docs/live-ports.md)。
+
+首次使用默认显示 `NULL`，表示尚未选择，不会尝试打开设备；之前保存的实体端口仍可用时才恢复，旧版保存的软件回环端口会重置为 `NULL`。
 
 串口首次成功连接后，设备复位导致驱动读写失败时会进入「等待设备恢复」，持续重试原来的端口，恢复后自动接收。连接 ID、历史记录和 AI 的读取游标保持不变；手动断开会停止重试。设备暂时没有输出时仍保持连接。等待恢复期间禁止发送，失败的发送不会自动重放；首次打开端口失败时会提示错误，修改参数后可重新连接。此功能使用原来的 COM 端口，不跟踪设备更换 COM 编号的情况。
 
@@ -228,7 +230,7 @@ $env:MINGW_BIN = 'D:/lib/Qt/Tools/mingw1310_64/bin'
 .\scripts\build.ps1
 
 # 打包后的 HTTP / STDIO 集成测试，需要 Python MCP SDK
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.10.0
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.10.1
 ```
 
 测试覆盖独立读取与分页、真实 TCP/UDP socket、软件串口回环及重配置、UTF-8/GBK 分片解析、ANSI 颜色与终端、连接标签和布局、设置恢复、MCP HTTP/STDIO、权限、非阻塞等待和错误参数。实际 COM 硬件、USB 设备的实际线速及各 AI 客户端的完整对话需要在对应环境验证。

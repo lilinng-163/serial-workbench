@@ -97,6 +97,7 @@ public:
     QJsonObject describe() const;
     void open();
     void close();
+    void deviceMissing();
     void applySerial(const Config &next);
     void receive(const QByteArray &data, const QString &peer = {});
     QJsonObject send(const QByteArray &data, const QString &peer = {}, const QString &origin = "gui");
@@ -125,6 +126,7 @@ public:
     Channel *get(const QString &id) const;
     void remove(const QString &id);
     QJsonArray list() const;
+    void checkSerialDevices(const QJsonArray &available);
     static QJsonArray ports();
     static QByteArray encode(const QString &payload, bool hex, const QString &encoding, const QString &newline);
 

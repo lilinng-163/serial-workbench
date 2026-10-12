@@ -197,6 +197,23 @@ QJsonArray Engine::list() const
     return result;
 }
 
+void Engine::checkSerialDevices(const QJsonArray &available)
+{
+    QStringList names;
+    for (const auto &value : available)
+    {
+        names.append(value.toObject()["port"].toString().toLower());
+    }
+    for (auto channel : channels.values())
+    {
+        const auto name = channel->config.port.toLower().remove("\\\\.\\");
+        if (!names.contains(name))
+        {
+            channel->deviceMissing();
+        }
+    }
+}
+
 QJsonArray Engine::ports()
 {
     QJsonArray result;
@@ -325,6 +342,17 @@ void Channel::close()
     retryTimer.stop();
     releaseTransport();
     status("closed");
+}
+
+void Channel::deviceMissing()
+{
+    if (manualClose || config.kind != "serial" || config.port == "loop://" || state != "connected")
+    {
+        return;
+    }
+    releaseTransport();
+    status("reconnecting", "设备已移除：" + config.port);
+    retryTimer.start();
 }
 
 void Channel::applySerial(const Config &next)

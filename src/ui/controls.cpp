@@ -102,16 +102,16 @@ QString Theme::stylesheet() const
         QSpinBox::up-arrow { image: url(:/icons/chevron-up.svg); width: 8px; height: 5px; }
         QSpinBox::down-arrow { image: url(:/icons/chevron-down.svg); width: 8px; height: 5px; }
         QPushButton, QToolButton { background: transparent; border: 1px solid transparent; border-radius: 0; padding: 6px 12px; min-height: 22px; }
-        QPushButton:hover, QToolButton:hover { background: $hover; border-color: $edge; }
-        QPushButton:checked { background: $hover; border-color: $edge; }
-        QPushButton:focus, QToolButton:focus { border-color: $accent; }
-        QPushButton:pressed, QToolButton:pressed { background: $line; }
+        QPushButton:hover, QToolButton:hover { color: $accent; }
+        QPushButton:checked { color: $accent; font-weight: 600; }
+        QPushButton:focus, QToolButton:focus { color: $accent; }
+        QPushButton:pressed, QToolButton:pressed { color: $text; padding-top: 7px; padding-bottom: 5px; }
         QPushButton#primary { background: $accent; color: $onaccent; border: 2px solid $text; border-bottom-width: 4px; padding: 6px 16px; }
-        QPushButton#primary:hover { background: $primaryhover; }
-        QPushButton#primary:pressed { border-bottom-width: 2px; padding-top: 8px; }
+        QPushButton#primary:hover { background: $primaryhover; color: $onaccent; }
+        QPushButton#primary:pressed { color: $onaccent; border-bottom-width: 2px; padding-top: 8px; }
         QPushButton#primary:disabled { background: $line; color: $muted; border-color: $edge; }
         QPushButton#outline { border: 1px solid $edge; border-bottom-width: 2px; background: $panel; }
-        QPushButton#outline:hover { background: $hover; }
+        QPushButton#outline:hover { color: $accent; }
         QPushButton:disabled, QToolButton:disabled { color: $muted; }
         QPlainTextEdit, QTextEdit { border: 1px solid $edge; border-radius: 0; background: $panel; padding: 8px; selection-background-color: $accent; selection-color: $onaccent; }
         QPlainTextEdit:focus { border-color: $accent; }
@@ -407,38 +407,14 @@ void IconButton::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
     const bool onRail = parentWidget() && parentWidget()->objectName() == "rail";
-    const bool highlighted = isChecked() || progress > 0;
     const QColor foreground = onRail ? QColor("#d7dfc4") : theme.muted;
-    const auto box = rect().adjusted(1, 1, -2, -2);
-    if (highlighted || isDown())
-    {
-        QColor fill = isChecked() ? theme.accent : onRail ? QColor("#435b49") : theme.hover;
-        if (!isChecked())
-        {
-            fill.setAlphaF(progress);
-        }
-        p.fillRect(box, fill);
-        p.setPen(isChecked() ? theme.text : onRail ? QColor("#71826a") : theme.edge);
-        p.drawRect(box);
-        if (isChecked())
-        {
-            p.fillRect(box.left(), box.bottom() - 1, box.width(), 2, theme.text);
-        }
-    }
-    const int shift = isDown() ? 1 : 0;
-    const qreal extent = qMin(20, qMin(width(), height()) - 4);
+    const QColor active = onRail ? QColor("#edaa50") : theme.accent;
+    const QColor color = !isEnabled() ? theme.line
+        : isChecked() || hasFocus() || progress > 0.3 ? active : foreground;
+    const qreal shift = isDown() ? 1.0 : -progress;
+    const qreal extent = qMin(20.0, qreal(qMin(width(), height()) - 6)) + progress;
     drawIcon(p, glyph == "pause" && isChecked() ? "play" : glyph,
-             QRectF((width() - extent) / 2 + shift, (height() - extent) / 2 + shift, extent, extent),
-             !isEnabled()                ? theme.line
-             : isChecked()               ? theme.onAccent
-             : progress > 0.3 && !onRail ? theme.text
-                                         : foreground);
-    if (hasFocus())
-    {
-        p.setPen(QPen(theme.accent, 1, Qt::DotLine));
-        p.setBrush(Qt::NoBrush);
-        p.drawRect(rect().adjusted(0, 0, -1, -1));
-    }
+             QRectF((width() - extent) / 2, (height() - extent) / 2 + shift, extent, extent), color);
 }
 
 Combo::Combo(QWidget *parent) : QComboBox(parent)

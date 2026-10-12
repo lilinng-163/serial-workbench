@@ -10,6 +10,7 @@ class NativeTests : public QObject
 private slots:
     void initTestCase()
     {
+        QApplication::setStyle("Fusion");
         QApplication::setFont(sw::Theme::interfaceFont());
     }
 
@@ -247,6 +248,7 @@ private slots:
         QTemporaryDir directory;
         sw::Engine engine;
         sw::McpServer mcp(&engine);
+        QJsonArray available;
         sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
         window.show();
         QTest::qWait(200);
@@ -292,7 +294,7 @@ private slots:
         QVERIFY(pane->newline->itemText(3).contains("\\r\\n"));
         QVERIFY(pane->newline->itemText(3).contains("CRLF"));
 
-        QJsonArray available {QJsonObject {{"port", "COM44"}, {"description", "Test device"}}};
+        available = {QJsonObject {{"port", "COM44"}, {"description", "Test device"}}};
         window.portProvider = [&available] { return available; };
         window.refreshPorts();
         QVERIFY(window.port->findText("COM44") >= 0);
@@ -301,8 +303,8 @@ private slots:
         window.port->lineEdit()->setSelection(1, 3);
         window.portTimer.setInterval(30);
         QTRY_VERIFY(window.port->findText("COM45") >= 0);
-        QCOMPARE(window.port->currentText(), "COM44");
-        QCOMPARE(window.port->lineEdit()->selectedText(), "OM4");
+        QCOMPARE(window.port->currentText(), "NULL");
+        QCOMPARE(window.active->draft.port, QString("NULL"));
         QVERIFY(window.port->findText("COM44") < 0);
         window.port->setCurrentText("loop://");
         available = {};
@@ -321,6 +323,95 @@ private slots:
         pane->sendCurrent();
         QTRY_COMPARE(channel->rx, 6);
         QCOMPARE(QByteArray::fromHex(engine.journal.read(0)["events"].toArray().last().toObject()["hex"].toString().toLatin1()), QByteArray("line\r\n"));
+        window.close();
+    }
+
+    void livePortDiscovery()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        QJsonArray available {
+            QJsonObject {{"port", "COM8"}, {"description", "USB UART"}},
+            QJsonObject {{"port", "COM9"}}
+        };
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        window.portProvider = [&available] { return available; };
+        window.portTimer.setInterval(30);
+        window.refreshPorts();
+        window.show();
+        window.port->setCurrentText("COM8");
+        window.port->lineEdit()->setSelection(1, 2);
+        QSignalSpy reset(window.port->model(), &QAbstractItemModel::modelReset);
+        QSignalSpy inserted(window.port->model(), &QAbstractItemModel::rowsInserted);
+        QSignalSpy removed(window.port->model(), &QAbstractItemModel::rowsRemoved);
+        available[0] = QJsonObject {{"port", "COM8"}, {"description", "Updated device"}};
+        window.refreshPorts();
+        QCOMPARE(window.port->currentText(), "COM8");
+        QCOMPARE(window.port->lineEdit()->selectedText(), "OM");
+        QCOMPARE(window.port->itemData(1, Qt::ToolTipRole).toString(), QString("Updated device"));
+        QCOMPARE(reset.count(), 0);
+        QCOMPARE(inserted.count(), 0);
+        QCOMPARE(removed.count(), 0);
+
+        available.removeAt(0);
+        QTRY_COMPARE(window.port->currentText(), QString("NULL"));
+        QCOMPARE(window.active->draft.port, QString("NULL"));
+        QCOMPARE(window.port->findText("COM8"), -1);
+        QCOMPARE(removed.count(), 1);
+
+        window.port->setCurrentText("COM9");
+        window.port->showPopup();
+        QTRY_VERIFY(window.port->view()->isVisible());
+        available.append(QJsonObject {{"port", "COM10"}});
+        QTRY_VERIFY(window.port->findText("COM10") > 0);
+        QCOMPARE(window.port->currentText(), "COM9");
+        available.removeAt(0);
+        QTRY_COMPARE(window.port->currentText(), QString("NULL"));
+        QVERIFY(window.port->view()->isVisible());
+        QCOMPARE(reset.count(), 0);
+        window.port->hidePopup();
+
+        window.port->lineEdit()->setFocus();
+        QTest::keyClick(window.port->lineEdit(), Qt::Key_A, Qt::ControlModifier);
+        QTest::keyClicks(window.port->lineEdit(), "COM");
+        available.append(QJsonObject {{"port", "COM11"}});
+        window.refreshPorts();
+        QCOMPARE(window.port->currentText(), "COM");
+        QCOMPARE(window.port->lineEdit()->cursorPosition(), 3);
+        QTest::keyClick(window.port->lineEdit(), Qt::Key_Return);
+        QCOMPARE(window.port->currentText(), "NULL");
+        QCOMPARE(window.port->findText("COM"), -1);
+
+        window.port->setCurrentText("COM8");
+        window.refreshPorts();
+        QCOMPARE(window.port->currentText(), "NULL");
+        sw::Config saved;
+        saved.port = "COM8";
+        window.loadForm(saved);
+        QCOMPARE(window.port->currentText(), "NULL");
+
+        // A lost device must not disable the existing connection's stop action.
+        available.append(QJsonObject {{"port", "COM9"}});
+        window.refreshPorts();
+        sw::Config loopback;
+        loopback.port = "loop://";
+        auto channel = engine.open(loopback);
+        channel->config.port = "COM9";
+        window.tabs->setCurrentIndex(window.stack->indexOf(window.findPane(channel)));
+        window.loadForm(channel->config);
+        QCOMPARE(window.port->currentText(), "COM9");
+        available = {};
+        window.refreshPorts();
+        QCOMPARE(window.port->currentText(), "NULL");
+        QCOMPARE(window.connectButton->text(), QString("断开连接"));
+        QCOMPARE(channel->state, QString("reconnecting"));
+        QVERIFY(channel->retryTimer.isActive());
+        QVERIFY(channel->error.contains("COM9"));
+        window.connectionAction();
+        QCOMPARE(channel->state, "closed");
+        QVERIFY(!channel->retryTimer.isActive());
+        QCOMPARE(channel->config.port, QString("COM9"));
         window.close();
     }
 
@@ -413,6 +504,8 @@ private slots:
         sw::McpServer mcp(&engine);
         sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
         window.show();
+        window.portProvider = [] { return QJsonArray {QJsonObject {{"port", "COM77"}}}; };
+        window.refreshPorts();
         window.port->setCurrentText("COM77");
         window.baud->setCurrentText("230400");
         auto draft = window.active;
