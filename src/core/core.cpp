@@ -351,7 +351,7 @@ void Channel::deviceMissing()
         return;
     }
     releaseTransport();
-    status("reconnecting", "设备已移除：" + config.port);
+    status("reconnecting", QString("串口 %1 已断开，等待设备恢复").arg(config.port));
     retryTimer.start();
 }
 
@@ -464,7 +464,7 @@ void Channel::open()
                     {
                         const QString message = serial->errorString();
                         releaseTransport();
-                        status("reconnecting", message);
+                        status("reconnecting", QString("串口 %1 已断开，等待设备恢复（%2）").arg(config.port, message));
                         retryTimer.start();
                     }
                 });
@@ -550,10 +550,14 @@ void Channel::open()
     catch (const std::exception &exception)
     {
         releaseTransport();
-        status(recovering ? "reconnecting" : "error", QString::fromUtf8(exception.what()));
         if (recovering)
         {
+            // Keep the first outage notification; retries are background work.
             retryTimer.start();
+        }
+        else
+        {
+            status("error", QString::fromUtf8(exception.what()));
         }
     }
     opening = false;

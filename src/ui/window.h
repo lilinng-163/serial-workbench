@@ -159,6 +159,7 @@ public:
     Config form() const;
     void loadForm(const Config &config);
     void refreshPorts();
+    bool holdsSerialPort(const QString &name) const;
     void protocolChanged();
     void openSettings();
     void configureClient(int index, QLabel *result);

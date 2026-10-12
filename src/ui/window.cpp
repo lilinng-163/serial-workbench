@@ -1517,7 +1517,7 @@ void Window::loadForm(const Config &c)
     portEditing = false;
     const int portIndex = port->findText(c.port, Qt::MatchFixedString);
     const QString selectedPort = portIndex >= 0 ? port->itemText(portIndex)
-        : !portsLoaded || c.port == "loop://" ? c.port : "NULL";
+        : !portsLoaded || c.port == "loop://" || holdsSerialPort(c.port) ? c.port : "NULL";
     port->setCurrentText(selectedPort);
     if (active && !active->channel)
     {
@@ -1556,6 +1556,13 @@ void Window::protocolChanged()
         widget->setVisible(index == 2 || index == 3);
     }
     configStack->updateGeometry();
+}
+
+bool Window::holdsSerialPort(const QString &name) const
+{
+    auto channel = active ? active->channel.data() : nullptr;
+    return channel && channel->config.kind == "serial" && channel->config.port == name
+        && !channel->manualClose && (channel->state == "connected" || channel->state == "reconnecting");
 }
 
 void Window::refreshPorts()
@@ -1618,7 +1625,7 @@ void Window::refreshPorts()
 
     const int selectedIndex = port->findText(selected, Qt::MatchFixedString);
     const bool editing = portEditing && edit->hasFocus();
-    const bool missing = selectedIndex < 0 && selected != "loop://" && !editing;
+    const bool missing = selectedIndex < 0 && selected != "loop://" && !editing && !holdsSerialPort(selected);
     const auto next = missing || selected.isEmpty() ? QString("NULL")
         : selectedIndex >= 0 ? port->itemText(selectedIndex) : selected;
     if (port->currentText() != next)
@@ -1841,7 +1848,13 @@ void Window::updateStatus()
     const bool same = channel && channel->config.kind == QStringList {"serial", "tcp-client", "tcp-server", "udp"}[protocol->currentIndex()]
         && (channel->config.kind != "serial" || channel->config.port == port->currentText() || port->currentText() == "NULL");
     const bool ready = channel && (channel->state == "connected" || channel->state == "listening" || channel->state == "connecting" || channel->state == "reconnecting");
-    connectButton->setText(same && ready ? channel->state == "listening" ? "停止监听" : "断开连接" : "建立连接");
+    QString actionText = "建立连接";
+    if (same && ready)
+    {
+        actionText = channel->state == "reconnecting" ? "停止重连"
+            : channel->state == "listening" ? "停止监听" : "断开连接";
+    }
+    connectButton->setText(actionText);
     if (channel)
     {
         QString text = stateText(channel->state);
@@ -1858,6 +1871,7 @@ void Window::updateStatus()
         status->setText("尚未连接    选择端口开始接收");
     }
     QString serialText = port->currentText() == "NULL" ? "尚未选择串口"
+        : channel && same && channel->state == "reconnecting" ? QString("%1 已断开，等待设备恢复").arg(channel->config.port)
         : channel && same && channel->appliedBaud ? QString("驱动已确认 %1 bps").arg(channel->appliedBaud)
         : port->itemData(port->currentIndex(), Qt::ToolTipRole).toString();
     if (port->currentText() == port->itemText(port->currentIndex()) && port->itemData(port->currentIndex(), Qt::UserRole + 1).toBool())

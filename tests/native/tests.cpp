@@ -403,8 +403,9 @@ private slots:
         QCOMPARE(window.port->currentText(), "COM9");
         available = {};
         window.refreshPorts();
-        QCOMPARE(window.port->currentText(), "NULL");
-        QCOMPARE(window.connectButton->text(), QString("断开连接"));
+        QCOMPARE(window.port->currentText(), "COM9");
+        QCOMPARE(window.port->findText("COM9"), -1);
+        QCOMPARE(window.connectButton->text(), QString("停止重连"));
         QCOMPARE(channel->state, QString("reconnecting"));
         QVERIFY(channel->retryTimer.isActive());
         QVERIFY(channel->error.contains("COM9"));
@@ -412,6 +413,75 @@ private slots:
         QCOMPARE(channel->state, "closed");
         QVERIFY(!channel->retryTimer.isActive());
         QCOMPARE(channel->config.port, QString("COM9"));
+        window.close();
+    }
+
+    void serialRecoveryIsQuiet()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        // Simulate discovery without opening any physical device.
+        QJsonArray available {QJsonObject {{"port", "COM65535"}}};
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        window.portProvider = [&available] { return available; };
+        window.refreshPorts();
+        sw::Config config;
+        config.port = "loop://";
+        auto channel = engine.open(config);
+        channel->config.port = "COM65535";
+        window.tabs->setCurrentIndex(window.stack->indexOf(window.findPane(channel)));
+        window.loadForm(channel->config);
+        auto pane = window.active;
+        window.show();
+        channel->receive("preserved data\r\n");
+        const auto identity = channel->id;
+        const auto before = engine.journal.sequence;
+
+        available = {};
+        window.refreshPorts();
+        QCOMPARE(engine.journal.sequence, before + 1);
+        const auto reason = channel->error;
+        QTRY_VERIFY(channel->attempts >= 3);
+        QCOMPARE(engine.journal.sequence, before + 1);
+        QCOMPARE(channel->error, reason);
+        QCOMPARE(channel->state, QString("reconnecting"));
+        QCOMPARE(window.port->currentText(), QString("COM65535"));
+        QCOMPARE(window.connectButton->text(), QString("停止重连"));
+        QVERIFY(window.serialInfo->text().contains("等待设备恢复"));
+        pane->tick();
+        QCOMPARE(pane->log->toPlainText().count("已断开"), 1);
+        QVERIFY(pane->log->toPlainText().contains("preserved data"));
+
+        window.newConnection();
+        window.tabs->setCurrentIndex(window.stack->indexOf(pane));
+        window.loadForm(channel->config);
+        QCOMPARE(window.port->currentText(), QString("COM65535"));
+        QCOMPARE(window.connectButton->text(), QString("停止重连"));
+        window.refreshPorts();
+        QCOMPARE(window.port->currentText(), QString("COM65535"));
+
+        // A successful recovery retains identity/history and re-arms notification.
+        channel->config.port = "loop://";
+        channel->open();
+        QCOMPARE(channel->state, QString("connected"));
+        QCOMPARE(channel->id, identity);
+        QVERIFY(!channel->retryTimer.isActive());
+        QCOMPARE(engine.journal.sequence, before + 2);
+        QVERIFY(engine.journal.read(before + 1)["events"].toArray().first().toObject()["stream_reset"].toBool());
+        channel->config.port = "COM65535";
+        window.loadForm(channel->config);
+        window.refreshPorts();
+        QCOMPARE(channel->state, QString("reconnecting"));
+        QCOMPARE(engine.journal.sequence, before + 3);
+        window.connectionAction();
+        QCOMPARE(channel->state, QString("closed"));
+        QVERIFY(!channel->retryTimer.isActive());
+        const auto stopped = engine.journal.sequence;
+        QTest::qWait(400);
+        QCOMPARE(engine.journal.sequence, stopped);
+        window.refreshPorts();
+        QCOMPARE(window.port->currentText(), QString("NULL"));
         window.close();
     }
 
