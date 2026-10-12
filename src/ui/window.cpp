@@ -46,6 +46,16 @@ static QPushButton *button(const QString &text, const QString &name = {})
     return result;
 }
 
+static QWidget *tabCloseSlot(IconButton *close)
+{
+    auto slot = new QWidget();
+    slot->setFixedSize(close->width() + 8, close->height());
+    auto layout = horizontal(slot);
+    layout->setContentsMargins(0, 0, 8, 0);
+    layout->addWidget(close);
+    return slot;
+}
+
 static Pane *tabPane(ConnectionBar *bar, int index)
 {
     return index < 0 ? nullptr : qobject_cast<Pane *>(bar->tabData(index).value<QObject *>());
@@ -917,7 +927,7 @@ void Pane::decoratePage(QWidget *page)
     close->setFixedSize(22, 22);
     close->theme = window->theme;
     connect(close, &QAbstractButton::clicked, this, [this, page] { closeInstrument(pages->indexOf(page)); });
-    pages->tabBar()->setTabButton(index, QTabBar::RightSide, close);
+    pages->tabBar()->setTabButton(index, QTabBar::RightSide, tabCloseSlot(close));
 }
 
 void Pane::closeInstrument(int index)
@@ -1215,7 +1225,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     tabHeader->setFixedHeight(52);
     auto header = horizontal(tabHeader);
     header->setContentsMargins(12, 0, 12, 0);
-    header->setSpacing(4);
+    header->setSpacing(0);
     tabs = new ConnectionBar();
     tabs->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(tabs, &QWidget::customContextMenuRequested, this, &Window::tabMenu);
@@ -1228,6 +1238,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     header->addWidget(tabs);
     plus = new IconButton("plus", "新建连接");
     plus->setObjectName("newConnection");
+    plus->setFixedSize(26, 34);
     connect(plus, &QAbstractButton::clicked, this, [this] { newConnection(); });
     header->addWidget(plus);
     header->addStretch();
@@ -1445,7 +1456,7 @@ void Window::attachPane(Pane *pane)
     close->setFixedSize(24, 24);
     close->theme = theme;
     connect(close, &QAbstractButton::clicked, this, [this, pane] { closeTab(paneIndex(tabs, pane)); });
-    tabs->setTabButton(index, QTabBar::RightSide, close);
+    tabs->setTabButton(index, QTabBar::RightSide, tabCloseSlot(close));
     tabs->blockSignals(false);
     tabs->setCurrentIndex(index);
     activate(index);
@@ -2223,10 +2234,14 @@ void Window::openSettings()
     auto font = button(dataFont.family(), "outline");
     connect(font, &QPushButton::clicked, this, [this, font]
     {
-        bool accepted = false;
-        auto selected = QFontDialog::getFont(&accepted, dataFont, this, "数据字体");
-        if (accepted)
+        QFontDialog dialog(dataFont, settingsDialog);
+        dialog.setOption(QFontDialog::DontUseNativeDialog);
+        dialog.setWindowTitle("数据字体");
+        dialog.setPalette(palette());
+        dialog.setStyleSheet(theme.stylesheet());
+        if (dialog.exec() == QDialog::Accepted)
         {
+            const auto selected = dialog.selectedFont();
             setDataFont(selected);
             font->setText(selected.family());
         }
@@ -2296,6 +2311,8 @@ void Window::openSettings()
         row->addWidget(label(names[i], "brand"));
         row->addStretch();
         auto configure = button("配置并检查", "outline");
+        configure->setAutoDefault(false);
+        configure->setDefault(false);
         row->addWidget(configure);
         clientBody->addLayout(row);
         auto result = label("保留其他配置，修改前创建备份", "muted");

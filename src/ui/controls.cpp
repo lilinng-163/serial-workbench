@@ -73,7 +73,8 @@ QString Theme::stylesheet() const
         QWidget#tabHeader { background: $bg; border-bottom: 2px solid $edge; }
         QWidget#monitorToolbar { background: $side; border-bottom: 1px solid $line; }
         QWidget#sender { background: $side; border-top: 1px solid $line; }
-        QLabel { background: transparent; border: none; }
+        QLabel { color: $text; background: transparent; border: none; }
+        QGroupBox { color: $text; }
         QLabel#muted { color: $muted; font-size: 13px; }
         QLabel#section { font-size: 14px; font-weight: 600; color: $text; padding: 0 0 8px 0; border-bottom: 2px solid $edge; }
         QLabel#brand { font-size: 14px; }
@@ -110,12 +111,17 @@ QString Theme::stylesheet() const
         QPushButton#primary:hover { background: $primaryhover; color: $onaccent; }
         QPushButton#primary:pressed { color: $onaccent; border-bottom-width: 2px; padding-top: 8px; }
         QPushButton#primary:disabled { background: $line; color: $muted; border-color: $edge; }
-        QPushButton#outline { border: 1px solid $edge; border-bottom-width: 2px; background: $panel; }
+        QPushButton#outline { color: $text; border: 1px solid $edge; border-bottom-width: 2px; background: $panel; }
+        QPushButton#outline:focus { border-color: $text; }
         QPushButton#outline:hover { color: $accent; }
         QPushButton:disabled, QToolButton:disabled { color: $muted; }
         QPlainTextEdit, QTextEdit { border: 1px solid $edge; border-radius: 0; background: $panel; padding: 8px; selection-background-color: $accent; selection-color: $onaccent; }
         QPlainTextEdit:focus { border-color: $accent; }
         QTextEdit#monitor { border: none; padding: 16px 18px; }
+        QFontDialog QListView { color: $text; background: $panel; border: 1px solid $edge; selection-background-color: $hover; selection-color: $text; outline: none; }
+        QFontDialog QListView::item { padding: 3px 6px; }
+        QFontDialog QGroupBox { color: $text; border: 1px solid $edge; margin-top: 12px; padding: 10px; }
+        QFontDialog QGroupBox::title { color: $text; subcontrol-origin: margin; left: 8px; padding: 0 4px; }
         QTreeWidget { border: 1px solid $line; background: $panel; alternate-background-color: $side; outline: none; }
         QTreeWidget::item { padding: 6px; min-height: 22px; }
         QTreeWidget::item:selected { background: $hover; color: $text; }
@@ -128,7 +134,7 @@ QString Theme::stylesheet() const
         QTabBar::tab { background: $side; padding: 11px 12px; border-right: 1px solid $line; border-bottom: 3px solid transparent; color: $muted; }
         QTabBar::tab:selected { color: $text; border-bottom-color: $accent; background: $panel; }
         QTabBar::tab:hover { background: $hover; }
-        QTabBar#connections::tab { padding: 9px 10px; margin: 4px 4px 0 0; border: 1px solid $edge; border-bottom: 3px solid $edge; background: $side; }
+        QTabBar#connections::tab { padding: 9px 10px; margin: 4px 0 0 0; border: 1px solid $edge; border-bottom: 3px solid $edge; background: $side; }
         QTabBar#connections::tab:selected { background: $panel; border-bottom-color: $accent; color: $text; }
         QMenu { background: $panel; border: 2px solid $edge; padding: 4px; }
         QMenu::item { padding: 10px 28px 10px 16px; border: 1px solid transparent; }
@@ -542,7 +548,7 @@ ConnectionBar::ConnectionBar(QWidget *parent) : TearTabBar(parent)
 QSize ConnectionBar::tabSizeHint(int index) const
 {
     return QSize(
-        qBound(116, fontMetrics().horizontalAdvance(tabText(index)) + (tabIcon(index).isNull() ? 68 : 88), 218), 43);
+        qBound(124, fontMetrics().horizontalAdvance(tabText(index)) + (tabIcon(index).isNull() ? 76 : 96), 226), 43);
 }
 
 QSize ConnectionBar::sizeHint() const
