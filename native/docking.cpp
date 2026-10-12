@@ -179,6 +179,7 @@ FloatingPage::FloatingPage(DetachableTabs *tabs, QWidget *content, const QString
     setAttribute(Qt::WA_DeleteOnClose);
     setWindowTitle(text + " · Serial Workbench");
     setWindowIcon(tabs->window()->windowIcon());
+    setFont(tabs->window()->font());
     setStyleSheet(tabs->window()->styleSheet());
     setPalette(tabs->palette());
     connect(tabs, &QObject::destroyed, this, [this] {

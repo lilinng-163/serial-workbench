@@ -93,7 +93,40 @@ LogView::LogView(QWidget *parent) : QTextEdit(parent)
     setReadOnly(true);
     document()->setMaximumBlockCount(4000);
     setLineWrapMode(QTextEdit::NoWrap);
-    setPlaceholderText("等待设备数据\n\n在左侧选择串口并连接，或新建 TCP / UDP 连接。");
+}
+
+void LogView::paintEvent(QPaintEvent *event)
+{
+    QTextEdit::paintEvent(event);
+    if (!document()->isEmpty())
+    {
+        return;
+    }
+
+    QPainter painter(viewport());
+    if (viewport()->height() < 180)
+    {
+        painter.setFont(Theme::interfaceFont());
+        painter.setPen(theme.muted);
+        painter.drawText(viewport()->rect(), Qt::AlignCenter, "等待设备数据");
+        return;
+    }
+    const int center = viewport()->width() / 2;
+    const int top = qMax(20, viewport()->height() / 2 - 90);
+    const QRect badge(center - 32, top, 64, 64);
+    painter.fillRect(badge, theme.sidebar);
+    painter.setPen(theme.edge);
+    painter.drawRect(badge);
+    drawIcon(painter, "port", badge.adjusted(8, 8, -8, -8), theme.green);
+
+    QFont title = Theme::interfaceFont();
+    title.setPixelSize(24);
+    painter.setFont(title);
+    painter.setPen(theme.text);
+    painter.drawText(QRect(0, top + 82, viewport()->width(), 30), Qt::AlignCenter, "等待设备数据");
+    painter.setFont(Theme::interfaceFont());
+    painter.setPen(theme.muted);
+    painter.drawText(QRect(8, top + 124, viewport()->width() - 16, 24), Qt::AlignCenter, "建立连接后，收发内容会显示在这里");
 }
 
 void LogView::reset()

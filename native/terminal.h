@@ -35,6 +35,7 @@ public:
     QMap<QString, std::shared_ptr<Stream>> streams;
     void feed(const QJsonObject &event);
     void reset();
+    void paintEvent(QPaintEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
 signals:
     void zoomRequested(int steps);

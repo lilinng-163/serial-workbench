@@ -49,7 +49,7 @@ public:
     QPlainTextEdit *payload;
     QWidget *sender;
     Splitter *splitter;
-    QList<int> senderSizes {600, 150};
+    QList<int> senderSizes {600, 176};
     Combo *encoding;
     Combo *newline;
     Combo *peer;

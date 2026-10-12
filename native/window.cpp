@@ -290,6 +290,7 @@ Pane::Pane(Window *owner) : QWidget(owner), window(owner)
     monitor->setContentsMargins(0, 0, 0, 0);
     monitor->setSpacing(0);
     auto toolbar = new QWidget();
+    toolbar->setObjectName("monitorToolbar");
     auto tools = horizontal(toolbar);
     tools->setContentsMargins(16, 8, 14, 6);
     tools->setSpacing(4);
@@ -351,12 +352,17 @@ Pane::Pane(Window *owner) : QWidget(owner), window(owner)
     sender = new QWidget();
     sender->setObjectName("sender");
     auto sendBody = new QVBoxLayout(sender);
-    sendBody->setContentsMargins(18, 4, 18, 12);
+    sendBody->setContentsMargins(18, 8, 18, 12);
     sendBody->setSpacing(8);
+    auto senderHeading = horizontal();
+    senderHeading->addWidget(label("发送缓冲", "senderLabel"));
+    senderHeading->addStretch();
+    senderHeading->addWidget(label("Ctrl + Enter", "senderLabel"));
+    sendBody->addLayout(senderHeading);
     payload = new QPlainTextEdit();
     payload->viewport()->installEventFilter(this);
     payload->setMinimumHeight(54);
-    payload->setPlaceholderText("输入待发送内容    Ctrl + Enter 发送");
+    payload->setPlaceholderText("输入待发送内容…");
     sendBody->addWidget(payload, 1);
     auto sendTools = horizontal();
     sendTools->setSpacing(6);
@@ -1005,7 +1011,8 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
 {
     rootWindow()->hosts.append(this);
     setWindowTitle("Serial Workbench · Native " + Version);
-    setWindowIcon(icon("port", QColor("#337de7"), 32));
+    setWindowIcon(icon("port", Theme::make(false).accent, 32));
+    setFont(Theme::interfaceFont());
     setMinimumSize(480, 320);
     resize(1400, 900);
     QFile settingsFile(path);
@@ -1017,7 +1024,16 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     templates = saved["templates"].toArray();
     const auto appearance = saved["appearance"].toObject();
     theme = Theme::make(appearance["theme"] == "dark");
-    dataFont = QFont(appearance["font_family"].toString("Cascadia Mono"), qBound(8, appearance["font_size"].toInt(11), 32));
+    dataFont = Theme::defaultDataFont();
+    const auto savedFamily = appearance["font_family"].toString();
+    const bool previousDefault = !appearance.contains("pixel_theme")
+        && savedFamily == "Cascadia Mono" && appearance["font_size"].toInt(11) == 11;
+    if (!savedFamily.isEmpty() && !previousDefault)
+    {
+        dataFont.setFamily(savedFamily);
+        dataFont.setPointSize(qBound(8, appearance["font_size"].toInt(18), 32));
+        dataFont.setStyleStrategy(savedFamily.startsWith("Fusion Pixel") ? QFont::NoAntialias : QFont::PreferDefault);
+    }
     if (!primary)
     {
         engine->allowControl = saved["allow_ai_control"].toBool();
@@ -1066,10 +1082,25 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     });
     connect(workbench, &QAbstractButton::toggled, this, [this] { QTimer::singleShot(0, this, &Window::adjustTabs); });
     auto side = new QVBoxLayout(sidebar);
-    side->setContentsMargins(20, 20, 20, 16);
-    side->setSpacing(14);
-    side->addWidget(label("Serial Workbench", "brand"));
-    side->addSpacing(10);
+    side->setContentsMargins(16, 16, 16, 16);
+    side->setSpacing(12);
+    auto brand = new QWidget();
+    brand->setObjectName("pixelBrand");
+    auto brandBody = new QVBoxLayout(brand);
+    brandBody->setContentsMargins(14, 14, 14, 12);
+    brandBody->setSpacing(10);
+    auto brandTop = horizontal();
+    auto emblem = new QLabel();
+    emblem->setPixmap(icon("port", QColor("#edaa50"), 32).pixmap(32, 32));
+    emblem->setFixedSize(32, 32);
+    brandTop->addWidget(emblem);
+    brandTop->addStretch();
+    brandTop->addWidget(label("SW", "brandMark"));
+    brandBody->addLayout(brandTop);
+    brandBody->addWidget(label("Serial\nWorkbench", "brandTitle"));
+    brandBody->addWidget(label("串口 / 网络调试", "brandSubtitle"));
+    side->addWidget(brand);
+    side->addSpacing(4);
     side->addWidget(label("连接参数", "section"));
     protocol = new ProtocolCombo();
     side->addWidget(protocol);
@@ -1159,7 +1190,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     connect(connectButton, &QPushButton::clicked, this, &Window::connectionAction);
     side->addWidget(connectButton);
     side->addStretch();
-    auto hint = label("已连接时修改波特率立即生效\n波特率以驱动回读结果为准", "muted");
+    auto hint = label("参数修改实时应用\n波特率以驱动回读为准", "connectionHint");
     hint->setWordWrap(true);
     side->addWidget(hint);
     auto sideScroll = new QScrollArea();
@@ -1175,7 +1206,8 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     rightBody->setContentsMargins(0, 0, 0, 0);
     rightBody->setSpacing(0);
     tabHeader = new QWidget();
-    tabHeader->setFixedHeight(48);
+    tabHeader->setObjectName("tabHeader");
+    tabHeader->setFixedHeight(52);
     auto header = horizontal(tabHeader);
     header->setContentsMargins(12, 0, 12, 0);
     header->setSpacing(4);
@@ -1669,10 +1701,9 @@ void Window::syncConnections()
         QPixmap pixmap(16, 16);
         pixmap.fill(Qt::transparent);
         QPainter painter(&pixmap);
-        painter.setRenderHint(QPainter::Antialiasing);
         painter.setPen(Qt::NoPen);
         painter.setBrush(color);
-        painter.drawEllipse(4, 4, 8, 8);
+        painter.drawRect(4, 4, 8, 8);
         painter.end();
         tabs->setTabIcon(index, QIcon(pixmap));
         tabs->setTabText(index, channel->name);
@@ -1772,6 +1803,22 @@ void Window::applyTheme(bool dark)
     {
         if (hostWindow) { hostWindow->applyLocalTheme(dark); }
     }
+    for (auto widget : QApplication::topLevelWidgets())
+    {
+        auto floating = qobject_cast<FloatingPage *>(widget);
+        if (!floating)
+        {
+            continue;
+        }
+        floating->setStyleSheet(theme.stylesheet());
+        floating->setPalette(palette());
+        floating->setFont(Theme::interfaceFont());
+        for (auto control : floating->findChildren<IconButton *>())
+        {
+            control->theme = theme;
+            control->update();
+        }
+    }
 }
 
 void Window::applyLocalTheme(bool dark)
@@ -1786,7 +1833,8 @@ void Window::applyLocalTheme(bool dark)
     palette.setColor(QPalette::WindowText, theme.text);
     palette.setColor(QPalette::ButtonText, theme.text);
     palette.setColor(QPalette::Highlight, theme.accent);
-    palette.setColor(QPalette::HighlightedText, dark ? QColor("#172337") : QColor("#ffffff"));
+    palette.setColor(QPalette::HighlightedText, theme.onAccent);
+    palette.setColor(QPalette::PlaceholderText, theme.muted);
     palette.setColor(QPalette::Mid, theme.muted);
     setPalette(palette);
     for (auto control : findChildren<IconButton *>())
@@ -1811,6 +1859,7 @@ void Window::setDataFont(const QFont &font)
     }
     dataFont = font;
     dataFont.setPointSize(qBound(8, font.pointSize(), 32));
+    dataFont.setStyleStrategy(dataFont.family().startsWith("Fusion Pixel") ? QFont::NoAntialias : QFont::PreferDefault);
     for (auto hostWindow : hosts)
     {
         if (!hostWindow) { continue; }
@@ -1888,6 +1937,7 @@ void Window::saveSettings()
     }
     QJsonObject appearance = active ? active->settings() : QJsonObject();
     appearance["theme"] = theme.dark ? "dark" : "light";
+    appearance["pixel_theme"] = true;
     appearance["font_family"] = dataFont.family();
     appearance["font_size"] = dataFont.pointSize();
     QJsonObject connection = saved["connection"].toObject();
@@ -2066,9 +2116,12 @@ void Window::openSettings()
     auto appearance = new QWidget();
     auto appearanceBody = new QVBoxLayout(appearance);
     appearanceBody->setContentsMargins(20, 24, 20, 20);
+    appearanceBody->addWidget(label("像素掌机", "themeTitle"));
+    appearanceBody->addWidget(label("灰绿屏幕 / 琥珀按键 / 点阵字形", "muted"));
+    appearanceBody->addSpacing(20);
     auto formLayout = new QFormLayout();
     formLayout->setVerticalSpacing(18);
-    auto themeChoice = combo({"浅色", "深色"});
+    auto themeChoice = combo({"像素掌机 · 浅色", "像素掌机 · 深色"});
     themeChoice->setCurrentIndex(theme.dark ? 1 : 0);
     connect(themeChoice, &QComboBox::currentIndexChanged, this, [this](int index) { applyTheme(index == 1); });
     auto font = button(dataFont.family(), "outline");
@@ -2095,7 +2148,16 @@ void Window::openSettings()
     formLayout->addRow("数据字体", font);
     formLayout->addRow("数据字号", size);
     appearanceBody->addLayout(formLayout);
-    appearanceBody->addWidget(label("字体用于收发记录、终端与报文输入。Ctrl + 滚轮调整数据字号。", "muted"));
+    auto resetFont = button("恢复像素字体", "outline");
+    connect(resetFont, &QPushButton::clicked, this, [this, font, size]
+    {
+        setDataFont(Theme::defaultDataFont());
+        font->setText(dataFont.family());
+        const QSignalBlocker blocker(size);
+        size->setValue(dataFont.pointSize());
+    });
+    appearanceBody->addWidget(resetFont, 0, Qt::AlignLeft);
+    appearanceBody->addWidget(label("界面使用内置中文像素字体。数据区可自选字体，Ctrl + 滚轮调整字号。", "muted"));
     appearanceBody->addStretch();
     pages->addTab(appearance, "外观");
 

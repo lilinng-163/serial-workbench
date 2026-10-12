@@ -4,23 +4,57 @@
 
 namespace sw
 {
+QString Theme::fontFamily(int pixels)
+{
+    static const QMap<int, QString> families = []
+    {
+        QMap<int, QString> loaded;
+        for (int size : {8, 12})
+        {
+            const auto path = QString(":/native/fonts/fusion-pixel-%1px-monospaced-zh_hans.otf").arg(size);
+            const int id = QFontDatabase::addApplicationFont(path);
+            const auto names = QFontDatabase::applicationFontFamilies(id);
+            loaded[size] = names.isEmpty() ? QString("Consolas") : names.first();
+        }
+        return loaded;
+    }();
+    return families.value(pixels);
+}
+
+QFont Theme::interfaceFont()
+{
+    QFont font(fontFamily(), 12);
+    font.setStyleStrategy(QFont::NoAntialias);
+    return font;
+}
+
+QFont Theme::defaultDataFont()
+{
+    QFont font(fontFamily(12), 18);
+    font.setStyleHint(QFont::Monospace);
+    font.setStyleStrategy(QFont::NoAntialias);
+    return font;
+}
+
 Theme Theme::make(bool dark)
 {
     Theme t;
     t.dark = dark;
     if (dark)
     {
-        t.background = "#1c2431";
-        t.panel = "#202b3a";
-        t.sidebar = "#232e3e";
-        t.text = "#dce5ef";
-        t.muted = "#8d9caf";
-        t.line = "#344256";
-        t.accent = "#74acff";
-        t.hover = "#30425a";
-        t.green = "#55c6ac";
-        t.red = "#ed8894";
-        t.amber = "#dfba7b";
+        t.background = "#1e2b25";
+        t.panel = "#24332b";
+        t.sidebar = "#2c3c32";
+        t.text = "#e1e5ce";
+        t.muted = "#a1b29a";
+        t.line = "#465b48";
+        t.accent = "#edaa50";
+        t.hover = "#3b5140";
+        t.green = "#9abf80";
+        t.red = "#e78b6d";
+        t.amber = "#edaa50";
+        t.edge = "#71826a";
+        t.rail = "#17231d";
     }
     return t;
 }
@@ -28,71 +62,104 @@ Theme Theme::make(bool dark)
 QString Theme::stylesheet() const
 {
     QString s = R"(
-        QWidget { color: $text; font-family: "Microsoft YaHei UI"; font-size: 13px; }
+        QWidget { color: $text; font-family: "$font"; font-size: 16px; font-weight: normal; }
         QMainWindow, QDialog, QWidget#root { background: $bg; }
-        QFrame#sidebar { background: $side; border-right: 1px solid $line; }
-        QFrame#rail { background: $side; border-right: 1px solid $line; }
-        QWidget#workspace, QWidget#page, QWidget#sender { background: $panel; }
+        QFrame#sidebar { background: $side; border-right: 2px solid $edge; }
+        QFrame#rail { background: $rail; border-right: 2px solid $rail; }
+        QWidget#workspace, QWidget#page { background: $panel; }
+        QWidget#tabHeader { background: $bg; border-bottom: 2px solid $edge; }
+        QWidget#monitorToolbar { background: $side; border-bottom: 1px solid $line; }
+        QWidget#sender { background: $side; border-top: 1px solid $line; }
         QLabel { background: transparent; border: none; }
-        QLabel#muted { color: $muted; font-size: 12px; }
-        QLabel#section { font-weight: 600; font-size: 17px; }
-        QLabel#brand { font-weight: 600; font-size: 13px; }
-        QLineEdit, QComboBox, QSpinBox { background: $panel; border: 1px solid $line; border-radius: 6px; padding: 6px 10px; min-height: 22px; }
-        QLineEdit:focus, QComboBox:focus, QSpinBox:focus { border-color: $accent; }
-        QLineEdit#searchBox { border-radius: 16px; padding: 5px 8px; background: $side; }
+        QLabel#muted { color: $muted; font-size: 16px; }
+        QLabel#section { font-size: 16px; color: $text; padding: 0 0 8px 0; border-bottom: 2px solid $edge; }
+        QLabel#brand { font-size: 16px; }
+        QLabel#themeTitle { font-size: 24px; }
+        QWidget#pixelBrand { background: $rail; border: 2px solid $rail; border-bottom: 4px solid $edge; }
+        QLabel#brandTitle { color: #f6f4e8; font-size: 24px; }
+        QLabel#brandSubtitle { color: #d7dfc4; font-size: 16px; }
+        QLabel#brandMark { color: #edaa50; font-size: 24px; }
+        QLabel#senderLabel { color: $muted; font-size: 16px; }
+        QLabel#connectionHint { color: $muted; padding: 10px 0 0 0; border-top: 1px solid $line; }
+        QLineEdit, QComboBox, QSpinBox { background: $panel; border: 1px solid $edge; border-bottom-width: 2px; border-radius: 0; padding: 6px 10px; min-height: 22px; selection-background-color: $accent; selection-color: $onaccent; }
+        QLineEdit:hover, QComboBox:hover, QSpinBox:hover { border-color: $text; }
+        QLineEdit:focus, QComboBox:focus, QSpinBox:focus { border: 2px solid $accent; padding: 5px 9px 6px 9px; }
+        QComboBox#protocolSelector { background: $hover; border: 2px solid $edge; padding: 8px 28px 8px 10px; }
+        QLineEdit#searchBox { padding: 5px 8px; background: $panel; }
+        QLineEdit#searchBox:focus { padding: 4px 7px 5px 7px; }
         QComboBox { padding-right: 28px; }
+        QComboBox:focus { padding-right: 27px; }
         QComboBox::drop-down { border: none; width: 28px; }
         QComboBox::down-arrow { image: none; }
-        QComboBox QLineEdit { border: none; padding: 0; min-height: 0; background: transparent; }
-        QComboBox QAbstractItemView { background: $panel; color: $text; border: 1px solid $line; selection-background-color: $hover; selection-color: $text; outline: none; padding: 4px; }
+        QComboBox QLineEdit, QComboBox QLineEdit:focus, QComboBox QLineEdit:hover { border: none; padding: 0; min-height: 0; background: transparent; }
+        QComboBox QAbstractItemView { background: $panel; color: $text; border: 2px solid $edge; selection-background-color: $hover; selection-color: $text; outline: none; padding: 4px; }
         QComboBox QAbstractItemView::item { min-height: 28px; padding: 4px 8px; }
         QSpinBox { padding-right: 22px; }
         QSpinBox::up-button, QSpinBox::down-button { width: 20px; border: none; }
         QSpinBox::up-arrow { image: url(:/native/chevron-up.svg); width: 8px; height: 5px; }
         QSpinBox::down-arrow { image: url(:/native/chevron-down.svg); width: 8px; height: 5px; }
-        QPushButton, QToolButton { background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 6px 12px; min-height: 22px; }
-        QPushButton:hover, QToolButton:hover { background: $hover; }
-        QPushButton:checked { background: $hover; color: $accent; font-weight: 600; }
+        QPushButton, QToolButton { background: transparent; border: 1px solid transparent; border-radius: 0; padding: 6px 12px; min-height: 22px; }
+        QPushButton:hover, QToolButton:hover { background: $hover; border-color: $edge; }
+        QPushButton:checked { background: $hover; border-color: $edge; }
         QPushButton:focus, QToolButton:focus { border-color: $accent; }
-        QPushButton#primary { background: $accent; color: $primarytext; font-weight: 600; padding: 7px 18px; }
+        QPushButton:pressed, QToolButton:pressed { background: $line; }
+        QPushButton#primary { background: $accent; color: $onaccent; border: 2px solid $text; border-bottom-width: 4px; padding: 6px 16px; }
         QPushButton#primary:hover { background: $primaryhover; }
-        QPushButton#outline { border: 1px solid $line; background: $panel; }
+        QPushButton#primary:pressed { border-bottom-width: 2px; padding-top: 8px; }
+        QPushButton#primary:disabled { background: $line; color: $muted; border-color: $edge; }
+        QPushButton#outline { border: 1px solid $edge; border-bottom-width: 2px; background: $panel; }
+        QPushButton#outline:hover { background: $hover; }
         QPushButton:disabled, QToolButton:disabled { color: $muted; }
-        QPlainTextEdit, QTextEdit { border: 1px solid $line; border-radius: 6px; background: $panel; padding: 8px; selection-background-color: $accent; }
-        QTextEdit#monitor { border: none; border-radius: 0; padding: 16px 18px; }
-        QTreeWidget { border: none; background: $panel; alternate-background-color: $side; outline: none; }
-        QTreeWidget::item { padding: 5px; min-height: 22px; }
+        QPlainTextEdit, QTextEdit { border: 1px solid $edge; border-radius: 0; background: $panel; padding: 8px; selection-background-color: $accent; selection-color: $onaccent; }
+        QPlainTextEdit:focus { border-color: $accent; }
+        QTextEdit#monitor { border: none; padding: 16px 18px; }
+        QTreeWidget { border: 1px solid $line; background: $panel; alternate-background-color: $side; outline: none; }
+        QTreeWidget::item { padding: 6px; min-height: 22px; }
         QTreeWidget::item:selected { background: $hover; color: $text; }
-        QHeaderView::section { background: $side; border: none; border-bottom: 1px solid $line; padding: 9px 8px; color: $muted; }
-        QTabWidget::pane { border: none; border-top: 1px solid $line; background: $panel; }
+        QHeaderView::section { background: $side; border: none; border-bottom: 2px solid $edge; padding: 10px 8px; color: $muted; }
+        QTabWidget { background: $side; }
+        QTabWidget::pane { border: none; border-top: 1px solid $edge; background: $panel; }
         QTabBar { background: transparent; }
-        QTabBar QToolButton { background: $side; border: none; padding: 0; min-height: 0; border-radius: 4px; }
+        QTabBar QToolButton { background: $side; border: 1px solid $edge; padding: 0; min-height: 0; }
         QTabBar::scroller { width: 48px; }
-        QTabBar::tab { background: transparent; padding: 10px 12px; border-bottom: 2px solid transparent; color: $muted; }
-        QTabBar::tab:selected { color: $accent; border-bottom-color: $accent; background: $panel; }
+        QTabBar::tab { background: $side; padding: 11px 12px; border-right: 1px solid $line; border-bottom: 3px solid transparent; color: $muted; }
+        QTabBar::tab:selected { color: $text; border-bottom-color: $accent; background: $panel; }
         QTabBar::tab:hover { background: $hover; }
-        QTabBar#connections::tab { padding: 9px 10px; margin: 4px 2px 0 0; border-radius: 7px 7px 0 0; }
-        QMenu { background: $panel; border: 1px solid $line; padding: 6px; }
-        QMenu::item { padding: 8px 28px 8px 12px; border-radius: 4px; }
-        QMenu::item:selected { background: $hover; }
+        QTabBar#connections::tab { padding: 9px 10px; margin: 4px 4px 0 0; border: 1px solid $edge; border-bottom: 3px solid $edge; background: $side; }
+        QTabBar#connections::tab:selected { background: $panel; border-bottom-color: $accent; color: $text; }
+        QMenu { background: $panel; border: 2px solid $edge; padding: 4px; }
+        QMenu::item { padding: 10px 28px 10px 16px; border: 1px solid transparent; }
+        QMenu::item:selected { background: $hover; border-color: $edge; }
         QMenu::separator { height: 1px; background: $line; margin: 5px 8px; }
+        QMenu::indicator:checked { image: url(:/native/check.svg); background: $accent; width: 12px; height: 12px; }
         QCheckBox { spacing: 7px; background: transparent; }
-        QCheckBox::indicator { width: 14px; height: 14px; border: 1px solid $muted; border-radius: 3px; background: $panel; }
+        QCheckBox::indicator { width: 14px; height: 14px; border: 1px solid $edge; border-bottom-width: 2px; background: $panel; }
         QCheckBox::indicator:hover { border-color: $accent; }
-        QCheckBox::indicator:checked { border-color: $accent; background: $accent; image: url(:/native/check.svg); }
+        QCheckBox::indicator:checked { border-color: $text; background: $accent; image: url(:/native/check.svg); }
         QScrollArea { border: none; background: transparent; }
-        QScrollBar:vertical { background: transparent; width: 9px; margin: 0; }
-        QScrollBar:horizontal { background: transparent; height: 9px; margin: 0; }
-        QScrollBar::handle { background: $line; border-radius: 4px; min-height: 28px; min-width: 28px; }
+        QScrollBar:vertical { background: $side; width: 10px; margin: 0; }
+        QScrollBar:horizontal { background: $side; height: 10px; margin: 0; }
+        QScrollBar::handle { background: $line; border: 1px solid $edge; min-height: 28px; min-width: 28px; }
         QScrollBar::handle:hover { background: $muted; }
         QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
         QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
-        QStatusBar { background: $panel; color: $muted; font-size: 11px; border-top: 1px solid $line; }
-        QToolTip { background: $panel; color: $text; border: 1px solid $line; padding: 5px; }
+        QStatusBar { background: $side; color: $muted; border-top: 2px solid $edge; }
+        QStatusBar::item { border: none; }
+        QToolTip { background: $panel; color: $text; border: 2px solid $edge; padding: 6px; }
     )";
-    const QMap<QString, QString> colors {{"$text", text.name()}, {"$muted", muted.name()}, {"$side", sidebar.name()},
-        {"$bg", background.name()}, {"$panel", panel.name()}, {"$line", line.name()}, {"$accent", accent.name()},
-        {"$hover", hover.name()}, {"$primarytext", dark ? "#172337" : "#ffffff"}, {"$primaryhover", dark ? "#92bdff" : "#286ccc"}};
+    const QMap<QString, QString> colors{{"$font", fontFamily()},
+                                        {"$text", text.name()},
+                                        {"$muted", muted.name()},
+                                        {"$side", sidebar.name()},
+                                        {"$bg", background.name()},
+                                        {"$rail", rail.name()},
+                                        {"$panel", panel.name()},
+                                        {"$line", line.name()},
+                                        {"$edge", edge.name()},
+                                        {"$accent", accent.name()},
+                                        {"$hover", hover.name()},
+                                        {"$onaccent", onAccent.name()},
+                                        {"$primaryhover", dark ? "#f4be71" : "#eba04b"}};
     for (auto it = colors.begin(); it != colors.end(); ++it)
     {
         s.replace(it.key(), it.value());
@@ -100,133 +167,182 @@ QString Theme::stylesheet() const
     return s;
 }
 
-void drawIcon(QPainter &p, const QString &name, QRectF rect, const QColor &color, qreal rotation)
+// Every icon uses the same 16 x 16 grid. Integer cells stay sharp at any DPI.
+void drawIcon(QPainter &p, const QString &name, QRectF rect, const QColor &color, qreal)
 {
     p.save();
-    p.setRenderHint(QPainter::Antialiasing);
-    p.translate(rect.center());
-    p.scale(rect.width() / 24, rect.height() / 24);
-    p.rotate(rotation);
-    p.setPen(QPen(color, 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.setRenderHint(QPainter::Antialiasing, false);
+    const qreal unit = qMax(1.0, std::floor(rect.width() / 16));
+    p.translate(std::floor(rect.center().x() - 8 * unit), std::floor(rect.center().y() - 8 * unit));
+    p.scale(unit, unit);
+    p.setPen(QPen(color, 2, Qt::SolidLine, Qt::FlatCap, Qt::MiterJoin));
     p.setBrush(Qt::NoBrush);
+    const auto line = [&](int x1, int y1, int x2, int y2)
+    {
+        // Bresenham rasterization avoids smoothed diagonals and rounded joins.
+        const int dx = std::abs(x2 - x1);
+        const int dy = -std::abs(y2 - y1);
+        const int sx = x1 < x2 ? 1 : -1;
+        const int sy = y1 < y2 ? 1 : -1;
+        int error = dx + dy;
+        while (true)
+        {
+            p.fillRect(QRect(x1, y1, 2, 2), color);
+            if (x1 == x2 && y1 == y2)
+            {
+                break;
+            }
+            const int twice = 2 * error;
+            if (twice >= dy)
+            {
+                error += dy;
+                x1 += sx;
+            }
+            if (twice <= dx)
+            {
+                error += dx;
+                y1 += sy;
+            }
+        }
+    };
     if (name == "gear")
     {
-        QPainterPath path;
-        for (int i = 0; i < 32; ++i)
-        {
-            const qreal radius = (i % 4 == 1 || i % 4 == 2) ? 9.8 : 7.8;
-            const qreal angle = i * M_PI / 16;
-            const QPointF point(radius * std::cos(angle), radius * std::sin(angle));
-            i == 0 ? path.moveTo(point) : path.lineTo(point);
-        }
-        path.closeSubpath();
-        p.drawPath(path);
-        p.drawEllipse(QPointF(), 3, 3);
+        p.drawRect(4, 4, 8, 8);
+        p.fillRect(6, 0, 4, 4, color);
+        p.fillRect(6, 12, 4, 4, color);
+        p.fillRect(0, 6, 4, 4, color);
+        p.fillRect(12, 6, 4, 4, color);
+        p.drawRect(7, 7, 2, 2);
     }
     else if (name == "plus")
     {
-        p.drawLine(-7, 0, 7, 0);
-        p.drawLine(0, -7, 0, 7);
+        line(7, 2, 7, 12);
+        line(2, 7, 12, 7);
     }
     else if (name == "clock")
     {
-        p.drawEllipse(QPointF(), 8, 8);
-        p.drawLine(0, -5, 0, 0);
-        p.drawLine(0, 0, 4, 2);
+        line(4, 0, 10, 0);
+        line(2, 2, 2, 2);
+        line(12, 2, 12, 2);
+        line(0, 4, 0, 10);
+        line(14, 4, 14, 10);
+        line(2, 12, 2, 12);
+        line(12, 12, 12, 12);
+        line(4, 14, 10, 14);
+        line(7, 4, 7, 8);
+        line(7, 8, 10, 8);
     }
     else if (name == "hex")
     {
-        p.setFont(QFont("Cascadia Mono", 11, QFont::DemiBold));
-        p.drawText(QRectF(-12, -12, 24, 24), Qt::AlignCenter, "0x");
+        p.drawRect(1, 4, 4, 8);
+        line(8, 5, 13, 10);
+        line(13, 5, 8, 10);
     }
     else if (name == "terminal")
     {
-        p.drawRoundedRect(QRectF(-9, -8, 18, 16), 3, 3);
-        p.drawPolyline(QPolygonF {QPointF(-5, -3), QPointF(-2, 0), QPointF(-5, 3)});
-        p.drawLine(1, 3, 5, 3);
+        p.drawRect(1, 2, 14, 12);
+        line(4, 5, 6, 7);
+        line(6, 7, 4, 9);
+        line(9, 10, 12, 10);
     }
     else if (name == "cursor")
     {
-        p.drawLine(-3, -8, 3, -8);
-        p.drawLine(0, -8, 0, 8);
-        p.drawLine(-3, 8, 3, 8);
+        line(5, 1, 10, 1);
+        line(7, 1, 7, 13);
+        line(5, 13, 10, 13);
     }
     else if (name == "dock")
     {
-        p.drawRoundedRect(QRectF(-9, -8, 18, 16), 2, 2);
-        p.drawLine(-9, -3, 9, -3);
-        p.drawLine(5, 2, -4, 2);
-        p.drawPolyline(QPolygonF {QPointF(-1, -1), QPointF(-4, 2), QPointF(-1, 5)});
+        p.drawRect(1, 2, 14, 12);
+        line(1, 5, 13, 5);
+        line(5, 9, 11, 9);
+        line(5, 9, 7, 7);
+        line(5, 9, 7, 11);
     }
     else if (name == "widgets")
     {
-        p.drawRoundedRect(QRectF(-8, -8, 6, 6), 1, 1);
-        p.drawRoundedRect(QRectF(2, -8, 6, 6), 1, 1);
-        p.drawRoundedRect(QRectF(-8, 2, 6, 6), 1, 1);
-        p.drawLine(5, 2, 5, 8);
-        p.drawLine(2, 5, 8, 5);
+        p.drawRect(1, 1, 5, 5);
+        p.drawRect(10, 1, 5, 5);
+        p.drawRect(1, 10, 5, 5);
+        line(12, 9, 12, 14);
+        line(9, 12, 14, 12);
     }
     else if (name == "close")
     {
-        p.drawLine(-5, -5, 5, 5);
-        p.drawLine(5, -5, -5, 5);
+        line(3, 3, 11, 11);
+        line(11, 3, 3, 11);
     }
     else if (name == "refresh")
     {
-        p.drawArc(QRectF(-7, -7, 14, 14), 30 * 16, 300 * 16);
-        p.drawPolyline(QPolygonF {QPointF(3, -8), QPointF(7, -6), QPointF(7, -10)});
+        line(3, 4, 11, 4);
+        line(3, 4, 3, 10);
+        line(3, 10, 11, 10);
+        line(11, 10, 11, 8);
+        line(11, 1, 11, 5);
+        line(8, 5, 11, 5);
     }
     else if (name == "search")
     {
-        p.drawEllipse(QPointF(-2, -2), 6, 6);
-        p.drawLine(3, 3, 8, 8);
+        p.drawRect(2, 2, 8, 8);
+        line(10, 10, 13, 13);
     }
     else if (name == "pause")
     {
-        p.drawLine(-3, -6, -3, 6);
-        p.drawLine(3, -6, 3, 6);
+        p.fillRect(3, 3, 3, 10, color);
+        p.fillRect(10, 3, 3, 10, color);
     }
     else if (name == "play")
     {
-        p.drawPolygon(QPolygonF {QPointF(-4, -7), QPointF(7, 0), QPointF(-4, 7)});
+        for (int i = 0; i < 6; ++i)
+        {
+            p.fillRect(4 + i, 2 + i, 1, 12 - i * 2, color);
+        }
     }
     else if (name == "trash")
     {
-        p.drawLine(-8, -6, 8, -6);
-        p.drawLine(-3, -9, 3, -9);
-        p.drawRoundedRect(QRectF(-6, -6, 12, 14), 2, 2);
-        p.drawLine(-2, -3, -2, 5);
-        p.drawLine(2, -3, 2, 5);
+        line(1, 3, 13, 3);
+        line(5, 1, 9, 1);
+        p.drawRect(3, 5, 10, 9);
+        line(6, 6, 6, 11);
+        line(9, 6, 9, 11);
     }
     else if (name == "wave")
     {
-        p.drawPolyline(QPolygonF {QPointF(-10, 2), QPointF(-6, 2), QPointF(-3, -7), QPointF(2, 8), QPointF(6, -2), QPointF(10, -2)});
+        line(0, 8, 3, 8);
+        line(3, 8, 3, 3);
+        line(3, 3, 6, 3);
+        line(6, 3, 6, 12);
+        line(6, 12, 10, 12);
+        line(10, 12, 10, 6);
+        line(10, 6, 14, 6);
     }
     else if (name == "port")
     {
-        p.drawRoundedRect(QRectF(-8, -5, 16, 11), 3, 3);
-        p.drawLine(-4, -9, -4, -5);
-        p.drawLine(4, -9, 4, -5);
-        p.drawLine(0, 6, 0, 10);
-        p.drawPoint(-3, 0);
-        p.drawPoint(3, 0);
+        p.drawRect(3, 5, 10, 7);
+        line(5, 1, 5, 4);
+        line(10, 1, 10, 4);
+        line(7, 12, 7, 14);
+        p.fillRect(5, 7, 2, 2, color);
+        p.fillRect(9, 7, 2, 2, color);
     }
     else if (name == "send")
     {
-        p.drawPolygon(QPolygonF {QPointF(-9, -8), QPointF(10, 0), QPointF(-9, 8), QPointF(-5, 0)});
-        p.drawLine(-5, 0, 8, 0);
+        line(1, 7, 13, 7);
+        line(8, 2, 13, 7);
+        line(13, 7, 8, 12);
     }
     else if (name == "more")
     {
-        p.drawEllipse(QPointF(-6, 0), 0.8, 0.8);
-        p.drawEllipse(QPointF(), 0.8, 0.8);
-        p.drawEllipse(QPointF(6, 0), 0.8, 0.8);
+        for (int x : {1, 7, 13})
+        {
+            p.fillRect(x, 7, 2, 2, color);
+        }
     }
     else
     {
-        p.drawRoundedRect(QRectF(-8, -8, 16, 16), 2, 2);
-        p.drawLine(-4, -2, 4, -2);
-        p.drawLine(-4, 3, 2, 3);
+        p.drawRect(2, 1, 12, 14);
+        line(5, 5, 10, 5);
+        line(5, 9, 8, 9);
     }
     p.restore();
 }
@@ -251,11 +367,12 @@ IconButton::IconButton(const QString &name, const QString &title, QWidget *paren
     setFocusPolicy(Qt::StrongFocus);
     animation.setDuration(140);
     animation.setEasingCurve(QEasingCurve::OutCubic);
-    connect(&animation, &QVariantAnimation::valueChanged, this, [this](const QVariant &value)
-    {
-        progress = value.toReal();
-        update();
-    });
+    connect(&animation, &QVariantAnimation::valueChanged, this,
+            [this](const QVariant &value)
+            {
+                progress = value.toReal();
+                update();
+            });
     connect(this, &QAbstractButton::toggled, this, qOverload<>(&QWidget::update));
 }
 
@@ -285,20 +402,38 @@ void IconButton::leaveEvent(QEvent *event)
 void IconButton::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
-    p.setRenderHint(QPainter::Antialiasing);
-    QColor fill = theme.accent;
-    fill.setAlphaF((isChecked() ? 0.13 : 0.09 * progress) + (isDown() ? 0.06 : 0));
-    p.setPen(Qt::NoPen);
-    p.setBrush(fill);
-    p.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 7, 7);
-    const qreal extent = qMin(20, qMin(width(), height()) - 8);
-    drawIcon(p, glyph == "pause" && isChecked() ? "play" : glyph, QRectF((width() - extent) / 2, (height() - extent) / 2, extent, extent),
-        isChecked() || progress > 0.3 ? theme.accent : theme.muted, glyph == "gear" ? progress * 24 : 0);
+    const bool onRail = parentWidget() && parentWidget()->objectName() == "rail";
+    const bool highlighted = isChecked() || progress > 0;
+    const QColor foreground = onRail ? QColor("#d7dfc4") : theme.muted;
+    const auto box = rect().adjusted(1, 1, -2, -2);
+    if (highlighted || isDown())
+    {
+        QColor fill = isChecked() ? theme.accent : onRail ? QColor("#435b49") : theme.hover;
+        if (!isChecked())
+        {
+            fill.setAlphaF(progress);
+        }
+        p.fillRect(box, fill);
+        p.setPen(isChecked() ? theme.text : onRail ? QColor("#71826a") : theme.edge);
+        p.drawRect(box);
+        if (isChecked())
+        {
+            p.fillRect(box.left(), box.bottom() - 1, box.width(), 2, theme.text);
+        }
+    }
+    const int shift = isDown() ? 1 : 0;
+    const qreal extent = qMin(20, qMin(width(), height()) - 4);
+    drawIcon(p, glyph == "pause" && isChecked() ? "play" : glyph,
+             QRectF((width() - extent) / 2 + shift, (height() - extent) / 2 + shift, extent, extent),
+             !isEnabled()                ? theme.line
+             : isChecked()               ? theme.onAccent
+             : progress > 0.3 && !onRail ? theme.text
+                                         : foreground);
     if (hasFocus())
     {
         p.setPen(QPen(theme.accent, 1, Qt::DotLine));
         p.setBrush(Qt::NoBrush);
-        p.drawRoundedRect(rect().adjusted(1, 1, -2, -2), 7, 7);
+        p.drawRect(rect().adjusted(0, 0, -1, -1));
     }
 }
 
@@ -326,10 +461,12 @@ void Combo::paintEvent(QPaintEvent *event)
 {
     QComboBox::paintEvent(event);
     QPainter p(this);
-    p.setRenderHint(QPainter::Antialiasing);
-    p.setPen(QPen(palette().color(QPalette::Text), 1.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-    const QPointF center(width() - 15, height() / 2.0);
-    p.drawPolyline(QPolygonF {center + QPointF(-3, -1.5), center + QPointF(0, 1.5), center + QPointF(3, -1.5)});
+    const QColor color = palette().color(QPalette::Text);
+    const int x = width() - 18;
+    const int y = height() / 2 - 2;
+    p.fillRect(x, y, 2, 2, color);
+    p.fillRect(x + 6, y, 2, 2, color);
+    p.fillRect(x + 2, y + 2, 4, 2, color);
 }
 
 ProtocolCombo::ProtocolCombo(QWidget *parent) : Combo(parent)
@@ -354,11 +491,12 @@ void Combo::showPopup()
         auto action = menu->addAction(description.isEmpty() ? itemText(i) : description);
         action->setCheckable(true);
         action->setChecked(i == currentIndex());
-        connect(action, &QAction::triggered, this, [this, i]
-        {
-            setCurrentIndex(i);
-            emit activated(i);
-        });
+        connect(action, &QAction::triggered, this,
+                [this, i]
+                {
+                    setCurrentIndex(i);
+                    emit activated(i);
+                });
     }
     menu->popup(mapToGlobal(QPoint(0, height() + 5)));
     auto fade = new QPropertyAnimation(menu, "windowOpacity", menu);
@@ -387,11 +525,14 @@ SearchBox::SearchBox(QWidget *parent) : QLineEdit(parent)
     clearButton->setFixedSize(24, 24);
     clearButton->hide();
     clearButton->setFocusPolicy(Qt::NoFocus);
-    connect(clearButton, &QAbstractButton::clicked, this, [this] { clear(); setFocus(); });
-    connect(this, &QLineEdit::textChanged, clearButton, [this](const QString &text)
-    {
-        clearButton->setVisible(!text.isEmpty());
-    });
+    connect(clearButton, &QAbstractButton::clicked, this,
+            [this]
+            {
+                clear();
+                setFocus();
+            });
+    connect(this, &QLineEdit::textChanged, clearButton,
+            [this](const QString &text) { clearButton->setVisible(!text.isEmpty()); });
 }
 
 void SearchBox::resizeEvent(QResizeEvent *event)
@@ -404,7 +545,7 @@ void SearchBox::paintEvent(QPaintEvent *event)
 {
     QLineEdit::paintEvent(event);
     QPainter painter(this);
-    drawIcon(painter, "search", QRectF(11, (height() - 16) / 2.0, 16, 16), palette().color(QPalette::Mid));
+    drawIcon(painter, "search", QRectF(11, (height() - 16) / 2.0, 16, 16), clearButton->theme.muted);
 }
 
 ConnectionBar::ConnectionBar(QWidget *parent) : TearTabBar(parent)
@@ -420,7 +561,8 @@ ConnectionBar::ConnectionBar(QWidget *parent) : TearTabBar(parent)
 
 QSize ConnectionBar::tabSizeHint(int index) const
 {
-    return QSize(qBound(116, fontMetrics().horizontalAdvance(tabText(index)) + (tabIcon(index).isNull() ? 68 : 88), 218), 43);
+    return QSize(
+        qBound(116, fontMetrics().horizontalAdvance(tabText(index)) + (tabIcon(index).isNull() ? 68 : 88), 218), 43);
 }
 
 QSize ConnectionBar::sizeHint() const
@@ -448,11 +590,14 @@ void Grip::paintEvent(QPaintEvent *)
     QPainter p(this);
     QColor color = palette().color(QPalette::Mid);
     color.setAlpha(underMouse() ? 150 : 60);
-    p.setPen(QPen(color, 3, Qt::SolidLine, Qt::RoundCap));
+    p.setPen(QPen(color, 2, Qt::SolidLine, Qt::FlatCap));
     const auto center = rect().center();
     if (orientation() == Qt::Vertical)
     {
-        p.drawLine(center + QPoint(-16, 0), center + QPoint(16, 0));
+        for (int x : {-8, -2, 4})
+        {
+            p.fillRect(QRect(center + QPoint(x, -1), QSize(4, 2)), color);
+        }
     }
     else if (underMouse())
     {
@@ -553,12 +698,15 @@ void WavePlot::paintEvent(QPaintEvent *)
     for (int i = 0; i <= 8; ++i)
     {
         const qreal y = area.bottom() - area.height() * i / 8;
-        p.drawText(QRectF(0, y - 10, 54, 20), Qt::AlignRight | Qt::AlignVCenter, QString::number(ymin + (ymax - ymin) * i / 8, 'g', 4));
+        p.drawText(QRectF(0, y - 10, 54, 20), Qt::AlignRight | Qt::AlignVCenter,
+                   QString::number(ymin + (ymax - ymin) * i / 8, 'g', 4));
         const qreal x = area.left() + area.width() * i / 8;
-        p.drawText(QRectF(x - 35, area.bottom() + 8, 70, 20), Qt::AlignCenter, QString::number(xmin + span * i / 8, 'f', 0));
+        p.drawText(QRectF(x - 35, area.bottom() + 8, 70, 20), Qt::AlignCenter,
+                   QString::number(xmin + span * i / 8, 'f', 0));
     }
     p.drawText(QRectF(area.left(), height() - 23, area.width(), 20), Qt::AlignCenter, "采样序号");
-    const QList<QColor> colors {theme.accent, theme.green, QColor("#c48a39"), QColor("#9c78c4"), QColor("#d57491"), QColor("#708d50")};
+    const QList<QColor> colors{theme.accent,      theme.green, QColor("#6c92a0"),
+                               QColor("#b0839a"), theme.red,   QColor("#9e9a52")};
     int index = 0;
     int legendX = 76;
     for (auto it = series.begin(); it != series.end(); ++it)
@@ -575,7 +723,8 @@ void WavePlot::paintEvent(QPaintEvent *)
         bool first = true;
         for (const auto &point : it.value())
         {
-            const QPointF mapped(area.left() + (point.x() - xmin) / span * area.width(), area.bottom() - (point.y() - ymin) / (ymax - ymin) * area.height());
+            const QPointF mapped(area.left() + (point.x() - xmin) / span * area.width(),
+                                 area.bottom() - (point.y() - ymin) / (ymax - ymin) * area.height());
             first ? path.moveTo(mapped) : path.lineTo(mapped);
             first = false;
         }
@@ -613,4 +762,4 @@ void WavePlot::mouseDoubleClickEvent(QMouseEvent *)
     offset = 0;
     update();
 }
-}
+} // namespace sw

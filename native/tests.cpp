@@ -8,6 +8,55 @@ class NativeTests : public QObject
 {
     Q_OBJECT
 private slots:
+    void initTestCase()
+    {
+        QApplication::setFont(sw::Theme::interfaceFont());
+    }
+
+    void pixelFontAndMigration()
+    {
+        const QFont font = sw::Theme::defaultDataFont();
+        const auto raw = QRawFont::fromFont(font);
+        QVERIFY(raw.isValid());
+        QVERIFY(raw.supportsCharacter(0x4e2d));
+        QVERIFY(raw.supportsCharacter(0x7aef));
+        const auto interfaceRaw = QRawFont::fromFont(sw::Theme::interfaceFont());
+        for (const QChar character : QString("连接参数端口波特率数据校验停止位流控设置发送搜索"))
+        {
+            QVERIFY2(interfaceRaw.supportsCharacter(character.unicode()), qPrintable(QString(character)));
+        }
+        const QFontMetrics metrics(font);
+        QCOMPARE(metrics.horizontalAdvance("iiii"), metrics.horizontalAdvance("WWWW"));
+        QCOMPARE(metrics.horizontalAdvance("0000"), metrics.horizontalAdvance("WWWW"));
+
+        QTemporaryDir directory;
+        const QString path = directory.filePath("settings.json");
+        const auto writeAppearance = [&](const QString &family, int size)
+        {
+            QFile file(path);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            file.write(QJsonDocument(QJsonObject {{"appearance", QJsonObject {
+                {"font_family", family}, {"font_size", size}
+            }}}).toJson());
+        };
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        writeAppearance("Cascadia Mono", 11);
+        {
+            sw::Window window(&engine, &mcp, path);
+            QCOMPARE(window.dataFont.family(), font.family());
+            QCOMPARE(window.dataFont.pointSize(), font.pointSize());
+            window.close();
+        }
+        writeAppearance("Consolas", 14);
+        {
+            sw::Window window(&engine, &mcp, path);
+            QCOMPARE(window.dataFont.family(), QString("Consolas"));
+            QCOMPARE(window.dataFont.pointSize(), 14);
+            window.close();
+        }
+    }
+
     void ansiResetAndTerminal()
     {
         sw::AnsiState state;
@@ -229,7 +278,15 @@ private slots:
         QVERIFY(pane->sender->isVisible());
         if (QGuiApplication::platformName() == "windows")
         {
-            QVERIFY(QFontInfo(pane->terminal->font()).fixedPitch());
+            // CJK fonts contain half-width Latin and full-width Han glyphs.
+            // Validate the actual cell advances rather than font metadata.
+            const QFontMetrics terminalMetrics(pane->terminal->font());
+            const int cell = terminalMetrics.horizontalAdvance('M');
+            for (int character = 32; character < 127; ++character)
+            {
+                QCOMPARE(terminalMetrics.horizontalAdvance(QChar(character)), cell);
+            }
+            QCOMPARE(terminalMetrics.horizontalAdvance(QChar(0x4e2d)), cell * 2);
         }
         QVERIFY(pane->newline->itemText(3).contains("\\r\\n"));
         QVERIFY(pane->newline->itemText(3).contains("CRLF"));
@@ -422,6 +479,9 @@ private slots:
             auto page = settingsTabs->widget(0);
             auto floatingSettings = settingsTabs->detachPage(0, QPoint(180, 180));
             QCOMPARE(floatingSettings->centralWidget(), page);
+            window.applyTheme(!window.theme.dark);
+            QCOMPARE(floatingSettings->palette().color(QPalette::Window), window.theme.background);
+            QCOMPARE(floatingSettings->styleSheet(), window.styleSheet());
             floatingSettings->close();
             QCOMPARE(settingsTabs->widget(0), page);
         }

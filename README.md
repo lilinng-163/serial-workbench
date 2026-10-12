@@ -2,9 +2,13 @@
 
 一个面向嵌入式开发的 Windows 串口与网络调试助手。人在界面查看数据，Codex、Claude、OpenCode 等 AI 通过 MCP 同时读取同一份数据，无需再次打开串口。
 
-当前版本：0.8.0，Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
+当前版本：0.9.0，Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
 
-![原生连接标签与收发工作台](docs/native-workspace.png)
+![像素掌机主题工作台](docs/pixel-workspace.png)
+
+默认采用「像素掌机」主题：灰绿面板、深绿侧栏和琥珀按键。中文点阵字体随程序内置，
+无需安装；设置中可选择浅色或深色，并可单独调整数据区字体、字号或恢复像素默认。
+收发区默认使用较大的 24px 点阵字形，便于读数。
 
 ## 启动
 
@@ -20,7 +24,7 @@
 .\dist\SerialWorkbenchNative\SerialWorkbench.exe --mcp-port 8877
 ```
 
-顶部连接标签旁的「＋」快速新建连接，左侧填写串口或网络参数，右侧默认显示收发页。多个串口和网络连接可同时运行；每个草稿保留自己的参数和发送文本。连接标签显示名称与状态圆点：绿色表示连接或监听，黄色表示连接或恢复中，灰色表示断开，红色表示出错；悬停查看详情。
+顶部连接标签旁的「＋」快速新建连接，左侧填写串口或网络参数，右侧默认显示收发页。多个串口和网络连接可同时运行；每个草稿保留自己的参数和发送文本。连接标签显示名称与状态方块：绿色表示连接或监听，黄色表示连接或恢复中，灰色表示断开，红色表示出错；悬停查看详情。
 
 标签可拖动排序，拖出标签栏会成为独立窗口，也可右键选择「移至独立窗口」。连接、收发页、各控件以及设置中的标签均支持分离。拖动独立窗口的系统标题栏使用 Windows 11 吸附与分屏；悬停最大化按钮或按 Win + Z 选择系统布局。窄窗口会自动收起连接参数，点击左上角端口图标可展开。
 
@@ -228,6 +232,6 @@ claude mcp add --transport http serial-workbench http://127.0.0.1:8765/mcp
 
 原生入口在 `native/main.cpp`；连接、数据历史和解析在 `native/core.cpp`，MCP 在 `native/mcp.cpp`，STDIO 桥在 `native/bridge.cpp`，工作台与设置在 `native/window.cpp`，标签分离和系统窗口移动在 `native/docking.cpp`，矢量图标及波形绘制在 `native/controls.cpp`，日志与终端在 `native/terminal.cpp`。程序目录的 `settings.json` 保存表单、模板、外观、各连接视图及 AI 权限，启动时不自动打开设备。
 
-0.8.0 的界面、独立窗口及 Windows 11 布局验证见 [验证记录](docs/workspace-0.8-validation.md)。
+0.9.0 的主题规则和验证结果见 [像素主题说明](docs/pixel-theme.md)。独立窗口及 Windows 11 布局实现验证见 [0.8.0 验证记录](docs/workspace-0.8-validation.md)。
 
 旧 Python 实现保留在 `serial_assistant/`，`run.py` 可单独启动；历史打包版位于 `dist/SerialWorkbench/`，供回退使用。原生迁移在 `feat/qt-native-workbench` 分支开发，Python 0.6.0 基线提交为 `7e74c8c`。

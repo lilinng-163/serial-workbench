@@ -8,6 +8,7 @@ int main(int argc, char *argv[])
     app.setApplicationName("SerialWorkbench");
     app.setApplicationVersion(sw::Version);
     app.setStyle("Fusion");
+    app.setFont(sw::Theme::interfaceFont());
     QCommandLineParser parser;
     parser.addHelpOption();
     parser.addVersionOption();

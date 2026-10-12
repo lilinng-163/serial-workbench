@@ -1,25 +1,31 @@
 #pragma once
-#include <QtWidgets>
 #include "core.h"
 #include "docking.h"
+#include <QtWidgets>
 
 namespace sw
 {
 struct Theme
 {
     bool dark = false;
-    QColor background = "#f2f5f9";
-    QColor panel = "#ffffff";
-    QColor sidebar = "#f8fafc";
-    QColor text = "#27374d";
-    QColor muted = "#7d8ba0";
-    QColor line = "#e3e9f0";
-    QColor accent = "#337de7";
-    QColor hover = "#e9f0fa";
-    QColor green = "#239b83";
-    QColor red = "#d65666";
-    QColor amber = "#b87a24";
+    QColor background = "#dce2d3";
+    QColor panel = "#f6f4e8";
+    QColor sidebar = "#e9ecdd";
+    QColor text = "#28392f";
+    QColor muted = "#647360";
+    QColor line = "#b7c2ac";
+    QColor accent = "#dc8c38";
+    QColor hover = "#dce4cd";
+    QColor green = "#477255";
+    QColor red = "#b85845";
+    QColor amber = "#996022";
+    QColor edge = "#7c8c74";
+    QColor rail = "#293e35";
+    QColor onAccent = "#28392f";
     static Theme make(bool dark);
+    static QString fontFamily(int pixels = 8);
+    static QFont interfaceFont();
+    static QFont defaultDataFont();
     QString stylesheet() const;
 };
 
@@ -29,7 +35,7 @@ void drawIcon(QPainter &painter, const QString &name, QRectF rect, const QColor 
 class IconButton : public QAbstractButton
 {
     Q_OBJECT
-public:
+  public:
     IconButton(const QString &name, const QString &title, QWidget *parent = nullptr);
     QString glyph;
     Theme theme;
@@ -43,7 +49,7 @@ public:
 
 class Combo : public QComboBox
 {
-public:
+  public:
     explicit Combo(QWidget *parent = nullptr);
     bool menuPopup = false;
     void showPopup() override;
@@ -53,7 +59,7 @@ public:
 
 class ProtocolCombo : public Combo
 {
-public:
+  public:
     explicit ProtocolCombo(QWidget *parent = nullptr);
     void showPopup() override;
 };
@@ -61,7 +67,7 @@ public:
 class SearchBox : public QLineEdit
 {
     Q_OBJECT
-public:
+  public:
     explicit SearchBox(QWidget *parent = nullptr);
     IconButton *clearButton;
     void resizeEvent(QResizeEvent *event) override;
@@ -70,7 +76,7 @@ public:
 
 class ConnectionBar : public TearTabBar
 {
-public:
+  public:
     explicit ConnectionBar(QWidget *parent = nullptr);
     QSize sizeHint() const override;
     QSize minimumSizeHint() const override;
@@ -79,7 +85,7 @@ public:
 
 class Grip : public QSplitterHandle
 {
-public:
+  public:
     Grip(Qt::Orientation orientation, QSplitter *parent);
     void paintEvent(QPaintEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
@@ -87,14 +93,14 @@ public:
 
 class Splitter : public QSplitter
 {
-public:
+  public:
     explicit Splitter(Qt::Orientation orientation = Qt::Horizontal, QWidget *parent = nullptr);
     QSplitterHandle *createHandle() override;
 };
 
 class WavePlot : public QWidget
 {
-public:
+  public:
     explicit WavePlot(QWidget *parent = nullptr);
     Theme theme;
     QMap<QString, QVector<QPointF>> series;
@@ -108,4 +114,4 @@ public:
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
 };
-}
+} // namespace sw

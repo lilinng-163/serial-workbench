@@ -22,6 +22,10 @@ $running = Get-Process SerialWorkbench,SerialWorkbenchMCP -ErrorAction SilentlyC
 if ($running) { throw 'Close the native workbench before packaging over its running executable.' }
 New-Item -ItemType Directory -Force -Path $destination | Out-Null
 Copy-Item -LiteralPath 'build/native/bin/SerialWorkbench.exe','build/native/bin/SerialWorkbenchMCP.exe' -Destination $destination -Force
+$fontNotices = Join-Path $destination 'licenses/FusionPixel'
+New-Item -ItemType Directory -Force -Path $fontNotices | Out-Null
+Copy-Item -LiteralPath 'native/fonts/OFL.txt','native/fonts/README.md' -Destination $fontNotices -Force
+Copy-Item -LiteralPath 'native/fonts/LICENSES' -Destination $fontNotices -Recurse -Force
 & "$QtRoot/bin/windeployqt.exe" --release --no-translations --no-system-d3d-compiler --no-opengl-sw "$destination/SerialWorkbench.exe"
 if ($LASTEXITCODE) { throw 'Qt deployment failed' }
 & "$QtRoot/bin/windeployqt.exe" --release --no-translations --no-system-d3d-compiler --no-opengl-sw "$destination/SerialWorkbenchMCP.exe"
