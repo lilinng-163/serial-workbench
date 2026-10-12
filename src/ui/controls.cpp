@@ -585,7 +585,7 @@ void Combo::paintEvent(QPaintEvent *event)
 
 ProtocolCombo::ProtocolCombo(QWidget *parent) : Combo(parent)
 {
-    addItems({"串口", "TCP 客户端", "TCP 服务端", "UDP"});
+    addItems({"串口", "TCP 客户端", "TCP 服务端", "UDP", "SSH"});
     setObjectName("protocolSelector");
 }
 

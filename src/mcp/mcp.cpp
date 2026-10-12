@@ -259,7 +259,7 @@ QJsonValue McpServer::call(const QString &name, const QJsonObject &a)
 {
     if (name == "get_status")
     {
-        QJsonObject counts {{"serial", 0}, {"tcp-client", 0}, {"tcp-server", 0}, {"udp", 0}, {"demo", 0}};
+        QJsonObject counts {{"serial", 0}, {"tcp-client", 0}, {"tcp-server", 0}, {"udp", 0}, {"ssh", 0}, {"demo", 0}};
         int active = 0;
         int recovering = 0;
         for (auto channel : engine->channels)
@@ -356,7 +356,7 @@ QJsonArray McpServer::tools() const
     add("send_data", "Send bytes. Requires GUI permission. newline none/lf/cr/crlf, peer IP:port.",
         {{"channel_id", property("string")}, {"payload", property("string")}, {"hex_mode", property("boolean", false)},
          {"encoding", property("string", "utf-8")}, {"newline", property("string", "none")}, {"peer", property("string", "")}}, {"channel_id", "payload"}, false);
-    add("open_connection", "Open serial/tcp-client/tcp-server/udp. Config fields kind, port, baudrate, bytesize, parity, stopbits, flow, dtr, rts, host, network_port, bind_host, bind_port, name. Requires GUI permission.", {{"config", property("object")}}, {"config"}, false);
+    add("open_connection", "Open serial/tcp-client/tcp-server/udp/ssh. SSH config fields: kind=ssh, ssh_host (alias from ~/.ssh/config or address), optional ssh_user, ssh_port, ssh_identity. Uses the system OpenSSH client and configured key or agent. Requires GUI permission.", {{"config", property("object")}}, {"config"}, false);
     add("close_connection", "Disconnect and retain history. Requires GUI permission.", {{"channel_id", property("string")}}, {"channel_id"}, false);
     return result;
 }

@@ -4,6 +4,7 @@
 #include <QtCore>
 #include <QtNetwork>
 #include <QtSerialPort>
+#include <QProcess>
 #include <QTextCodec>
 #include <deque>
 
@@ -27,6 +28,10 @@ struct Config
     int networkPort = 9000;
     QString bindHost = "127.0.0.1";
     int bindPort = 9001;
+    QString sshHost;
+    QString sshUser;
+    int sshPort = 0;
+    QString sshIdentity;
 
     QJsonObject json() const;
     static Config fromJson(const QJsonObject &object);
@@ -87,6 +92,8 @@ public:
     QTcpSocket *client = nullptr;
     QTcpServer *listener = nullptr;
     QUdpSocket *udp = nullptr;
+    QProcess *ssh = nullptr;
+    QString sshError;
     QMap<QString, QTcpSocket *> peers;
     QMap<QString, std::shared_ptr<Source>> sources;
     QTimer demoTimer;
@@ -121,6 +128,7 @@ public:
     Journal journal;
     QMap<QString, Channel *> channels;
     bool allowControl = false;
+    QString sshExecutable = "ssh";
 
     Channel *open(const Config &config);
     Channel *get(const QString &id) const;

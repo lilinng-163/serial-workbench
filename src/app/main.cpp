@@ -15,7 +15,7 @@ int main(int argc, char *argv[])
     parser.addOption({"mcp-port", "Local MCP port", "port", "8765"});
     parser.addOption({"settings", "Settings file", "path", QCoreApplication::applicationDirPath() + "/settings.json"});
     parser.addOption({"demo", "Show generated example data"});
-    parser.addOption({"view", "Preview waveform, values, structured, settings, dark, search, terminal, detached, floating-wave, narrow or protocol", "name"});
+    parser.addOption({"view", "Preview waveform, values, structured, settings, dark, search, terminal, ssh, detached, floating-wave, narrow or protocol", "name"});
     parser.addOption({"screenshot", "Save window preview", "path"});
     parser.addOption({"ready-file", "Write startup timing", "path"});
     parser.addOption({"quit-after", "Close after milliseconds", "ms"});
@@ -103,6 +103,10 @@ int main(int argc, char *argv[])
             window.active->setTerminal(true);
             window.active->terminal->blockCursor = false;
             window.active->cursorShape->setChecked(false);
+        }
+        else if (view == "ssh")
+        {
+            window.protocol->setCurrentIndex(4);
         }
         else if (view == "narrow")
         {

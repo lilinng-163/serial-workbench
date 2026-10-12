@@ -1,4 +1,5 @@
 #include "window.h"
+#include "ssh_profiles.h"
 #include <QtTest>
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -17,6 +18,77 @@ class NativeTests : public QObject
 {
     Q_OBJECT
 private slots:
+    void sshProfilesAndSession()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        QDir().mkpath(directory.filePath("includes"));
+
+        QFile included(directory.filePath("includes/hosts.conf"));
+        QVERIFY(included.open(QIODevice::WriteOnly));
+        included.write("Host lab-server lab-backup\n  HostName 192.0.2.10\nInclude ../config\n");
+        included.close();
+
+        QFile configFile(directory.filePath("config"));
+        QVERIFY(configFile.open(QIODevice::WriteOnly));
+        configFile.write("# local configuration\nHost local-host *.example !blocked\n  User tester\nInclude includes/*.conf\n");
+        configFile.close();
+
+        QCOMPARE(sw::SshProfiles::aliases(configFile.fileName()),
+            QStringList({"local-host", "lab-server", "lab-backup"}));
+
+        sw::Config config;
+        config.kind = "ssh";
+        config.sshHost = "lab-server";
+        config.sshIdentity = directory.filePath("test key");
+        QCOMPARE(sw::Config::fromJson(config.json()).key(), config.key());
+        config.validate();
+        config.sshHost = "-oProxyCommand=evil";
+        QVERIFY_EXCEPTION_THROWN(config.validate(), std::runtime_error);
+        config.sshHost = "lab-server";
+
+        sw::Engine engine;
+        engine.sshExecutable = QCoreApplication::applicationDirPath() + "/fake_ssh.exe";
+        QVERIFY(QFile::exists(engine.sshExecutable));
+        auto channel = engine.open(config);
+        QTRY_COMPARE(channel->state, QString("connected"));
+        QTRY_VERIFY(channel->rx >= 6);
+
+        const QByteArray input("private-input\n");
+        const auto sent = channel->send(input);
+        QCOMPARE(sent["bytes_sent"].toInt(), input.size());
+        QTRY_VERIFY(channel->rx >= 6 + input.size());
+        const auto events = engine.journal.read(0)["events"].toArray();
+        bool received = false;
+        for (const auto &value : events)
+        {
+            const auto event = value.toObject();
+            QVERIFY(event["direction"].toString() != "tx");
+            received |= event["text"].toString().contains("private-input");
+        }
+        QVERIFY(received);
+        channel->close();
+        QCOMPARE(channel->state, QString("closed"));
+
+        sw::McpServer mcp(&engine);
+        QCOMPARE(mcp.call("get_status", {}).toObject()["counts_by_protocol"].toObject()["ssh"].toInt(), 0);
+
+        sw::Engine uiEngine;
+        uiEngine.sshExecutable = engine.sshExecutable;
+        sw::McpServer uiMcp(&uiEngine);
+        sw::Window window(&uiEngine, &uiMcp, directory.filePath("settings.json"));
+        window.protocol->setCurrentIndex(4);
+        QCOMPARE(window.configStack->currentIndex(), 2);
+        window.sshTarget->setCurrentText("lab-server");
+        window.sshIdentity->setText(directory.filePath("test key"));
+        QCOMPARE(window.form().sshHost, QString("lab-server"));
+        window.connectionAction();
+        QTRY_COMPARE(window.active->channel->state, QString("connected"));
+        QVERIFY(window.active->terminalMode);
+        QCOMPARE(window.active->channel->config.sshIdentity, directory.filePath("test key"));
+        window.close();
+    }
+
     void initTestCase()
     {
         QApplication::setStyle("Fusion");

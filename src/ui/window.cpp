@@ -1,4 +1,5 @@
 #include "window.h"
+#include "ssh_profiles.h"
 #include <QTextCodec>
 #include <numeric>
 #ifdef Q_OS_WIN
@@ -680,6 +681,7 @@ void Pane::setChannel(Channel *value)
     {
         draft = value->config;
         if (instrument) { sourceKey = value->config.key(); }
+        if (!instrument && value->config.kind == "ssh") { setTerminal(true); }
     }
     enableParser();
 }
@@ -1055,7 +1057,7 @@ void Pane::restore(const QJsonObject &settings)
         senderSizes = {sizes[0].toInt(), sizes[1].toInt()};
         QTimer::singleShot(0, this, [this] { splitter->setSizes(senderSizes); });
     }
-    setTerminal(settings["terminal_mode"].toBool());
+    setTerminal((channel && channel->config.kind == "ssh") || settings["terminal_mode"].toBool());
     window->restoreInstruments(settings, channel ? channel->config.key() : Config::fromJson(window->saved["connection"].toObject()).key());
 }
 
@@ -1168,7 +1170,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     brandTop->addWidget(label("SW", "brandMark"));
     brandBody->addLayout(brandTop);
     brandBody->addWidget(label("Serial\nWorkbench", "brandTitle"));
-    brandBody->addWidget(label("串口 / 网络调试", "brandSubtitle"));
+    brandBody->addWidget(label("串口 / 网络 / SSH", "brandSubtitle"));
     side->addWidget(brand);
     side->addSpacing(4);
     side->addWidget(label("连接参数", "section"));
@@ -1258,19 +1260,54 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     network->addWidget(bindHost);
     network->addWidget(bindPort);
     configStack->addWidget(networkPanel);
+    auto sshPanel = new QWidget();
+    auto sshBody = new QVBoxLayout(sshPanel);
+    sshBody->setContentsMargins(0, 4, 0, 0);
+    sshBody->setSpacing(8);
+    sshBody->addWidget(label("主机别名或地址", "muted"));
+    auto sshTargetRow = horizontal();
+    sshTarget = combo({}, {}, true);
+    sshTarget->setObjectName("sshHost");
+    sshTarget->setInsertPolicy(QComboBox::NoInsert);
+    sshTarget->lineEdit()->setPlaceholderText("选择配置或输入地址");
+    sshTargetRow->addWidget(sshTarget, 1);
+    auto sshRefresh = new IconButton("refresh", "重新读取 ~/.ssh/config");
+    sshRefresh->setFixedSize(34, 38);
+    connect(sshRefresh, &QAbstractButton::clicked, this, &Window::refreshSshProfiles);
+    sshTargetRow->addWidget(sshRefresh);
+    sshBody->addLayout(sshTargetRow);
+    sshBody->addWidget(label("用户名（可选）", "muted"));
+    sshUser = new QLineEdit();
+    sshUser->setPlaceholderText("User");
+    sshBody->addWidget(sshUser);
+    sshBody->addWidget(label("端口（可选）", "muted"));
+    sshPort = new QLineEdit();
+    sshPort->setPlaceholderText("Port / 22");
+    sshPort->setValidator(new QIntValidator(1, 65535, sshPort));
+    sshBody->addWidget(sshPort);
+    sshBody->addWidget(label("私钥文件（可选）", "muted"));
+    sshIdentity = new QLineEdit();
+    sshIdentity->setPlaceholderText("IdentityFile");
+    sshBody->addWidget(sshIdentity);
+    for (auto edit : {sshUser, sshPort, sshIdentity})
+    {
+        edit->setToolTip("留空时使用 ~/.ssh/config 中的设置");
+    }
+    configStack->addWidget(sshPanel);
+    refreshSshProfiles();
     side->addWidget(configStack);
     side->addWidget(label("连接名称", "muted"));
     connectionName = new QLineEdit();
-    connectionName->setPlaceholderText("可选 · 使用端口名称");
+    connectionName->setPlaceholderText("可选 · 使用端口或主机名");
     side->addWidget(connectionName);
     connectButton = button("建立连接", "primary");
     connectButton->setMinimumHeight(26);
     connect(connectButton, &QPushButton::clicked, this, &Window::connectionAction);
     side->addWidget(connectButton);
     side->addStretch();
-    auto hint = label("参数修改实时应用\n波特率以驱动回读为准", "connectionHint");
-    hint->setWordWrap(true);
-    side->addWidget(hint);
+    connectionHint = label("参数修改实时应用\n波特率以驱动回读为准", "connectionHint");
+    connectionHint->setWordWrap(true);
+    side->addWidget(connectionHint);
     auto sideScroll = new QScrollArea();
     sideScroll->setWidgetResizable(true);
     sideScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -1723,7 +1760,7 @@ void Window::syncParameterPane(bool force)
 Config Window::form() const
 {
     Config c;
-    c.kind = QStringList {"serial", "tcp-client", "tcp-server", "udp"}[protocol->currentIndex()];
+    c.kind = QStringList {"serial", "tcp-client", "tcp-server", "udp", "ssh"}[protocol->currentIndex()];
     c.name = connectionName->text().trimmed();
     c.port = port->currentText().trimmed();
     bool ok = false;
@@ -1742,6 +1779,15 @@ Config Window::form() const
     c.networkPort = remotePort->value();
     c.bindHost = bindHost->text().trimmed();
     c.bindPort = bindPort->value();
+    c.sshHost = sshTarget->currentText().trimmed();
+    c.sshUser = sshUser->text().trimmed();
+    const QString sshPortValue = sshPort->text().trimmed();
+    c.sshPort = sshPortValue.isEmpty() ? 0 : sshPortValue.toInt(&ok);
+    if (c.kind == "ssh" && !sshPortValue.isEmpty() && (!ok || c.sshPort < 1 || c.sshPort > 65535))
+    {
+        fail("SSH 端口需要 1 到 65535 的整数");
+    }
+    c.sshIdentity = sshIdentity->text().trimmed();
     return c;
 }
 
@@ -1769,7 +1815,11 @@ void Window::loadForm(const Config &c)
     remotePort->setValue(c.networkPort);
     bindHost->setText(c.bindHost);
     bindPort->setValue(c.bindPort);
-    const int index = QStringList {"serial", "tcp-client", "tcp-server", "udp"}.indexOf(c.kind);
+    sshTarget->setCurrentText(c.sshHost);
+    sshUser->setText(c.sshUser);
+    sshPort->setText(c.sshPort ? QString::number(c.sshPort) : QString());
+    sshIdentity->setText(c.sshIdentity);
+    const int index = QStringList {"serial", "tcp-client", "tcp-server", "udp", "ssh"}.indexOf(c.kind);
     if (index >= 0)
     {
         protocol->setCurrentIndex(index);
@@ -1781,7 +1831,10 @@ void Window::loadForm(const Config &c)
 void Window::protocolChanged()
 {
     const int index = protocol->currentIndex();
-    configStack->setCurrentIndex(index == 0 ? 0 : 1);
+    configStack->setCurrentIndex(index == 0 ? 0 : index == 4 ? 2 : 1);
+    connectionHint->setText(index == 4
+        ? "读取 ~/.ssh/config 中的主机别名\n使用系统密钥或代理登录"
+        : "参数修改实时应用\n波特率以驱动回读为准");
     for (auto widget : QList<QWidget *> {remoteLabel, host, remotePort})
     {
         widget->setVisible(index == 1 || index == 3);
@@ -1791,6 +1844,17 @@ void Window::protocolChanged()
         widget->setVisible(index == 2 || index == 3);
     }
     configStack->updateGeometry();
+    if (!syncing) { updateStatus(); }
+}
+
+void Window::refreshSshProfiles()
+{
+    const QString current = sshTarget->currentText();
+    const QSignalBlocker blocker(sshTarget);
+    sshTarget->clear();
+    sshTarget->addItems(SshProfiles::aliases());
+    sshTarget->setCurrentIndex(-1);
+    sshTarget->setEditText(current);
 }
 
 bool Window::holdsSerialPort(const QString &name) const
@@ -2107,8 +2171,12 @@ void Window::updateStatus()
     }
     auto channel = active->channel;
     auto parameterChannel = parameterPane ? parameterPane->channel.data() : nullptr;
-    const bool same = parameterChannel && parameterChannel->config.kind == QStringList {"serial", "tcp-client", "tcp-server", "udp"}[protocol->currentIndex()]
-        && (parameterChannel->config.kind != "serial" || parameterChannel->config.port == port->currentText() || port->currentText() == "NULL");
+    const bool same = parameterChannel && parameterChannel->config.kind == QStringList {"serial", "tcp-client", "tcp-server", "udp", "ssh"}[protocol->currentIndex()]
+        && (parameterChannel->config.kind != "serial" || parameterChannel->config.port == port->currentText() || port->currentText() == "NULL")
+        && (parameterChannel->config.kind != "ssh" || (parameterChannel->config.sshHost == sshTarget->currentText().trimmed()
+            && parameterChannel->config.sshUser == sshUser->text().trimmed()
+            && parameterChannel->config.sshPort == sshPort->text().trimmed().toInt()
+            && parameterChannel->config.sshIdentity == sshIdentity->text().trimmed()));
     const bool ready = parameterChannel && (parameterChannel->state == "connected" || parameterChannel->state == "listening" || parameterChannel->state == "connecting" || parameterChannel->state == "reconnecting");
     QString actionText = parameterPane ? "建立连接" : "新建收发页面";
     if (same && ready)
@@ -2132,6 +2200,7 @@ void Window::updateStatus()
     {
         status->setText(active->isInstrument()
             ? (active->sourceKey.isEmpty() ? "控件页面    请选择数据来源" : "控件页面    等待数据来源连接")
+            : protocol->currentIndex() == 4 ? "尚未连接    选择 SSH 主机后建立连接"
             : "尚未连接    选择端口开始接收");
     }
     const auto selectedPort = port->currentText();

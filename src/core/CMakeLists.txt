@@ -1,6 +1,8 @@
 add_library(workbench_core STATIC
     core.cpp
     core.h
+    ssh_profiles.cpp
+    ssh_profiles.h
 )
 workbench_configure_target(workbench_core)
 target_include_directories(workbench_core PUBLIC

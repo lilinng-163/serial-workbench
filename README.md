@@ -1,8 +1,8 @@
 # Serial Workbench
 
-一个面向嵌入式开发的 Windows 串口与网络调试助手。人在界面查看数据，Codex、Claude、OpenCode 等 AI 通过 MCP 同时读取同一份数据，无需再次打开串口。
+一个面向嵌入式开发的 Windows 串口、网络与 SSH 调试助手。人在界面查看数据，Codex、Claude、OpenCode 等 AI 通过 MCP 同时读取同一份数据，无需再次打开串口。
 
-当前版本：0.11.6，Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
+当前版本：0.12.0，Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
 
 ![像素掌机主题工作台](docs/pixel-workspace.png)
 
@@ -51,6 +51,7 @@
 | TCP 客户端 | 填写远端 IP/主机名和端口 |
 | TCP 服务端 | 填写本地 IPv4 和端口；支持最多 16 个客户端，发送时可选择目标客户端 |
 | UDP | 同时填写本地绑定地址和远端目标地址；可在发送栏指定另一个 `IP:端口` |
+| SSH | 选择 `~/.ssh/config` 中的主机别名，或输入主机地址；用户名、端口和私钥文件留空时由系统 OpenSSH 配置决定。连接后自动进入交互终端 |
 | 文本/HEX | UTF-8、GBK、ASCII、Latin-1；HEX 例如 `01 03 00 00 00 02 C4 0B` |
 | 换行 | 显示 None、`LF · \n`、`CR · \r`、`CRLF · \r\n`；下拉菜单同时解释 Line Feed / Carriage Return。HEX 模式也会追加换行，发送二进制报文时通常选择「无换行」 |
 | 定时发送 | 最小 20 ms；开启时固定当前连接、报文和周期，修改后重新勾选；切换连接或发生错误会停止 |
@@ -72,6 +73,8 @@ Espressif USB Serial/JTAG（VID `303A` / PID `1001`）会显示 USB 速率提示
 收发监视的文本视图按设备的换行组织日志，不会把分开到达的 `ESC`、颜色码或中文字符显示成多条消息；没有换行的提示符也会实时更新。CR、LF、CRLF 均显示为普通换行，日志时间采用该行首次接收的时间。监视和终端都支持 ANSI SGR 的 16 色、256 色、RGB 前景/背景色以及粗体、斜体、下划线和颜色复位；跨接收块的颜色码会拼接解析。HEX、导出的日志及 MCP `read_events` 保留原始字节和接收分块；需要还原精确字符时使用 `hex`，按流增量解码。
 
 ## 终端
+
+SSH 使用 Windows 自带的 `ssh.exe`，沿用 `~/.ssh/config` 的 `HostName`、`User`、`Port`、`IdentityFile`、`ProxyJump` 等设置和现有密钥代理。打开左侧协议选择中的 SSH，选择别名后点击「建立连接」；配置文件变化时点击主机字段旁的刷新图标。程序不会读取或保存私钥内容。SSH 连接只使用已配置的密钥或代理，不弹出密码输入框；若主机尚未加入 `known_hosts`，请先在系统终端执行一次 `ssh 主机别名` 完成主机验证。SSH 终端的输入不会写入共享日志，以免远端程序的密码输入进入日志；接收内容仍可由界面和 MCP 分别读取。
 
 收发工具栏最左侧的终端图标在日志与交互终端之间切换，下方发送栏在终端模式隐藏。点击终端即可直接输入，闪烁光标显示设备的输入位置。按 Insert 或点击工具栏光标图标，在方块和竖线光标之间切换；Insert 仅改变本地光标形状，不向设备发送字符。再次点击终端图标返回收发日志与发送栏，共享历史保留。终端输入发送到当前终端所属的连接。
 
@@ -232,7 +235,7 @@ $env:MINGW_BIN = 'D:/lib/Qt/Tools/mingw1310_64/bin'
 .\scripts\build.ps1
 
 # 打包后的 HTTP / STDIO 集成测试，需要 Python MCP SDK
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.11.5
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.12.0
 ```
 
 测试覆盖独立读取与分页、真实 TCP/UDP socket、软件串口回环及重配置、UTF-8/GBK 分片解析、ANSI 颜色与终端、连接标签和布局、设置恢复、MCP HTTP/STDIO、权限、非阻塞等待和错误参数。实际 COM 硬件、USB 设备的实际线速及各 AI 客户端的完整对话需要在对应环境验证。

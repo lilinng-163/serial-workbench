@@ -1,4 +1,5 @@
 qt_add_executable(native_tests tests.cpp)
+add_executable(fake_ssh fake_ssh.cpp)
 workbench_configure_target(native_tests)
 target_link_libraries(native_tests PRIVATE workbench_ui Qt6::Test)
 

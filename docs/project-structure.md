@@ -7,7 +7,7 @@ serial/
 ├── cmake/                  # 编译规则及版本头模板
 ├── src/
 │   ├── app/                # 桌面程序入口
-│   ├── core/               # 串口、TCP、UDP、历史与数据解析
+│   ├── core/               # 串口、TCP、UDP、SSH、历史与数据解析
 │   ├── mcp/                # MCP HTTP 服务与工具
 │   ├── ui/                 # 工作台、控件、终端和窗口停靠
 │   └── bridge/             # MCP STDIO 桥入口
@@ -69,7 +69,7 @@ cmake --install build/custom --prefix dist/install
 .\scripts\build.ps1
 # 工具不在 PATH 时可指定 -CMake / -Ninja；可选 -Jobs / -BuildDir / -PackageDir
 # 只编译测试：-SkipPackage；仅构建生产目标：-SkipTests
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.11.6
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.12.0
 ```
 
 脚本可从任何工作目录调用，结束时恢复原工作目录和 PATH。替换分发包前会检查其中的程序是否仍运行。

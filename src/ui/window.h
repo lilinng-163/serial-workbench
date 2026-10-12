@@ -132,6 +132,11 @@ public:
     QSpinBox *remotePort;
     QLineEdit *bindHost;
     QSpinBox *bindPort;
+    Combo *sshTarget;
+    QLineEdit *sshUser;
+    QLineEdit *sshPort;
+    QLineEdit *sshIdentity;
+    QLabel *connectionHint;
     QLabel *remoteLabel;
     QLabel *localLabel;
     QLabel *serialInfo;
@@ -170,6 +175,7 @@ public:
     Config form() const;
     void loadForm(const Config &config);
     void refreshPorts();
+    void refreshSshProfiles();
     bool holdsSerialPort(const QString &name) const;
     void protocolChanged();
     void openSettings();

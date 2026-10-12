@@ -33,7 +33,8 @@ QJsonObject Config::json() const
     return {{"kind", kind}, {"name", name}, {"port", port}, {"baudrate", baudrate},
         {"bytesize", bytesize}, {"parity", parity}, {"stopbits", stopbits}, {"flow", flow},
         {"dtr", dtr}, {"rts", rts}, {"host", host}, {"network_port", networkPort},
-        {"bind_host", bindHost}, {"bind_port", bindPort}};
+        {"bind_host", bindHost}, {"bind_port", bindPort}, {"ssh_host", sshHost},
+        {"ssh_user", sshUser}, {"ssh_port", sshPort}, {"ssh_identity", sshIdentity}};
 }
 
 Config Config::fromJson(const QJsonObject &o)
@@ -53,18 +54,23 @@ Config Config::fromJson(const QJsonObject &o)
     c.networkPort = o.value("network_port").toInt(c.networkPort);
     c.bindHost = o.value("bind_host").toString(c.bindHost);
     c.bindPort = o.value("bind_port").toInt(c.bindPort);
+    c.sshHost = o.value("ssh_host").toString();
+    c.sshUser = o.value("ssh_user").toString();
+    c.sshPort = o.value("ssh_port").toInt();
+    c.sshIdentity = o.value("ssh_identity").toString();
     return c;
 }
 
 QString Config::key() const
 {
     return kind == "serial" ? "serial:" + port.toLower().remove("\\\\.\\")
+        : kind == "ssh" ? QString("ssh:%1:%2:%3:%4").arg(sshHost.toLower(), sshUser, QString::number(sshPort), sshIdentity)
         : QString("%1:%2:%3:%4:%5").arg(kind, host).arg(networkPort).arg(bindHost).arg(bindPort);
 }
 
 void Config::validate() const
 {
-    if (!QStringList {"serial", "tcp-client", "tcp-server", "udp", "demo"}.contains(kind))
+    if (!QStringList {"serial", "tcp-client", "tcp-server", "udp", "ssh", "demo"}.contains(kind))
     {
         fail("不支持的连接协议");
     }
@@ -82,6 +88,14 @@ void Config::validate() const
     if (bindPort < 0 || bindPort > 65535 || networkPort < 1 || networkPort > 65535)
     {
         fail("网络端口无效");
+    }
+    if (kind == "ssh" && (sshHost.isEmpty() || sshHost.startsWith('-')
+        || sshHost.contains(QRegularExpression(R"([\s\x00-\x1f])"))
+        || sshUser.startsWith('-') || sshUser.contains(QRegularExpression(R"([\r\n])"))
+        || sshIdentity.contains(QRegularExpression(R"([\r\n])"))
+        || sshPort < 0 || sshPort > 65535))
+    {
+        fail("SSH 主机、用户名或端口无效");
     }
 }
 
@@ -266,7 +280,9 @@ QByteArray Engine::encode(const QString &payload, bool hex, const QString &encod
 
 Channel::Channel(Engine *owner, const Config &configuration) : QObject(owner), engine(owner), config(configuration)
 {
-    name = config.name.isEmpty() ? (config.kind == "serial" ? config.port : config.kind + " · " + QString::number(config.kind == "tcp-client" ? config.networkPort : config.bindPort)) : config.name;
+    name = config.name.isEmpty() ? (config.kind == "serial" ? config.port
+        : config.kind == "ssh" ? config.sshHost
+        : config.kind + " · " + QString::number(config.kind == "tcp-client" ? config.networkPort : config.bindPort)) : config.name;
     demoTimer.setInterval(40);
     connect(&demoTimer, &QTimer::timeout, this, [this]
     {
@@ -325,6 +341,20 @@ void Channel::releaseTransport()
     {
         udp->close();
     }
+    if (ssh)
+    {
+        ssh->disconnect(this);
+        if (ssh->state() != QProcess::NotRunning)
+        {
+            ssh->terminate();
+            if (!ssh->waitForFinished(300))
+            {
+                ssh->kill();
+                ssh->waitForFinished(300);
+            }
+        }
+        ssh->deleteLater();
+    }
     for (auto socket : peers)
     {
         socket->disconnect(this);
@@ -336,6 +366,8 @@ void Channel::releaseTransport()
     client = nullptr;
     listener = nullptr;
     udp = nullptr;
+    ssh = nullptr;
+    sshError.clear();
     appliedBaud = 0;
 }
 
@@ -544,6 +576,64 @@ void Channel::open()
             });
             status("connected");
         }
+        else if (config.kind == "ssh")
+        {
+            ssh = new QProcess(this);
+            QStringList arguments {"-tt", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15",
+                "-o", "ServerAliveInterval=30", "-o", "ServerAliveCountMax=3"};
+            if (!config.sshUser.isEmpty())
+            {
+                arguments << "-l" << config.sshUser;
+            }
+            if (config.sshPort > 0)
+            {
+                arguments << "-p" << QString::number(config.sshPort);
+            }
+            if (!config.sshIdentity.isEmpty())
+            {
+                arguments << "-i" << config.sshIdentity;
+            }
+            arguments << config.sshHost;
+            ssh->setProgram(engine->sshExecutable);
+            ssh->setArguments(arguments);
+            auto environment = QProcessEnvironment::systemEnvironment();
+            environment.insert("TERM", "xterm-256color");
+            ssh->setProcessEnvironment(environment);
+            connect(ssh, &QProcess::readyReadStandardOutput, this, [this]
+            {
+                const QByteArray data = ssh->readAllStandardOutput();
+                if (state == "connecting") { status("connected"); }
+                receive(data);
+            });
+            connect(ssh, &QProcess::readyReadStandardError, this, [this]
+            {
+                const QByteArray data = ssh->readAllStandardError();
+                sshError = (sshError + QString::fromUtf8(data)).right(2048);
+                receive(data);
+            });
+            connect(ssh, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error)
+            {
+                if (error == QProcess::FailedToStart)
+                {
+                    status("error", "无法启动系统 OpenSSH 客户端 ssh.exe");
+                }
+            });
+            connect(ssh, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
+                [this](int code, QProcess::ExitStatus)
+            {
+                if (code == 0 && state == "connected")
+                {
+                    status("closed", "SSH 会话已结束");
+                }
+                else if (state != "error")
+                {
+                    const QString reason = sshError.trimmed().section('\n', -1).trimmed();
+                    status("error", reason.isEmpty() ? QString("SSH 连接结束，退出码 %1").arg(code) : reason);
+                }
+            });
+            status("connecting");
+            ssh->start();
+        }
         else
         {
             demoTimer.start();
@@ -643,6 +733,10 @@ QJsonObject Channel::send(const QByteArray &data, const QString &peer, const QSt
         }
         written = udp->writeDatagram(data, QHostAddress(host), port);
     }
+    else if (ssh)
+    {
+        written = ssh->write(data);
+    }
     else if (config.kind == "demo")
     {
         fail("模拟信号为只读数据源");
@@ -652,7 +746,12 @@ QJsonObject Channel::send(const QByteArray &data, const QString &peer, const QSt
         fail("驱动未接受完整报文，未自动重发");
     }
     tx += written;
-    engine->journal.append(id, "tx", data, peer, origin);
+    // Interactive SSH input can contain passwords typed into remote programs.
+    // Only the byte count is shared with journal readers.
+    if (config.kind != "ssh")
+    {
+        engine->journal.append(id, "tx", data, peer, origin);
+    }
     emit engine->eventAdded();
     return {{"channel_id", id}, {"bytes_sent", written}, {"peer", peer}};
 }
