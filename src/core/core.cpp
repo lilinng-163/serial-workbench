@@ -221,6 +221,9 @@ QJsonArray Engine::ports()
     {
         result.append(QJsonObject {{"port", port.portName()}, {"description", port.description()},
             {"hwid", port.serialNumber()}, {"manufacturer", port.manufacturer()},
+            {"serial_number", port.serialNumber()}, {"system_location", port.systemLocation()},
+            {"vendor_id", port.hasVendorIdentifier() ? QJsonValue(port.vendorIdentifier()) : QJsonValue()},
+            {"product_id", port.hasProductIdentifier() ? QJsonValue(port.productIdentifier()) : QJsonValue()},
             {"usb_serial_jtag", port.vendorIdentifier() == 0x303a && port.productIdentifier() == 0x1001}});
     }
     return result;

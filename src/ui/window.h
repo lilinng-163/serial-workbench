@@ -35,6 +35,7 @@ public:
     Window *window;
     QPointer<Channel> channel;
     Config draft;
+    QJsonObject portMetadata;
     qint64 cursor = 0;
     qint64 viewStart = 0;
     Instrument *instrument = nullptr;
@@ -133,6 +134,7 @@ public:
     QLabel *remoteLabel;
     QLabel *localLabel;
     QLabel *serialInfo;
+    QLabel *portDetails;
     QPushButton *connectButton;
     QLabel *status;
     QLabel *mcpStatus;

@@ -374,6 +374,7 @@ private slots:
         QTRY_VERIFY(window.port->findText("COM45") >= 0);
         QCOMPARE(window.port->currentText(), "NULL");
         QCOMPARE(window.active->draft.port, QString("NULL"));
+        QVERIFY(window.portDetails->isHidden());
         QVERIFY(window.port->findText("COM44") < 0);
         window.port->setCurrentText("loop://");
         available = {};
@@ -414,11 +415,27 @@ private slots:
         QSignalSpy reset(window.port->model(), &QAbstractItemModel::modelReset);
         QSignalSpy inserted(window.port->model(), &QAbstractItemModel::rowsInserted);
         QSignalSpy removed(window.port->model(), &QAbstractItemModel::rowsRemoved);
-        available[0] = QJsonObject {{"port", "COM8"}, {"description", "Updated device"}};
+        available[0] = QJsonObject {
+            {"port", "COM8"}, {"description", "Updated device"}, {"manufacturer", "Silicon Labs"},
+            {"vendor_id", 0x10c4}, {"product_id", 0xea60}, {"serial_number", "UART1234"},
+            {"system_location", "test-device-path"}
+        };
         window.refreshPorts();
         QCOMPARE(window.port->currentText(), "COM8");
         QCOMPARE(window.port->lineEdit()->selectedText(), "OM");
-        QCOMPARE(window.port->itemData(1, Qt::ToolTipRole).toString(), QString("Updated device"));
+        const auto tooltip = window.port->itemData(1, Qt::ToolTipRole).toString();
+        QVERIFY(tooltip.contains("Updated device"));
+        QVERIFY(tooltip.contains("Silicon Labs"));
+        QVERIFY(tooltip.contains("VID 10C4 · PID EA60"));
+        QVERIFY(tooltip.contains("UART1234"));
+        QVERIFY(tooltip.contains("test-device-path"));
+        QVERIFY(window.portDetails->text().contains("VID 10C4 · PID EA60"));
+        QVERIFY(window.portDetails->text().contains("UART1234"));
+        QVERIFY(window.portDetails->isVisible());
+        for (auto text : window.findChildren<QLabel *>())
+        {
+            QVERIFY(text->text() != "实时扫描");
+        }
         QCOMPARE(reset.count(), 0);
         QCOMPARE(inserted.count(), 0);
         QCOMPARE(removed.count(), 0);
@@ -474,7 +491,7 @@ private slots:
         QCOMPARE(window.port->currentText(), "NULL");
 
         // A lost device must not disable the existing connection's stop action.
-        available.append(QJsonObject {{"port", "COM9"}});
+        available.append(QJsonObject {{"port", "COM9"}, {"description", "Retained USB UART"}, {"hwid", "OLD-SERIAL"}});
         window.refreshPorts();
         sw::Config loopback;
         loopback.port = "loop://";
@@ -488,6 +505,8 @@ private slots:
         QCOMPARE(window.port->currentText(), "COM9");
         QCOMPARE(window.port->findText("COM9"), -1);
         QCOMPARE(window.connectButton->text(), QString("停止重连"));
+        QVERIFY(window.portDetails->text().contains("Retained USB UART"));
+        QVERIFY(window.portDetails->text().contains("OLD-SERIAL"));
         QCOMPARE(channel->state, QString("reconnecting"));
         QVERIFY(channel->retryTimer.isActive());
         QVERIFY(channel->error.contains("COM9"));

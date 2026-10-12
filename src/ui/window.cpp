@@ -73,6 +73,113 @@ static int paneIndex(ConnectionBar *bar, Pane *pane)
     return -1;
 }
 
+static QString usbIdentity(const QJsonObject &metadata)
+{
+    QStringList identifiers;
+    for (const auto &key : {"vendor_id", "product_id"})
+    {
+        if (!metadata[key].isDouble())
+        {
+            continue;
+        }
+        const auto value = QString::number(metadata[key].toInt(), 16).rightJustified(4, '0').toUpper();
+        identifiers.append(QString(key == QString("vendor_id") ? "VID %1" : "PID %1").arg(value));
+    }
+    return identifiers.join(" · ");
+}
+
+static QString serialNumber(const QJsonObject &metadata)
+{
+    return metadata["serial_number"].toString(metadata["hwid"].toString());
+}
+
+static QString portDescription(const QJsonObject &metadata, bool includeLocation = false)
+{
+    QStringList lines;
+    if (!metadata["description"].toString().isEmpty())
+    {
+        lines.append(metadata["description"].toString());
+    }
+    if (!metadata["manufacturer"].toString().isEmpty())
+    {
+        lines.append("制造商：" + metadata["manufacturer"].toString());
+    }
+    const auto usb = usbIdentity(metadata);
+    if (!usb.isEmpty())
+    {
+        lines.append(usb);
+    }
+    const auto serial = serialNumber(metadata);
+    if (!serial.isEmpty())
+    {
+        lines.append("序列号：" + serial);
+    }
+    if (includeLocation && !metadata["system_location"].toString().isEmpty())
+    {
+        lines.append("设备路径：" + metadata["system_location"].toString());
+    }
+    return lines.join('\n');
+}
+
+class PortDelegate : public QStyledItemDelegate
+{
+public:
+    explicit PortDelegate(Window *owner) : QStyledItemDelegate(owner), window(owner) {}
+    Window *window;
+
+    QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override
+    {
+        const bool device = !index.data(Qt::UserRole + 2).toJsonObject().isEmpty();
+        return QSize(430, option.fontMetrics.height() * (device ? 2 : 1) + 18);
+    }
+
+    void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override
+    {
+        const auto metadata = index.data(Qt::UserRole + 2).toJsonObject();
+        if (metadata.isEmpty())
+        {
+            QStyledItemDelegate::paint(painter, option, index);
+            return;
+        }
+        QStyleOptionViewItem background(option);
+        initStyleOption(&background, index);
+        background.text.clear();
+        auto style = option.widget ? option.widget->style() : QApplication::style();
+        style->drawControl(QStyle::CE_ItemViewItem, &background, painter, option.widget);
+
+        QString title = metadata["port"].toString();
+        if (!metadata["description"].toString().isEmpty())
+        {
+            title += " · " + metadata["description"].toString();
+        }
+        QStringList details;
+        if (!metadata["manufacturer"].toString().isEmpty())
+        {
+            details.append(metadata["manufacturer"].toString());
+        }
+        if (!usbIdentity(metadata).isEmpty())
+        {
+            details.append(usbIdentity(metadata));
+        }
+        if (!serialNumber(metadata).isEmpty())
+        {
+            details.append("SN " + serialNumber(metadata));
+        }
+        const auto area = option.rect.adjusted(10, 7, -10, -7);
+        const int lineHeight = option.fontMetrics.height();
+        painter->save();
+        painter->setClipRect(option.rect);
+        painter->setFont(option.font);
+        painter->setPen(window->theme.text);
+        painter->drawText(area.x(), area.y() + option.fontMetrics.ascent(),
+            option.fontMetrics.elidedText(title, Qt::ElideRight, area.width()));
+        painter->setPen(window->theme.muted);
+        painter->drawText(area.x(), area.y() + lineHeight + option.fontMetrics.ascent(),
+            option.fontMetrics.elidedText(details.isEmpty() ? "串口设备" : details.join(" · "), Qt::ElideRight, area.width()));
+        painter->restore();
+    }
+};
+
 Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), kind(type)
 {
     setObjectName("page");
@@ -1063,15 +1170,11 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     auto serialBody = new QVBoxLayout(serialPanel);
     serialBody->setContentsMargins(0, 4, 0, 0);
     serialBody->setSpacing(8);
-    auto portLabel = horizontal();
-    portLabel->addWidget(label("端口", "muted"));
-    portLabel->addStretch();
-    auto scanning = label("实时扫描", "muted");
-    scanning->setToolTip("自动检测设备插拔，无需手动刷新；不可用的端口会自动清除。");
-    portLabel->addWidget(scanning);
-    serialBody->addLayout(portLabel);
+    serialBody->addWidget(label("端口", "muted"));
     port = combo({"NULL"}, "NULL", true);
     port->setObjectName("serialPort");
+    port->setItemDelegate(new PortDelegate(this));
+    port->view()->setMinimumWidth(430);
     port->setInsertPolicy(QComboBox::NoInsert);
     port->setCompleter(nullptr);
     port->lineEdit()->setReadOnly(true);
@@ -1080,6 +1183,13 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     port->lineEdit()->setCursor(Qt::ArrowCursor);
     port->setFixedHeight(38);
     serialBody->addWidget(port);
+    portDetails = label("", "portDetails");
+    portDetails->setTextFormat(Qt::PlainText);
+    portDetails->setWordWrap(true);
+    portDetails->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    portDetails->setForegroundRole(QPalette::PlaceholderText);
+    portDetails->hide();
+    serialBody->addWidget(portDetails);
     serialBody->addSpacing(7);
     serialBody->addWidget(label("波特率", "muted"));
     baud = combo({"1200", "2400", "4800", "9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600", "1000000", "2000000"}, "115200", true);
@@ -1690,7 +1800,8 @@ void Window::refreshPorts()
             const auto item = value.toObject();
             const int index = port->findText(item["port"].toString());
             if (index <= 0) { continue; }
-            port->setItemData(index, item["description"].toString(), Qt::ToolTipRole);
+            port->setItemData(index, item["port"].toString() + "\n" + portDescription(item, true), Qt::ToolTipRole);
+            port->setItemData(index, item, Qt::UserRole + 2);
             port->setItemData(index, item["usb_serial_jtag"].toBool(), Qt::UserRole + 1);
         }
     }
@@ -1953,15 +2064,42 @@ void Window::updateStatus()
             ? (active->sourceKey.isEmpty() ? "控件页面    请选择数据来源" : "控件页面    等待数据来源连接")
             : "尚未连接    选择端口开始接收");
     }
-    QString serialText = port->currentText() == "NULL" ? "尚未选择串口"
-        : channel && same && channel->state == "reconnecting" ? QString("%1 已断开，等待设备恢复").arg(channel->config.port)
-        : channel && same && channel->appliedBaud ? QString("驱动已确认 %1 bps").arg(channel->appliedBaud)
-        : port->itemData(port->currentIndex(), Qt::ToolTipRole).toString();
-    if (port->currentText() == port->itemText(port->currentIndex()) && port->itemData(port->currentIndex(), Qt::UserRole + 1).toBool())
+    const auto selectedPort = port->currentText();
+    auto metadata = port->itemData(port->findText(selectedPort, Qt::MatchFixedString), Qt::UserRole + 2).toJsonObject();
+    if (metadata["port"].toString().compare(selectedPort, Qt::CaseInsensitive) != 0)
     {
-        serialText += "\nUSB Serial/JTAG · 速率由 USB 决定";
+        metadata = {};
+    }
+    const bool serialConnection = channel && same && !active->isInstrument() && channel->config.kind == "serial";
+    if (serialConnection && !metadata.isEmpty())
+    {
+        active->portMetadata = metadata;
+    }
+    else if (serialConnection && active->portMetadata["port"].toString().compare(selectedPort, Qt::CaseInsensitive) == 0)
+    {
+        metadata = active->portMetadata;
+    }
+    const auto details = portDescription(metadata);
+    portDetails->setText(details);
+    portDetails->setVisible(!details.isEmpty());
+    const auto tooltip = selectedPort == "NULL" ? "选择串口；设备插拔时列表会自动更新"
+        : selectedPort + "\n" + portDescription(metadata, true);
+    port->setToolTip(tooltip);
+    portDetails->setToolTip(tooltip);
+
+    QString serialText = selectedPort == "NULL" ? "尚未选择串口"
+        : serialConnection && channel->state == "reconnecting" ? QString("%1 已断开，等待设备恢复").arg(channel->config.port)
+        : serialConnection && channel->appliedBaud ? QString("驱动已确认 %1 bps").arg(channel->appliedBaud) : QString();
+    if (metadata["usb_serial_jtag"].toBool())
+    {
+        if (!serialText.isEmpty())
+        {
+            serialText += '\n';
+        }
+        serialText += "USB Serial/JTAG · 速率由 USB 决定";
     }
     serialInfo->setText(serialText);
+    serialInfo->setVisible(!serialText.isEmpty());
     mcpStatus->setText(mcp->isListening() ? QString("MCP 就绪  ·  %1").arg(mcp->serverPort()) : "MCP 离线");
     mcpStatus->setToolTip(mcp->error.isEmpty() ? mcp->url() : mcp->error);
 }
