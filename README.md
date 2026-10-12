@@ -2,41 +2,37 @@
 
 一个面向嵌入式开发的 Windows 串口与网络调试助手。人在界面查看数据，Codex、Claude、OpenCode 等 AI 通过 MCP 同时读取同一份数据，无需再次打开串口。
 
-当前版本：0.6.0。
+当前版本：0.7.0，Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
 
-![连接标签与收发工作台](docs/workspace-tabs.png)
+![原生连接标签与收发工作台](docs/native-workspace.png)
 
 ## 启动
 
-当前开发目录已经准备好运行环境，双击 `start.bat` 即可启动。
+双击 `start.bat` 或 `start-native.bat` 启动原生版；也可直接运行 `dist/SerialWorkbenchNative/SerialWorkbench.exe`。
 
-打包版直接运行 `dist/SerialWorkbench/SerialWorkbench.exe`，无需安装 Python。分发时复制整个 `SerialWorkbench` 文件夹；其中的 `SerialWorkbenchMCP.exe` 是提供给 STDIO 客户端的独立桥接程序。
-
-首次在其他电脑使用源码时，安装 Python 3.11 或更高版本，先运行 `setup.bat`，再运行 `start.bat`。本项目已在 Windows / Python 3.14 上验证。
+分发时复制整个 `SerialWorkbenchNative` 文件夹，保留 Qt DLL 和插件目录。`SerialWorkbenchMCP.exe` 是原生 STDIO 桥接程序。首次启动默认端口为 `NULL`，不会自动连接设备。
 
 ```powershell
-.\.venv\Scripts\python.exe run.py
-
-# 打开内置模拟信号
-.\.venv\Scripts\python.exe run.py --demo
+# 打开内置示例信号
+.\dist\SerialWorkbenchNative\SerialWorkbench.exe --demo
 
 # 自定义 MCP 端口
-.\.venv\Scripts\python.exe run.py --mcp-port 8877
+.\dist\SerialWorkbenchNative\SerialWorkbench.exe --mcp-port 8877
 ```
 
 顶部连接标签旁的「＋」快速新建连接，左侧填写串口或网络参数，右侧默认显示收发页。多个串口和网络连接可同时运行；每个草稿保留自己的参数和发送文本。连接标签显示名称与状态圆点：绿色表示连接或监听，黄色表示连接或恢复中，灰色表示断开，红色表示出错；悬停查看详情。
 
 标签可拖动排序；右键可断开、重连、重命名、清屏、导出日志或关闭并移除。断开后重连复用同一连接 ID、标签和历史；重复建立已打开的串口会选中已有标签。切换连接不会改变其他连接的发送目标，关闭连接标签会停止并移除该连接。
 
-右侧「控件」提供二级菜单：「图表 → 数值波形」「数据 → 实时数值」「数据 → JSON / XML」。选择后在当前连接内添加独立控件标签页，收发页保留完整空间；波形和实时数值可添加多个实例，每个实例独立冻结。关闭控件页不关闭连接，不清除共享历史。数值波形支持滚轮缩放、拖动平移、自动缩放及数据格式帮助。
+右侧「添加控件」提供二级菜单：「图表 → 数值波形」「数据 → 实时数值」「数据 → JSON / XML」。选择后在当前连接内添加独立控件标签页，收发页保留完整空间；波形和实时数值可添加多个实例，每个实例独立冻结。关闭控件页不关闭连接，不清除共享历史。数值波形支持滚轮缩放、拖动平移、自动缩放及数据格式帮助。
 
 拖动收发页中带握柄的分隔条调整接收区和发送栏高度，双击可均衡布局。控件列表、波形点数、收发比例、时间戳、终端模式和解析格式按连接保存；打开连接时默认回到收发页。
 
 左下角齿轮打开「设置」：「外观」内调整主题、数据字体和 8～32 字号；「AI / MCP」内查看连接总览、配置 AI 客户端、控制 AI 权限和查看调用日志。在收发、终端或发送内容中按 Ctrl + 滚轮也可同步调整字号。「更多串口参数」展开数据位、校验、停止位、流控和 DTR/RTS；收发页「更多」包含时间戳、跟随滚动和导出日志。
 
-窗口标题显示版本和实际运行账户；MCP 的 `get_status` 返回同一进程的账户和进程信息。同一账户、同一 MCP 端口重复启动时，会唤醒已有窗口。同一窗口不能重复打开同一串口，界面和 AI 共同读取已有连接即可。
+窗口标题显示原生版本；MCP 的 `get_status` 返回同一进程的账户和进程信息。同一账户、同一 MCP 端口重复启动时，会唤醒已有窗口。同一窗口不能重复打开同一串口，界面和 AI 共同读取已有连接即可。
 
-请从自己的 Windows 桌面双击启动程序。若由 Codex 沙箱账户启动，界面会提示该账户可能没有设备访问权限。MCP 端口无法监听时，顶部会显示原因；AI 此时可能连接的是其他窗口，请关闭旧窗口后重新启动，或指定不同的 `--mcp-port` 并同步修改 AI 客户端配置。
+请从自己的 Windows 桌面双击启动程序。MCP 的进程信息可确认当前运行账户。MCP 端口无法监听时，底部状态栏会显示离线，悬停可查看原因；AI 此时可能连接的是其他窗口，请关闭旧窗口后重新启动，或指定不同的 `--mcp-port` 并同步修改 AI 客户端配置。
 
 ## 连接与报文
 
@@ -53,9 +49,13 @@
 | 报文模板 | 保存当前报文、编码、HEX 和换行设置；可导入/导出 JSON，示例在 `examples/templates.json` |
 | 日志 | 时间戳、方向、对端地址；文本自动拼接接收分块、解析 ANSI 颜色、合并 CRLF 换行；支持过滤、HEX、暂停显示、导出当前连接的保留历史为 JSONL |
 
-串口参数在建立连接时生效。修改后断开并重新建立连接；「重新连接」沿用原连接的参数。TCP/UDP 默认绑定 `127.0.0.1`，局域网设备需要绑定本机局域网 IP 或 `0.0.0.0`。远端报文的应用协议内容由你自行构造，首版不包含 MQTT、Modbus 专用解析器或自动 CRC 计算。
+串口已连接时，选择波特率或输入后移开焦点立即应用；状态栏显示驱动确认的实际波特率。Windows 通过 `GetCommState` 回读，驱动拒绝参数或回读不一致时会断开并明确报错。其他串口参数在「更多连接参数 → 应用」中生效；重新连接沿用已应用参数。软件回环不能验证实体 UART 的速率。TCP/UDP 默认绑定 `127.0.0.1`，局域网设备需要绑定本机局域网 IP 或 `0.0.0.0`。远端报文的应用协议内容由你自行构造，首版不包含 MQTT、Modbus 专用解析器或自动 CRC 计算。
 
 开发时可手动输入 `loop://` 测试软件回环；默认端口列表仅包含 `NULL` 和发现的串口。
+
+Espressif USB Serial/JTAG（VID `303A` / PID `1001`）会显示 USB 速率提示。这是 USB 通道，改变 COM 波特率后仍能正常读取文本不意味着设置失败；其没有 UART 物理波特率。通过 USB 转 UART 桥测试时，波特率才需要与固件 UART 一致。参考 [Espressif 官方说明](https://docs.espressif.com/projects/esp-brookesia/en/latest/system/usb_cli.html)。
+
+Espressif USB Serial/JTAG（VID `303A` / PID `1001`）会显示 USB 速率提示。这是 USB 通道，改变 COM 波特率后仍能正常读取文本不意味着设置失败；其没有 UART 物理波特率。通过 USB 转 UART 桥测试时，波特率才需要与固件 UART 一致。参考 [Espressif 官方说明](https://docs.espressif.com/projects/esp-brookesia/en/latest/system/usb_cli.html)。
 
 首次使用默认显示 `NULL`，表示尚未选择，不会尝试打开设备；之前保存的实体端口会恢复，旧版保存的软件回环端口会重置为 `NULL`。
 
@@ -69,7 +69,7 @@
 
 终端与 JSON/XML 解析可同时开启。恢复上次设置或调整解析格式时，终端保持显示；点击「JSON / XML」可查看解析结果，后台接收和解析继续运行。
 
-终端使用 VT100/ANSI 解析器处理颜色、光标移动、回车、退格、清屏等控制序列，提供固定 120 × 32 字符的彩色终端。支持方向键、Tab、Esc、Ctrl+C、Ctrl+D、粘贴和输入法提交文本；输入使用 UTF-8，回车发送 CR，不做本地回显。接收编码跟随发送栏的编码选择，建议选择等宽字体。时间戳仅用于收发监视，终端保持设备原始屏幕布局。
+终端使用 VT100/ANSI 解析器处理颜色、光标移动、回车、退格、清屏等控制序列，提供随窗口和字号调整行列的彩色字符终端。支持方向键、Tab、Esc、Ctrl+C、Ctrl+D、粘贴和输入法提交文本；输入使用 UTF-8，回车发送 CR，不做本地回显。接收编码跟随发送栏的编码选择，建议选择等宽字体。时间戳仅用于收发监视，终端保持设备原始屏幕布局。
 
 终端是所选连接的接收视图，不是本地 PowerShell。收发监视仍保留原始数据。TCP 服务端有多个客户端时，终端显示它们汇总的接收流，键盘发送按目标客户端选择；需要独立终端时使用单独连接。
 
@@ -92,11 +92,11 @@ temperature=25.6,voltage=3.3
 
 先启动桌面程序。默认 MCP 地址为 `http://127.0.0.1:8765/mcp`，使用标准 Streamable HTTP。左下角齿轮「设置 → AI / MCP」提供可复制配置；端口变化后这里会同步更新。
 
-「全部连接」页显示串口、TCP、UDP 的数量、状态、连接 ID、收发计数及 TCP 对端。AI 的 `get_status` 返回同一份总览；`read_events` 不指定 `channel_id` 可读取全部连接，指定后读取单个连接。界面当前选中的标签不会限制 AI 访问其他连接。
+「连接总览」页显示各连接的协议、状态、连接 ID 和收发计数；连接详情中的 `peers` 提供 TCP 对端。AI 的 `get_status` 返回同一份总览；`read_events` 不指定 `channel_id` 可读取全部连接，指定后读取单个连接。界面当前选中的标签不会限制 AI 访问其他连接。
 
-「客户端接入」页为 Codex、Claude Code、OpenCode CLI 和 Claude Desktop 分别提供「一键配置并检查」。按钮将本服务合并到当前 Windows 账户的客户端配置，保留其他设置，修改前生成带时间戳的 `.bak` 备份。OpenCode JSONC 的注释与其他服务器保留。随后实际初始化 HTTP 或 STDIO MCP、发现工具并调用 `get_status`；结果显示检查范围，客户端需重启或重新加载配置。此检查不启动 AI 对话，也不会打开串口。
+「客户端接入」页为 Codex、Claude Code、OpenCode CLI 和 Claude Desktop 分别提供「配置并检查」。按钮将本服务合并到当前 Windows 账户的客户端配置，保留其他设置，修改前生成带时间戳的 `.bak` 备份。OpenCode JSONC 的注释与其他服务器保留。随后检查本地服务、工具数量和 `get_status`；客户端需重启或重新加载配置。打包集成测试另行验证真实 HTTP / STDIO 传输。此检查不启动 AI 对话，也不会打开串口。
 
-「调用日志」显示客户端名称、工具、参数摘要、成功/失败、耗时及错误，可按客户端筛选。名称来自 MCP 客户端会话；日志仅保留最近 1000 次调用，界面显示最近 300 次，发送内容仅记录长度。
+「调用日志」显示客户端名称、工具、成功/失败、耗时及错误。名称来自 MCP 客户端会话，日志保留最近 1000 次调用，发送内容仅在后台摘要中记录长度。
 
 ### Codex
 
@@ -148,9 +148,8 @@ claude mcp add --transport http serial-workbench http://127.0.0.1:8765/mcp
 {
   "mcpServers": {
     "serial-workbench": {
-      "command": "E:/demo/serial/.venv/Scripts/python.exe",
+      "command": "E:/demo/serial/dist/SerialWorkbenchNative/SerialWorkbenchMCP.exe",
       "args": [
-        "E:/demo/serial/mcp_bridge.py",
         "--url",
         "http://127.0.0.1:8765/mcp"
       ]
@@ -174,7 +173,7 @@ claude mcp add --transport http serial-workbench http://127.0.0.1:8765/mcp
 ## 共享读取与 MCP 工具
 
 ```text
-串口 / TCP / UDP → 单一接收线程 → 有界历史记录
+串口 / TCP / UDP → Qt 异步接收 → 有界历史记录
                                   ├─ 界面游标
                                   ├─ Codex 游标
                                   ├─ Claude 游标
@@ -201,11 +200,11 @@ claude mcp add --transport http serial-workbench http://127.0.0.1:8765/mcp
 
 串口恢复时会新增带有 `stream_reset=true` 的状态记录，增量解码器和报文拼接器应在此处重置，避免把复位前的半条消息拼到新启动日志上。`list_connections` 的 `serial_generation` 表示成功打开串口的次数，`reconnect_attempts` 表示恢复尝试次数；等待期间状态为 `reconnecting`，恢复后为 `connected`。
 
-可运行 `examples/read_mcp.py` 查看一个独立 MCP 读者示例。底层使用 [官方 MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk)。
+可运行 `examples/read_mcp.py` 查看一个独立 MCP 读者示例。原生服务实现 MCP Streamable HTTP JSON 响应，STDIO 桥转发到同一个进程；打包测试使用 [官方 MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) 验证。
 
 ## JSON / XML 提取
 
-通过「控件 → 数据 → JSON / XML」添加解析页，在页内格式选项中选择「JSON / XML」「仅 JSON」或「仅 XML」，程序开始从后续接收流中提取完整对象。支持日志前后混有普通文本、JSON 嵌套对象/数组、多行与跨接收块、XML 嵌套元素/属性/CDATA；ANSI 颜色码不影响解析。JSON 顶层需要是对象或数组。
+通过「添加控件 → 数据 → JSON / XML」添加解析页，在页内格式选项中选择「JSON / XML」「仅 JSON」或「仅 XML」，程序开始从后续接收流中提取完整对象。支持日志前后混有普通文本、JSON 嵌套对象/数组、多行与跨接收块、XML 嵌套元素/属性/CDATA；ANSI 颜色码不影响解析。JSON 顶层需要是对象或数组。
 
 「JSON / XML」页列出提取记录，选择一条查看格式化内容；格式选择和文本过滤共同筛选显示。原始收发区、HEX、导出日志及 MCP `read_events` 始终保留原数据，解析不会消耗它们。不同网络对端分别拼接，不会把两个来源合成一条消息。
 
@@ -215,15 +214,18 @@ claude mcp add --transport http serial-workbench http://127.0.0.1:8765/mcp
 
 ## 开发与打包
 
+需要 Qt 6（Widgets、Network、SerialPort、Core5Compat、Test）、CMake、Ninja 和对应的 C++17 编译器。当前构建使用 Qt 6.11.1 / MinGW 13.1 / Release。可在脚本参数中调整本机工具链路径。
+
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.\.venv\Scripts\python.exe -m pytest -q
-.\build.bat
-.\.venv\Scripts\python.exe tests/smoke_packaged.py
+# 配置、编译、原生测试、部署 Qt 运行库
+.\build-native.ps1
+
+# 打包后的 HTTP / STDIO 集成测试，需要 Python MCP SDK
+.\.venv\Scripts\python.exe tests/smoke_native.py
 ```
 
-测试覆盖独立读者和游标分页、覆盖提示、波形分片、真实 socket 的 TCP/UDP、串口软件回环、MCP HTTP/STDIO、权限以及 Qt 界面收发。实际 COM 硬件和各 AI 客户端的完整对话仍需在使用环境验证。
+测试覆盖独立读取与分页、真实 TCP/UDP socket、软件串口回环及重配置、UTF-8/GBK 分片解析、ANSI 颜色与终端、连接标签和布局、设置恢复、MCP HTTP/STDIO、权限、非阻塞等待和错误参数。实际 COM 硬件、USB 设备的实际线速及各 AI 客户端的完整对话需要在对应环境验证。
 
-`requirements-lock.txt` 记录本次验证的精确依赖版本（包含测试和打包工具），需要复现环境时可使用它安装。
+原生入口在 `native/main.cpp`；连接、数据历史和解析在 `native/core.cpp`，MCP 在 `native/mcp.cpp`，STDIO 桥在 `native/bridge.cpp`，工作台与设置在 `native/window.cpp`，矢量图标及波形绘制在 `native/controls.cpp`，日志与终端在 `native/terminal.cpp`。程序目录的 `settings.json` 保存表单、模板、外观、各连接视图及 AI 权限，启动时不自动打开设备。
 
-源码入口为 `run.py`；通信在 `serial_assistant/engine.py`，数据记录及波形在 `data.py`，结构化提取在 `structured.py`，MCP 服务与调用日志在 `mcp_server.py`、`audit.py`。主窗口在 `ui.py`，连接标签在 `workspace.py`，可扩展的波形与实时数值控件在 `instruments.py`，监视与终端在 `views.py`，客户端配置在 `client_setup.py`，MCP 页在 `mcp_panel.py`。`settings.json` 保存表单、模板、外观、各连接视图及 AI 控制权限；启动时不会自行建立设备连接。
+旧 Python 实现保留在 `serial_assistant/`，`run.py` 可单独启动；历史打包版位于 `dist/SerialWorkbench/`，供回退使用。原生迁移在 `feat/qt-native-workbench` 分支开发，Python 0.6.0 基线提交为 `7e74c8c`。

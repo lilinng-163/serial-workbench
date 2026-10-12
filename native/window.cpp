@@ -1,0 +1,2070 @@
+#include "window.h"
+#include <QTextCodec>
+#include <numeric>
+
+namespace sw
+{
+static QLabel *label(const QString &text, const QString &name = {})
+{
+    auto result = new QLabel(text);
+    result->setObjectName(name);
+    return result;
+}
+
+static QHBoxLayout *horizontal(QWidget *parent = nullptr)
+{
+    auto layout = new QHBoxLayout(parent);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(8);
+    return layout;
+}
+
+static Combo *combo(const QStringList &items, const QString &selected = {}, bool editable = false)
+{
+    auto control = new Combo();
+    control->addItems(items);
+    control->setEditable(editable);
+    if (!selected.isEmpty())
+    {
+        control->setCurrentText(selected);
+    }
+    if (control->lineEdit())
+    {
+        control->lineEdit()->setTextMargins(0, 0, 0, 0);
+    }
+    return control;
+}
+
+static QToolButton *menuButton(const QString &text, QMenu *menu)
+{
+    auto result = new QToolButton();
+    result->setText(text);
+    result->setMenu(menu);
+    result->setPopupMode(QToolButton::InstantPopup);
+    return result;
+}
+
+static QPushButton *button(const QString &text, const QString &name = {})
+{
+    auto result = new QPushButton(text);
+    result->setObjectName(name);
+    result->setCursor(Qt::PointingHandCursor);
+    return result;
+}
+
+static Pane *tabPane(ConnectionBar *bar, int index)
+{
+    return index < 0 ? nullptr : qobject_cast<Pane *>(bar->tabData(index).value<QObject *>());
+}
+
+static int paneIndex(ConnectionBar *bar, Pane *pane)
+{
+    for (int i = 0; i < bar->count(); ++i)
+    {
+        if (tabPane(bar, i) == pane)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), kind(type)
+{
+    setObjectName("page");
+    auto body = new QVBoxLayout(this);
+    body->setContentsMargins(16, 12, 16, 8);
+    auto tools = horizontal();
+    freeze = new QCheckBox("冻结显示");
+    tools->addWidget(freeze);
+    tools->addStretch();
+    body->addLayout(tools);
+    if (kind == "waveform")
+    {
+        points = new QSpinBox();
+        points->setRange(100, 5000);
+        points->setValue(1000);
+        points->setSuffix(" 点");
+        points->setFixedWidth(112);
+        auto fit = button("自动缩放");
+        auto help = button("数据格式");
+        tools->addWidget(points);
+        tools->addWidget(fit);
+        tools->addWidget(help);
+        plot = new WavePlot();
+        body->addWidget(plot, 1);
+        connect(fit, &QPushButton::clicked, this, [this]
+        {
+            plot->zoom = 1;
+            plot->offset = 0;
+            plot->update();
+        });
+        connect(help, &QPushButton::clicked, this, [this]
+        {
+            auto window = qobject_cast<Window *>(this->window());
+            if (window)
+            {
+                window->waveHelp();
+            }
+        });
+    }
+    else
+    {
+        table = new QTreeWidget();
+        table->setRootIsDecorated(false);
+        table->setAlternatingRowColors(true);
+        table->setUniformRowHeights(true);
+        table->header()->setStretchLastSection(true);
+        if (kind == "values")
+        {
+            table->setHeaderLabels({"变量", "当前值", "来源", "采样序号"});
+            table->setColumnWidth(0, 200);
+            table->setColumnWidth(1, 150);
+            table->setColumnWidth(2, 180);
+            body->addWidget(table, 1);
+        }
+        else
+        {
+            parser = combo({"JSON / XML", "仅 JSON", "仅 XML"});
+            filter = new QLineEdit();
+            filter->setPlaceholderText("筛选解析记录");
+            filter->setClearButtonEnabled(true);
+            filter->setMaximumWidth(210);
+            tools->insertWidget(1, filter);
+            connect(filter, &QLineEdit::textChanged, this, [this](const QString &text)
+            {
+                for (int i = 0; i < table->topLevelItemCount(); ++i)
+                {
+                    auto item = table->topLevelItem(i);
+                    item->setHidden(!item->data(0, Qt::UserRole).toJsonObject()["text"].toString().contains(text, Qt::CaseInsensitive));
+                }
+            });
+            tools->addWidget(label("解析格式", "muted"));
+            tools->addWidget(parser);
+            table->setHeaderLabels({"时间", "格式", "来源", "内容"});
+            table->setColumnWidth(0, 130);
+            table->setColumnWidth(1, 80);
+            table->setColumnWidth(2, 150);
+            detail = new QPlainTextEdit();
+            detail->setReadOnly(true);
+            auto split = new Splitter(Qt::Vertical);
+            split->addWidget(table);
+            split->addWidget(detail);
+            split->setSizes({360, 200});
+            body->addWidget(split, 1);
+            connect(table, &QTreeWidget::currentItemChanged, this, [this](QTreeWidgetItem *current)
+            {
+                detail->setPlainText(current ? current->data(0, Qt::UserRole).toJsonObject()["pretty"].toString() : QString());
+            });
+        }
+    }
+    info = label(kind == "values" ? "显示每个来源的最新数值，后台持续采集" : "等待设备数据", "muted");
+    body->addWidget(info);
+}
+
+QJsonObject Instrument::settings() const
+{
+    QJsonObject result {{"kind", kind}};
+    if (points)
+    {
+        result["points"] = points->value();
+    }
+    if (parser)
+    {
+        result["parser"] = parser->currentIndex();
+    }
+    return result;
+}
+
+void Instrument::tick(Channel *channel)
+{
+    if (!channel || freeze->isChecked())
+    {
+        return;
+    }
+    if (plot)
+    {
+        const auto data = channel->waveform(points->value());
+        plot->setSamples(data);
+        qint64 count = 0;
+        int rejected = 0;
+        const auto sources = data["sources"].toObject();
+        for (const auto &value : sources)
+        {
+            count += value.toObject()["total_samples"].toInteger();
+            rejected += value.toObject()["rejected_lines"].toInt();
+        }
+        info->setText(QString("%1 个采样    %2 条曲线    忽略 %3 行").arg(count).arg(plot->series.size()).arg(rejected));
+    }
+    else if (kind == "values")
+    {
+        table->clear();
+        const auto sources = channel->waveform(1)["sources"].toObject();
+        for (auto source = sources.begin(); source != sources.end(); ++source)
+        {
+            const auto samples = source.value().toObject()["samples"].toArray();
+            if (samples.isEmpty())
+            {
+                continue;
+            }
+            const auto sample = samples.last().toObject();
+            const auto values = sample["values"].toObject();
+            for (auto value = values.begin(); value != values.end(); ++value)
+            {
+                new QTreeWidgetItem(table, {value.key(), QString::number(value.value().toDouble(), 'g', 9), source.key() == "default" ? "本连接" : source.key(), QString::number(sample["index"].toInteger())});
+            }
+        }
+    }
+    else
+    {
+        const auto sources = channel->structured(0, 100, cursors)["sources"].toObject();
+        for (auto source = sources.begin(); source != sources.end(); ++source)
+        {
+            const auto batch = source.value().toObject();
+            cursors[source.key()] = batch["next_cursor"];
+            for (const auto &value : batch["records"].toArray())
+            {
+                const auto record = value.toObject();
+                if ((parser->currentIndex() == 1 && record["format"] != "json") || (parser->currentIndex() == 2 && record["format"] != "xml"))
+                {
+                    continue;
+                }
+                auto item = new QTreeWidgetItem(table, {record["time"].toString().mid(11, 12), record["format"].toString().toUpper(), source.key(), record["text"].toString().left(200)});
+                item->setData(0, Qt::UserRole, record);
+                item->setHidden(!record["text"].toString().contains(filter->text(), Qt::CaseInsensitive));
+                table->setCurrentItem(item);
+                while (table->topLevelItemCount() > 200)
+                {
+                    delete table->takeTopLevelItem(0);
+                }
+            }
+        }
+        info->setText(QString("%1 条解析记录 · 原始报文仍保留在收发页").arg(table->topLevelItemCount()));
+    }
+}
+
+Pane::Pane(Window *owner) : QWidget(owner), window(owner)
+{
+    setObjectName("workspace");
+    auto body = new QVBoxLayout(this);
+    body->setContentsMargins(0, 0, 0, 0);
+    body->setSpacing(0);
+    pages = new QTabWidget();
+    pages->setDocumentMode(true);
+    pages->tabBar()->setDrawBase(false);
+    pages->setTabsClosable(true);
+    pages->tabBar()->setElideMode(Qt::ElideRight);
+    connect(pages, &QTabWidget::tabCloseRequested, this, &Pane::closeInstrument);
+    controls = menuButton("添加控件", controlMenu());
+    controls->setIcon(icon("plus", window->theme.muted, 16));
+    controls->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    controls->setToolTip("为当前连接添加独立控件页");
+    pages->setCornerWidget(controls);
+    body->addWidget(pages, 1);
+    monitorPage = new QWidget();
+    monitorPage->setObjectName("page");
+    auto monitor = new QVBoxLayout(monitorPage);
+    monitor->setContentsMargins(0, 0, 0, 0);
+    monitor->setSpacing(0);
+    auto toolbar = new QWidget();
+    auto tools = horizontal(toolbar);
+    tools->setContentsMargins(16, 8, 14, 6);
+    auto modes = new QButtonGroup(this);
+    auto logMode = button("日志");
+    logMode->setObjectName("logMode");
+    auto terminalButton = button("终端");
+    logMode->setCheckable(true);
+    terminalButton->setCheckable(true);
+    logMode->setChecked(true);
+    modes->addButton(logMode, 0);
+    modes->addButton(terminalButton, 1);
+    tools->addWidget(logMode);
+    tools->addWidget(terminalButton);
+    connect(modes, &QButtonGroup::idClicked, this, [this](int id) { setTerminal(id == 1); });
+    connect(terminalButton, &QPushButton::toggled, this, [this](bool enabled)
+    {
+        if (terminalMode != enabled)
+        {
+            setTerminal(enabled);
+        }
+    });
+    terminalButton->setObjectName("terminalMode");
+    tools->addStretch();
+    filter = new QLineEdit();
+    filter->setPlaceholderText("筛选收发内容");
+    filter->setClearButtonEnabled(true);
+    filter->setFixedWidth(210);
+    filter->hide();
+    tools->addWidget(filter);
+    auto search = new IconButton("search", "筛选收发内容");
+    search->setCheckable(true);
+    connect(search, &QAbstractButton::toggled, filter, &QWidget::setVisible);
+    connect(search, &QAbstractButton::clicked, filter, qOverload<>(&QWidget::setFocus));
+    tools->addWidget(search);
+    pause = new IconButton("pause", "暂停显示，后台继续接收");
+    pause->setCheckable(true);
+    tools->addWidget(pause);
+    auto clear = new IconButton("trash", "清空当前显示，保留共享历史");
+    connect(clear, &QAbstractButton::clicked, this, &Pane::clearView);
+    tools->addWidget(clear);
+    auto moreMenu = new QMenu(this);
+    auto timestamps = moreMenu->addAction("显示时间戳");
+    timestamps->setObjectName("timestamps");
+    timestamps->setCheckable(true);
+    timestamps->setChecked(true);
+    auto hex = moreMenu->addAction("十六进制显示");
+    hex->setCheckable(true);
+    auto follow = moreMenu->addAction("跟随最新数据");
+    follow->setCheckable(true);
+    follow->setChecked(true);
+    moreMenu->addSeparator();
+    moreMenu->addAction("导出连接日志…", this, &Pane::exportLog);
+    auto more = new IconButton("more", "显示选项与日志导出");
+    connect(more, &QAbstractButton::clicked, this, [moreMenu, more]
+    {
+        moreMenu->exec(more->mapToGlobal(QPoint(0, more->height())));
+    });
+    tools->addWidget(more);
+    monitor->addWidget(toolbar);
+    splitter = new Splitter(Qt::Vertical);
+    display = new QStackedWidget();
+    log = new LogView();
+    terminal = new TerminalView();
+    display->addWidget(log);
+    display->addWidget(terminal);
+    splitter->addWidget(display);
+    monitor->addWidget(splitter, 1);
+
+    sender = new QWidget();
+    sender->setObjectName("sender");
+    auto sendBody = new QVBoxLayout(sender);
+    sendBody->setContentsMargins(18, 4, 18, 12);
+    sendBody->setSpacing(8);
+    payload = new QPlainTextEdit();
+    payload->viewport()->installEventFilter(this);
+    payload->setMinimumHeight(54);
+    payload->setPlaceholderText("输入待发送内容    Ctrl + Enter 发送");
+    sendBody->addWidget(payload, 1);
+    auto sendTools = horizontal();
+    encoding = combo({"utf-8", "gbk", "ascii", "latin-1"});
+    encoding->setFixedWidth(108);
+    encoding->setToolTip("收发文本编码");
+    newline = combo({"无换行", "LF", "CR", "CRLF"}, "CRLF");
+    newline->setFixedWidth(100);
+    newline->setToolTip("发送时追加的换行符");
+    sendHex = new QCheckBox("HEX");
+    sendTools->addWidget(encoding);
+    sendTools->addWidget(newline);
+    sendTools->addWidget(sendHex);
+    peer = combo({}, {}, true);
+    peer->lineEdit()->setPlaceholderText("目标 IP:端口");
+    peer->setMaximumWidth(210);
+    peer->hide();
+    sendTools->addWidget(peer);
+    sendTools->addStretch();
+    auto templateButton = new IconButton("template", "报文模板");
+    connect(templateButton, &QAbstractButton::clicked, this, &Pane::templateMenu);
+    sendTools->addWidget(templateButton);
+    auto sendOptions = new QMenu(this);
+    auto optionPanel = new QWidget();
+    auto optionBody = new QVBoxLayout(optionPanel);
+    repeat = new QCheckBox("循环发送");
+    interval = new QSpinBox();
+    interval->setRange(20, 3600000);
+    interval->setValue(1000);
+    interval->setSuffix(" ms");
+    optionBody->addWidget(repeat);
+    optionBody->addWidget(label("发送间隔", "muted"));
+    optionBody->addWidget(interval);
+    auto optionAction = new QWidgetAction(sendOptions);
+    optionAction->setDefaultWidget(optionPanel);
+    sendOptions->addAction(optionAction);
+    auto options = new IconButton("more", "循环发送设置");
+    connect(options, &QAbstractButton::clicked, this, [sendOptions, options]
+    {
+        sendOptions->exec(options->mapToGlobal(QPoint(0, options->height())));
+    });
+    sendTools->addWidget(options);
+    sendButton = button("发送", "primary");
+    sendButton->setFixedWidth(94);
+    connect(sendButton, &QPushButton::clicked, this, &Pane::sendCurrent);
+    sendTools->addWidget(sendButton);
+    sendBody->addLayout(sendTools);
+    splitter->addWidget(sender);
+    splitter->setStretchFactor(0, 1);
+    splitter->setSizes(senderSizes);
+    pages->addTab(monitorPage, "收发");
+    pages->tabBar()->setTabButton(0, QTabBar::RightSide, nullptr);
+    pages->tabBar()->setTabButton(0, QTabBar::LeftSide, nullptr);
+
+    connect(timestamps, &QAction::toggled, this, [this](bool checked) { log->timestamps = checked; replay(); });
+    connect(hex, &QAction::toggled, this, [this](bool checked) { log->hex = checked; replay(); });
+    connect(follow, &QAction::toggled, this, [this](bool checked) { log->follow = checked; });
+    connect(filter, &QLineEdit::textChanged, this, [this](const QString &value) { log->filter = value; replay(); });
+    connect(encoding, &QComboBox::currentTextChanged, this, [this](const QString &value)
+    {
+        log->encoding = value;
+        replay();
+        for (auto instrument : instruments)
+        {
+            if (instrument->parser && channel)
+            {
+                channel->configureParser(QStringList {"auto", "json", "xml"}[instrument->parser->currentIndex()], value);
+            }
+        }
+    });
+    connect(repeat, &QCheckBox::toggled, this, [this](bool checked)
+    {
+        if (!checked)
+        {
+            repeatTimer.stop();
+            return;
+        }
+        try
+        {
+            if (!channel || (channel->state != "connected" && channel->state != "listening"))
+            {
+                fail("请先连接设备");
+            }
+            repeatedPayload = Engine::encode(payload->toPlainText(), sendHex->isChecked(), encoding->currentText(), QStringList {"none", "lf", "cr", "crlf"}[newline->currentIndex()]);
+            repeatedPeer = peer->currentText();
+            repeatTimer.start(interval->value());
+            sendCurrent();
+        }
+        catch (const std::exception &exception)
+        {
+            repeat->setChecked(false);
+            window->error(QString::fromUtf8(exception.what()));
+        }
+    });
+    connect(&repeatTimer, &QTimer::timeout, this, [this]
+    {
+        try
+        {
+            if (!channel)
+            {
+                fail("连接已关闭");
+            }
+            channel->send(repeatedPayload, repeatedPeer);
+        }
+        catch (const std::exception &exception)
+        {
+            repeat->setChecked(false);
+            window->error(QString::fromUtf8(exception.what()));
+        }
+    });
+    connect(terminal, &TerminalView::transmit, this, [this](const QByteArray &data)
+    {
+        try
+        {
+            if (channel)
+            {
+                channel->send(data, peer->currentText());
+            }
+        }
+        catch (const std::exception &exception)
+        {
+            window->error(QString::fromUtf8(exception.what()));
+        }
+    });
+    const auto zoom = [this](int steps)
+    {
+        auto font = window->dataFont;
+        font.setPointSize(qBound(8, font.pointSize() + steps, 32));
+        window->setDataFont(font);
+    };
+    connect(log, &LogView::zoomRequested, this, zoom);
+    connect(terminal, &TerminalView::zoomRequested, this, zoom);
+    auto shortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Return), payload);
+    connect(shortcut, &QShortcut::activated, this, &Pane::sendCurrent);
+    applyAppearance();
+}
+
+void Pane::setChannel(Channel *value)
+{
+    channel = value;
+    draft = value->config;
+    for (auto instrument : instruments)
+    {
+        if (instrument->parser)
+        {
+            channel->configureParser(QStringList {"auto", "json", "xml"}[instrument->parser->currentIndex()], encoding->currentText());
+        }
+    }
+}
+
+bool Pane::eventFilter(QObject *object, QEvent *event)
+{
+    if (object == payload->viewport() && event->type() == QEvent::Wheel)
+    {
+        auto wheel = static_cast<QWheelEvent *>(event);
+        if (wheel->modifiers() & Qt::ControlModifier)
+        {
+            auto font = window->dataFont;
+            font.setPointSize(qBound(8, font.pointSize() + wheel->angleDelta().y() / 120, 32));
+            window->setDataFont(font);
+            return true;
+        }
+    }
+    return QWidget::eventFilter(object, event);
+}
+
+void Pane::applyAppearance()
+{
+    log->theme = window->theme;
+    terminal->theme = window->theme;
+    const QString fontStyle = QString("font-family: '%1'; font-size: %2pt;").arg(window->dataFont.family()).arg(window->dataFont.pointSizeF());
+    log->setFont(window->dataFont);
+    log->setStyleSheet(fontStyle);
+    payload->setFont(window->dataFont);
+    payload->setStyleSheet(fontStyle);
+    terminal->setFont(window->dataFont);
+    terminal->update();
+    for (auto instrument : instruments)
+    {
+        if (instrument->plot)
+        {
+            instrument->plot->theme = window->theme;
+            instrument->plot->update();
+        }
+        if (instrument->detail)
+        {
+            instrument->detail->setFont(window->dataFont);
+            instrument->detail->setStyleSheet(fontStyle);
+        }
+    }
+    controls->setIcon(icon("plus", window->theme.muted, 16));
+    for (auto control : findChildren<IconButton *>())
+    {
+        control->theme = window->theme;
+        control->update();
+    }
+}
+
+void Pane::tick()
+{
+    const bool ready = channel && (channel->state == "connected" || channel->state == "listening");
+    sendButton->setEnabled(ready && channel->config.kind != "demo");
+    terminal->enabledInput = ready && terminalMode;
+    if (!ready)
+    {
+        repeat->setChecked(false);
+    }
+    peer->setVisible(channel && (channel->config.kind == "tcp-server" || channel->config.kind == "udp"));
+    if (!channel || !isVisible())
+    {
+        return;
+    }
+    if (channel->config.kind == "tcp-server")
+    {
+        QStringList current;
+        for (int i = 0; i < peer->count(); ++i)
+        {
+            current.append(peer->itemText(i));
+        }
+        if (current != channel->peers.keys())
+        {
+            const auto selected = peer->currentText();
+            peer->clear();
+            peer->addItems(channel->peers.keys());
+            if (channel->peers.contains(selected))
+            {
+                peer->setCurrentText(selected);
+            }
+        }
+    }
+    if (!pause->isChecked())
+    {
+        const auto batch = window->engine->journal.read(cursor, 500, channel->id);
+        cursor = batch["next_cursor"].toInteger();
+        if (batch["gap"].toBool())
+        {
+            log->append("部分旧数据已被历史缓冲区覆盖");
+            log->streams.clear();
+            terminal->reset(encoding->currentText());
+        }
+        for (const auto &value : batch["events"].toArray())
+        {
+            const auto event = value.toObject();
+            log->feed(event);
+            if (event["stream_reset"].toBool())
+            {
+                terminal->reset(encoding->currentText());
+            }
+            if (event["direction"] == "rx")
+            {
+                terminal->feed(QByteArray::fromHex(event["hex"].toString().toLatin1()));
+            }
+        }
+    }
+    auto current = qobject_cast<Instrument *>(pages->currentWidget());
+    if (current)
+    {
+        current->tick(channel);
+    }
+}
+
+void Pane::sendCurrent()
+{
+    try
+    {
+        if (!channel)
+        {
+            fail("请先连接设备");
+        }
+        channel->send(Engine::encode(payload->toPlainText(), sendHex->isChecked(), encoding->currentText(), QStringList {"none", "lf", "cr", "crlf"}[newline->currentIndex()]), peer->currentText());
+    }
+    catch (const std::exception &exception)
+    {
+        window->error(QString::fromUtf8(exception.what()));
+    }
+}
+
+void Pane::setTerminal(bool enabled)
+{
+    if (enabled && !sender->isHidden())
+    {
+        const auto sizes = splitter->sizes();
+        if (sizes.size() == 2 && sizes[0] > 0 && sizes[1] > 0)
+        {
+            senderSizes = sizes;
+        }
+    }
+    terminalMode = enabled;
+    repeat->setChecked(false);
+    pause->setChecked(false);
+    display->setCurrentWidget(enabled ? static_cast<QWidget *>(terminal) : log);
+    sender->setVisible(!enabled);
+    auto modeButton = findChild<QPushButton *>("terminalMode");
+    if (modeButton && modeButton->isChecked() != enabled)
+    {
+        modeButton->setChecked(enabled);
+    }
+    if (!enabled)
+    {
+        findChild<QPushButton *>("logMode")->setChecked(true);
+    }
+    if (enabled)
+    {
+        terminal->setFocus();
+    }
+    else
+    {
+        QTimer::singleShot(0, this, [this] { splitter->setSizes(senderSizes); });
+    }
+}
+
+void Pane::clearView()
+{
+    cursor = window->engine->journal.sequence;
+    viewStart = cursor;
+    log->reset();
+    terminal->reset(encoding->currentText());
+}
+
+void Pane::replay()
+{
+    cursor = viewStart;
+    log->reset();
+    terminal->reset(encoding->currentText());
+}
+
+void Pane::exportLog()
+{
+    if (!channel)
+    {
+        return;
+    }
+    const auto path = QFileDialog::getSaveFileName(this, "导出连接日志", "serial-log.jsonl", "JSON Lines (*.jsonl)");
+    if (path.isEmpty())
+    {
+        return;
+    }
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly))
+    {
+        window->error(file.errorString());
+        return;
+    }
+    for (const auto &entry : window->engine->journal.events)
+    {
+        if (entry.first["channel_id"] == channel->id)
+        {
+            file.write(QJsonDocument(entry.first).toJson(QJsonDocument::Compact) + '\n');
+        }
+    }
+    if (!file.commit())
+    {
+        window->error(file.errorString());
+    }
+}
+
+void Pane::templateMenu()
+{
+    QMenu menu(this);
+    for (const auto &value : window->templates)
+    {
+        const auto item = value.toObject();
+        menu.addAction(item["name"].toString(), this, [this, item]
+        {
+            payload->setPlainText(item["payload"].toString());
+            sendHex->setChecked(item["hex_mode"].toBool());
+            encoding->setCurrentText(item["encoding"].toString("utf-8"));
+            newline->setCurrentIndex(item["newline"].toInt());
+        });
+    }
+    if (!window->templates.isEmpty())
+    {
+        menu.addSeparator();
+    }
+    menu.addAction("保存当前报文…", this, [this]
+    {
+        bool accepted = false;
+        const QString name = QInputDialog::getText(this, "保存报文模板", "模板名称", QLineEdit::Normal, {}, &accepted);
+        if (accepted && !name.trimmed().isEmpty())
+        {
+            window->templates.append(QJsonObject {{"name", name.trimmed()}, {"payload", payload->toPlainText()}, {"hex_mode", sendHex->isChecked()}, {"encoding", encoding->currentText()}, {"newline", newline->currentIndex()}});
+            window->saveSettings();
+        }
+    });
+    menu.addAction("导入模板…", this, [this]
+    {
+        QFile file(QFileDialog::getOpenFileName(this, "导入模板", {}, "JSON (*.json)"));
+        if (!file.open(QIODevice::ReadOnly))
+        {
+            return;
+        }
+        const auto document = QJsonDocument::fromJson(file.readAll());
+        if (!document.isArray())
+        {
+            window->error("模板文件需要 JSON 数组");
+            return;
+        }
+        for (const auto &value : document.array())
+        {
+            const auto item = value.toObject();
+            if (!item["name"].isString() || !item["payload"].isString() || item["newline"].toInt() < 0 || item["newline"].toInt() > 3)
+            {
+                window->error("模板字段无效，未导入");
+                return;
+            }
+        }
+        window->templates = document.array();
+        window->saveSettings();
+    });
+    menu.addAction("导出模板…", this, [this]
+    {
+        const auto path = QFileDialog::getSaveFileName(this, "导出模板", "templates.json", "JSON (*.json)");
+        if (path.isEmpty())
+        {
+            return;
+        }
+        QSaveFile file(path);
+        if (file.open(QIODevice::WriteOnly))
+        {
+            file.write(QJsonDocument(window->templates).toJson(QJsonDocument::Indented));
+            file.commit();
+        }
+    });
+    menu.exec(QCursor::pos());
+}
+
+QMenu *Pane::controlMenu()
+{
+    auto menu = new QMenu(this);
+    auto charts = menu->addMenu("图表");
+    charts->setIcon(icon("wave", window->theme.muted));
+    charts->addAction("数值波形", this, [this] { addInstrument("waveform"); });
+    auto data = menu->addMenu("数据");
+    data->setIcon(icon("template", window->theme.muted));
+    data->addAction("实时数值", this, [this] { addInstrument("values"); });
+    data->addAction("JSON / XML", this, [this] { addInstrument("structured"); });
+    return menu;
+}
+
+Instrument *Pane::addInstrument(const QString &kind, bool activate)
+{
+    if (!QStringList {"waveform", "values", "structured"}.contains(kind))
+    {
+        return nullptr;
+    }
+    if (kind == "structured")
+    {
+        for (auto instrument : instruments)
+        {
+            if (instrument->kind == kind)
+            {
+                if (activate)
+                {
+                    pages->setCurrentWidget(instrument);
+                }
+                return instrument;
+            }
+        }
+    }
+    auto instrument = new Instrument(kind);
+    instruments.append(instrument);
+    const QString title = kind == "waveform" ? "数值波形" : kind == "values" ? "实时数值" : "JSON / XML";
+    int number = 1;
+    QStringList titles;
+    for (int i = 0; i < pages->count(); ++i)
+    {
+        titles.append(pages->tabText(i));
+    }
+    while (titles.contains(title + " " + QString::number(number)))
+    {
+        ++number;
+    }
+    const int index = pages->addTab(instrument, kind == "structured" ? title : title + " " + QString::number(number));
+    auto close = new IconButton("close", "关闭控件");
+    close->setFixedSize(22, 22);
+    connect(close, &QAbstractButton::clicked, this, [this, instrument] { closeInstrument(pages->indexOf(instrument)); });
+    pages->tabBar()->setTabButton(index, QTabBar::RightSide, close);
+    if (instrument->parser)
+    {
+        connect(instrument->parser, &QComboBox::currentIndexChanged, this, [this, instrument](int mode)
+        {
+            if (channel)
+            {
+                channel->configureParser(QStringList {"auto", "json", "xml"}[mode], encoding->currentText());
+            }
+        });
+        if (channel)
+        {
+            channel->configureParser("auto", encoding->currentText());
+        }
+    }
+    applyAppearance();
+    if (activate)
+    {
+        pages->setCurrentWidget(instrument);
+    }
+    return instrument;
+}
+
+void Pane::closeInstrument(int index)
+{
+    if (index <= 0)
+    {
+        return;
+    }
+    auto instrument = qobject_cast<Instrument *>(pages->widget(index));
+    if (instrument->parser && channel)
+    {
+        channel->configureParser("off");
+    }
+    pages->removeTab(index);
+    instruments.removeOne(instrument);
+    instrument->deleteLater();
+}
+
+QJsonObject Pane::settings() const
+{
+    QJsonArray controls;
+    for (auto instrument : instruments)
+    {
+        controls.append(instrument->settings());
+    }
+    const auto sizes = terminalMode ? senderSizes : splitter->sizes();
+    return {{"timestamps", log->timestamps}, {"terminal_mode", terminalMode}, {"encoding", encoding->currentText()},
+        {"instruments", controls}, {"sender_sizes", QJsonArray {sizes.value(0, 600), sizes.value(1, 150)}}};
+}
+
+void Pane::restore(const QJsonObject &settings)
+{
+    while (pages->count() > 1)
+    {
+        closeInstrument(pages->count() - 1);
+    }
+    log->timestamps = settings.value("timestamps").toBool(true);
+    const QSignalBlocker blocker(findChild<QAction *>("timestamps"));
+    findChild<QAction *>("timestamps")->setChecked(log->timestamps);
+    encoding->setCurrentText(settings.value("encoding").toString("utf-8"));
+    auto list = settings.value("instruments").toArray();
+    if (!settings.contains("instruments") && settings["show_wave"].toBool())
+    {
+        list.append(QJsonObject {{"kind", "waveform"}});
+    }
+    if (settings["parser"].toInt() && std::none_of(list.begin(), list.end(), [](const auto &value) { return value.toObject()["kind"] == "structured"; }))
+    {
+        list.append(QJsonObject {{"kind", "structured"}, {"parser", settings["parser"].toInt() - 1}});
+    }
+    for (const auto &value : list)
+    {
+        const auto object = value.toObject();
+        auto instrument = addInstrument(object["kind"].toString(), false);
+        if (instrument && instrument->points)
+        {
+            instrument->points->setValue(object["points"].toInt(1000));
+        }
+        if (instrument && instrument->parser)
+        {
+            instrument->parser->setCurrentIndex(qBound(0, object["parser"].toInt(), 2));
+        }
+    }
+    const auto sizes = settings["sender_sizes"].toArray();
+    if (sizes.size() == 2 && sizes[0].toInt() > 0 && sizes[1].toInt() > 0)
+    {
+        senderSizes = {sizes[0].toInt(), sizes[1].toInt()};
+        QTimer::singleShot(0, this, [this] { splitter->setSizes(senderSizes); });
+    }
+    setTerminal(settings["terminal_mode"].toBool());
+    pages->setCurrentIndex(0);
+}
+
+class AdaptiveStack : public QStackedWidget
+{
+public:
+    QSize sizeHint() const override
+    {
+        return currentWidget() ? currentWidget()->sizeHint() : QSize();
+    }
+    QSize minimumSizeHint() const override
+    {
+        return currentWidget() ? currentWidget()->minimumSizeHint() : QSize();
+    }
+};
+
+Window::Window(Engine *owner, McpServer *service, const QString &path)
+    : engine(owner), mcp(service), settingsPath(path)
+{
+    setWindowTitle("Serial Workbench · Native " + Version);
+    setWindowIcon(icon("port", QColor("#337de7"), 32));
+    setMinimumSize(960, 640);
+    resize(1400, 900);
+    QFile settingsFile(path);
+    if (settingsFile.open(QIODevice::ReadOnly))
+    {
+        saved = QJsonDocument::fromJson(settingsFile.readAll()).object();
+    }
+    viewSettings = saved["views"].toObject();
+    templates = saved["templates"].toArray();
+    const auto appearance = saved["appearance"].toObject();
+    theme = Theme::make(appearance["theme"] == "dark");
+    dataFont = QFont(appearance["font_family"].toString("Cascadia Mono"), qBound(8, appearance["font_size"].toInt(11), 32));
+    engine->allowControl = saved["allow_ai_control"].toBool();
+
+    auto root = new QWidget();
+    root->setObjectName("root");
+    auto layout = horizontal(root);
+    layout->setSpacing(0);
+    rail = new QFrame();
+    rail->setObjectName("rail");
+    rail->setFixedWidth(54);
+    auto railBody = new QVBoxLayout(rail);
+    railBody->setContentsMargins(9, 16, 9, 12);
+    auto workbench = new IconButton("port", "显示 / 隐藏连接参数");
+    workbench->setCheckable(true);
+    workbench->setChecked(true);
+    railBody->addWidget(workbench);
+    railBody->addStretch();
+    gear = new IconButton("gear", "设置");
+    railBody->addWidget(gear);
+    connect(gear, &QAbstractButton::clicked, this, &Window::openSettings);
+    layout->addWidget(rail);
+
+    sidebar = new QFrame();
+    sidebar->setObjectName("sidebar");
+    sidebar->setFixedWidth(246);
+    connect(workbench, &QAbstractButton::toggled, sidebar, &QWidget::setVisible);
+    connect(workbench, &QAbstractButton::toggled, this, [this] { QTimer::singleShot(0, this, &Window::adjustTabs); });
+    auto side = new QVBoxLayout(sidebar);
+    side->setContentsMargins(20, 20, 20, 16);
+    side->setSpacing(14);
+    side->addWidget(label("Serial Workbench", "brand"));
+    side->addSpacing(10);
+    side->addWidget(label("连接参数", "section"));
+    protocol = combo({"串口", "TCP 客户端", "TCP 服务端", "UDP"});
+    side->addWidget(protocol);
+    configStack = new AdaptiveStack();
+    configStack->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
+    auto serialPanel = new QWidget();
+    auto serialBody = new QVBoxLayout(serialPanel);
+    serialBody->setContentsMargins(0, 4, 0, 0);
+    serialBody->setSpacing(8);
+    auto portLabel = horizontal();
+    portLabel->addWidget(label("端口", "muted"));
+    portLabel->addStretch();
+    auto refresh = new IconButton("refresh", "刷新可用串口");
+    refresh->setFixedSize(24, 24);
+    connect(refresh, &QAbstractButton::clicked, this, &Window::refreshPorts);
+    portLabel->addWidget(refresh);
+    serialBody->addLayout(portLabel);
+    port = combo({"NULL"}, "NULL", true);
+    port->setObjectName("serialPort");
+    port->setFixedHeight(38);
+    serialBody->addWidget(port);
+    serialBody->addSpacing(7);
+    serialBody->addWidget(label("波特率", "muted"));
+    baud = combo({"1200", "2400", "4800", "9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600", "1000000", "2000000"}, "115200", true);
+    baud->setObjectName("baudRate");
+    baud->setFixedHeight(38);
+    baud->setToolTip("连接后选择新值会立即应用，并回读 Windows 驱动确认");
+    serialBody->addWidget(baud);
+    serialInfo = label("尚未选择串口", "muted");
+    serialInfo->setWordWrap(true);
+    serialBody->addWidget(serialInfo);
+    configStack->addWidget(serialPanel);
+    auto networkPanel = new QWidget();
+    auto network = new QVBoxLayout(networkPanel);
+    network->setContentsMargins(0, 4, 0, 0);
+    network->setSpacing(8);
+    host = new QLineEdit("127.0.0.1");
+    remotePort = new QSpinBox();
+    remotePort->setRange(1, 65535);
+    remotePort->setValue(9000);
+    bindHost = new QLineEdit("127.0.0.1");
+    bindPort = new QSpinBox();
+    bindPort->setRange(0, 65535);
+    bindPort->setValue(9001);
+    remoteLabel = label("远端地址 / 端口", "muted");
+    localLabel = label("本地绑定 / 端口", "muted");
+    network->addWidget(remoteLabel);
+    network->addWidget(host);
+    network->addWidget(remotePort);
+    network->addWidget(localLabel);
+    network->addWidget(bindHost);
+    network->addWidget(bindPort);
+    configStack->addWidget(networkPanel);
+    side->addWidget(configStack);
+    auto advanced = button("更多连接参数…");
+    advanced->setStyleSheet("text-align: left; padding-left: 0;");
+    connect(advanced, &QPushButton::clicked, this, &Window::advancedSettings);
+    side->addWidget(advanced);
+    connectButton = button("建立连接", "primary");
+    connectButton->setMinimumHeight(26);
+    connect(connectButton, &QPushButton::clicked, this, &Window::connectionAction);
+    side->addWidget(connectButton);
+    side->addStretch();
+    auto hint = label("已连接时修改波特率立即生效\n波特率以驱动回读结果为准", "muted");
+    hint->setWordWrap(true);
+    side->addWidget(hint);
+    layout->addWidget(sidebar);
+
+    connectionName = new QLineEdit(this);
+    connectionName->hide();
+    bits = combo({"5", "6", "7", "8"}, "8");
+    parity = combo({"N", "E", "O", "M", "S"});
+    stopbits = combo({"1", "1.5", "2"});
+    flow = combo({"none", "rtscts", "xonxoff"});
+    dtr = new QCheckBox("DTR");
+    rts = new QCheckBox("RTS");
+    for (auto control : QList<QWidget *> {bits, parity, stopbits, flow, dtr, rts})
+    {
+        control->setParent(this);
+        control->hide();
+    }
+    auto right = new QWidget();
+    auto rightBody = new QVBoxLayout(right);
+    rightBody->setContentsMargins(0, 0, 0, 0);
+    rightBody->setSpacing(0);
+    tabHeader = new QWidget();
+    tabHeader->setFixedHeight(48);
+    auto header = horizontal(tabHeader);
+    header->setContentsMargins(12, 0, 12, 0);
+    header->setSpacing(4);
+    tabs = new ConnectionBar();
+    tabs->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(tabs, &QWidget::customContextMenuRequested, this, &Window::tabMenu);
+    connect(tabs, &QTabBar::currentChanged, this, &Window::activate);
+    connect(tabs, &QTabBar::tabMoved, this, [this] { activate(tabs->currentIndex()); });
+    header->addWidget(tabs);
+    plus = new IconButton("plus", "新建连接");
+    plus->setObjectName("newConnection");
+    connect(plus, &QAbstractButton::clicked, this, [this] { newConnection(); });
+    header->addWidget(plus);
+    header->addStretch();
+    rightBody->addWidget(tabHeader);
+    stack = new QStackedWidget();
+    rightBody->addWidget(stack, 1);
+    layout->addWidget(right, 1);
+    setCentralWidget(root);
+    status = label("尚未连接", "muted");
+    mcpStatus = label("", "muted");
+    statusBar()->setSizeGripEnabled(false);
+    statusBar()->addWidget(status, 1);
+    statusBar()->addPermanentWidget(mcpStatus);
+    statusBar()->setContentsMargins(12, 2, 12, 2);
+    connect(protocol, &QComboBox::currentIndexChanged, this, &Window::protocolChanged);
+    connect(baud, &QComboBox::activated, this, [this] { applyBaud(); });
+    connect(baud->lineEdit(), &QLineEdit::editingFinished, this, &Window::applyBaud);
+    connect(port, &QComboBox::currentTextChanged, this, [this] { updateStatus(); });
+    newConnection();
+    Config initial = Config::fromJson(saved["connection"].toObject());
+    if (initial.port == "loop://")
+    {
+        initial.port = "NULL";
+    }
+    active->draft = initial;
+    loadForm(initial);
+    active->restore(appearance);
+    applyTheme(theme.dark);
+    connect(engine, &Engine::channelsChanged, this, &Window::syncConnections);
+    timer.setInterval(40);
+    settingsRefresh.start();
+    connect(&timer, &QTimer::timeout, this, [this]
+    {
+        for (auto pane : panes)
+        {
+            pane->tick();
+        }
+        updateStatus();
+        if (settingsDialog && settingsDialog->isVisible() && mcpConnections && settingsRefresh.elapsed() >= 250)
+        {
+            settingsRefresh.restart();
+            mcpConnections->setUpdatesEnabled(false);
+            mcpConnections->clear();
+            for (auto channel : engine->channels)
+            {
+                new QTreeWidgetItem(mcpConnections, {channel->name, channel->config.kind, stateText(channel->state), channel->id, QString("%1 / %2").arg(channel->rx).arg(channel->tx)});
+            }
+            mcpConnections->setUpdatesEnabled(true);
+            if (auditTable->property("lastSequence").toLongLong() != mcp->calls)
+            {
+                auditTable->setProperty("lastSequence", mcp->calls);
+                auditTable->setUpdatesEnabled(false);
+                auditTable->clear();
+                for (const auto &value : mcp->audit)
+                {
+                    const auto item = value.toObject();
+                    new QTreeWidgetItem(auditTable, {item["time"].toString().mid(11, 12), item["client"].toString(), item["tool"].toString(), item["status"] == "ok" ? "成功" : "失败", QString::number(item["duration_ms"].toInteger()), item["error"].toString()});
+                }
+                auditTable->setUpdatesEnabled(true);
+            }
+        }
+    });
+    timer.start();
+    QTimer::singleShot(150, this, &Window::refreshPorts);
+    port->setFocus();
+}
+
+Pane *Window::newConnection()
+{
+    auto pane = new Pane(this);
+    panes.append(pane);
+    stack->addWidget(pane);
+    tabs->blockSignals(true);
+    const int index = tabs->addTab("新连接");
+    tabs->setTabData(index, QVariant::fromValue(static_cast<QObject *>(pane)));
+    auto close = new IconButton("close", "关闭连接");
+    close->setFixedSize(24, 24);
+    close->theme = theme;
+    connect(close, &QAbstractButton::clicked, this, [this, pane] { closeTab(paneIndex(tabs, pane)); });
+    tabs->setTabButton(index, QTabBar::RightSide, close);
+    tabs->blockSignals(false);
+    tabs->setCurrentIndex(index);
+    activate(index);
+    adjustTabs();
+    return pane;
+}
+
+void Window::adjustTabs()
+{
+    tabs->setFixedWidth(std::min(tabs->sizeHint().width(), std::max(64, tabHeader->width() - 80)));
+}
+
+void Window::activate(int index)
+{
+    auto pane = tabPane(tabs, index);
+    if (!pane || syncing)
+    {
+        return;
+    }
+    if (active && panes.contains(active) && !active->channel)
+    {
+        try
+        {
+            active->draft = form();
+        }
+        catch (...)
+        {
+        }
+    }
+    if (active && active != pane && panes.contains(active))
+    {
+        active->repeat->setChecked(false);
+    }
+    active = pane;
+    stack->setCurrentWidget(pane);
+    loadForm(pane->channel ? pane->channel->config : pane->draft);
+    updateStatus();
+}
+
+Config Window::form() const
+{
+    Config c;
+    c.kind = QStringList {"serial", "tcp-client", "tcp-server", "udp"}[protocol->currentIndex()];
+    c.name = connectionName->text().trimmed();
+    c.port = port->currentText().trimmed();
+    bool ok = false;
+    c.baudrate = baud->currentText().toInt(&ok);
+    if (!ok)
+    {
+        fail("波特率需要有效整数");
+    }
+    c.bytesize = bits->currentText().toInt();
+    c.parity = parity->currentText();
+    c.stopbits = stopbits->currentText().toDouble();
+    c.flow = flow->currentText();
+    c.dtr = dtr->isChecked();
+    c.rts = rts->isChecked();
+    c.host = host->text().trimmed();
+    c.networkPort = remotePort->value();
+    c.bindHost = bindHost->text().trimmed();
+    c.bindPort = bindPort->value();
+    return c;
+}
+
+void Window::loadForm(const Config &c)
+{
+    syncing = true;
+    connectionName->setText(c.name);
+    port->setCurrentText(c.port);
+    baud->setCurrentText(QString::number(c.baudrate));
+    bits->setCurrentText(QString::number(c.bytesize));
+    parity->setCurrentText(c.parity);
+    stopbits->setCurrentText(QString::number(c.stopbits));
+    flow->setCurrentText(c.flow);
+    dtr->setChecked(c.dtr);
+    rts->setChecked(c.rts);
+    host->setText(c.host);
+    remotePort->setValue(c.networkPort);
+    bindHost->setText(c.bindHost);
+    bindPort->setValue(c.bindPort);
+    const int index = QStringList {"serial", "tcp-client", "tcp-server", "udp"}.indexOf(c.kind);
+    if (index >= 0)
+    {
+        protocol->setCurrentIndex(index);
+    }
+    protocolChanged();
+    syncing = false;
+}
+
+void Window::protocolChanged()
+{
+    const int index = protocol->currentIndex();
+    configStack->setCurrentIndex(index == 0 ? 0 : 1);
+    for (auto widget : QList<QWidget *> {remoteLabel, host, remotePort})
+    {
+        widget->setVisible(index == 1 || index == 3);
+    }
+    for (auto widget : QList<QWidget *> {localLabel, bindHost, bindPort})
+    {
+        widget->setVisible(index == 2 || index == 3);
+    }
+    configStack->updateGeometry();
+}
+
+void Window::refreshPorts()
+{
+    const auto selected = port->currentText();
+    const QSignalBlocker blocker(port);
+    port->clear();
+    port->addItem("NULL");
+    for (const auto &value : Engine::ports())
+    {
+        const auto item = value.toObject();
+        port->addItem(item["port"].toString());
+        port->setItemData(port->count() - 1, item["description"].toString(), Qt::ToolTipRole);
+        port->setItemData(port->count() - 1, item["usb_serial_jtag"].toBool(), Qt::UserRole + 1);
+    }
+    port->setCurrentText(selected.isEmpty() || selected == "loop://" ? "NULL" : selected);
+}
+
+void Window::connectionAction()
+{
+    try
+    {
+        const auto config = form();
+        auto current = active->channel;
+        if (current && current->config.key() == config.key() && (current->state == "connected" || current->state == "listening" || current->state == "connecting" || current->state == "reconnecting"))
+        {
+            active->repeat->setChecked(false);
+            current->close();
+        }
+        else
+        {
+            auto draft = active;
+            syncing = true;
+            auto channel = engine->open(config);
+            syncing = false;
+            Pane *existing = nullptr;
+            for (auto pane : panes)
+            {
+                if (pane->channel == channel)
+                {
+                    existing = pane;
+                }
+            }
+            if (existing)
+            {
+                tabs->setCurrentIndex(paneIndex(tabs, existing));
+                activate(paneIndex(tabs, existing));
+            }
+            else if (!draft->channel)
+            {
+                draft->setChannel(channel);
+                if (viewSettings.contains(config.key()))
+                {
+                    draft->restore(viewSettings[config.key()].toObject());
+                }
+            }
+            else
+            {
+                auto pane = newConnection();
+                pane->setChannel(channel);
+                if (viewSettings.contains(config.key()))
+                {
+                    pane->restore(viewSettings[config.key()].toObject());
+                }
+                loadForm(config);
+            }
+            syncConnections();
+        }
+    }
+    catch (const std::exception &exception)
+    {
+        syncing = false;
+        error(QString::fromUtf8(exception.what()));
+    }
+    updateStatus();
+}
+
+void Window::applyBaud()
+{
+    if (syncing || !active || !active->channel || active->channel->state != "connected" || active->channel->config.kind != "serial")
+    {
+        return;
+    }
+    try
+    {
+        const auto config = form();
+        if (config.key() == active->channel->config.key() && config.json() != active->channel->config.json())
+        {
+            active->channel->applySerial(config);
+            statusBar()->showMessage(QString("驱动已确认波特率：%1 bps").arg(active->channel->appliedBaud), 4000);
+        }
+    }
+    catch (const std::exception &exception)
+    {
+        const QString message = QString::fromUtf8(exception.what());
+        loadForm(active->channel->config);
+        error(message);
+    }
+    updateStatus();
+}
+
+void Window::syncConnections()
+{
+    if (syncing || closing)
+    {
+        return;
+    }
+    for (auto pane : QList<Pane *>(panes))
+    {
+        if (pane->channel && !engine->channels.contains(pane->channel->id))
+        {
+            const int index = paneIndex(tabs, pane);
+            tabs->blockSignals(true);
+            tabs->removeTab(index);
+            tabs->blockSignals(false);
+            panes.removeOne(pane);
+            stack->removeWidget(pane);
+            pane->deleteLater();
+        }
+    }
+    for (auto channel : engine->channels)
+    {
+        Pane *pane = nullptr;
+        for (auto item : panes)
+        {
+            if (item->channel == channel)
+            {
+                pane = item;
+                break;
+            }
+        }
+        if (!pane)
+        {
+            const auto previous = active;
+            pane = newConnection();
+            pane->restore(viewSettings[channel->config.key()].toObject());
+            pane->setChannel(channel);
+            if (previous && panes.contains(previous))
+            {
+                tabs->setCurrentIndex(paneIndex(tabs, previous));
+                activate(paneIndex(tabs, previous));
+            }
+        }
+        const int index = paneIndex(tabs, pane);
+        QColor color = channel->state == "connected" || channel->state == "listening" ? theme.green
+            : channel->state == "error" ? theme.red : channel->state == "connecting" || channel->state == "reconnecting" ? theme.amber : theme.muted;
+        QPixmap pixmap(16, 16);
+        pixmap.fill(Qt::transparent);
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(color);
+        painter.drawEllipse(4, 4, 8, 8);
+        painter.end();
+        tabs->setTabIcon(index, QIcon(pixmap));
+        tabs->setTabText(index, channel->name);
+        tabs->setTabToolTip(index, channel->name + " · " + stateText(channel->state) + "\n" + channel->error);
+    }
+    if (panes.isEmpty())
+    {
+        active = nullptr;
+        newConnection();
+    }
+    else if (!panes.contains(active))
+    {
+        active = nullptr;
+        activate(tabs->currentIndex());
+    }
+    adjustTabs();
+    updateStatus();
+}
+
+void Window::closeTab(int index)
+{
+    auto pane = tabPane(tabs, index);
+    if (!pane)
+    {
+        return;
+    }
+    if (pane->channel)
+    {
+        viewSettings[pane->channel->config.key()] = pane->settings();
+        engine->remove(pane->channel->id);
+        return;
+    }
+    tabs->blockSignals(true);
+    tabs->removeTab(index);
+    tabs->blockSignals(false);
+    panes.removeOne(pane);
+    stack->removeWidget(pane);
+    pane->deleteLater();
+    if (panes.isEmpty())
+    {
+        active = nullptr;
+        newConnection();
+    }
+    else
+    {
+        active = nullptr;
+        activate(tabs->currentIndex());
+    }
+    adjustTabs();
+}
+
+void Window::updateStatus()
+{
+    if (!active || syncing)
+    {
+        return;
+    }
+    auto channel = active->channel;
+    const bool same = channel && channel->config.kind == QStringList {"serial", "tcp-client", "tcp-server", "udp"}[protocol->currentIndex()]
+        && (channel->config.kind != "serial" || channel->config.port == port->currentText());
+    const bool ready = channel && (channel->state == "connected" || channel->state == "listening" || channel->state == "connecting" || channel->state == "reconnecting");
+    connectButton->setText(same && ready ? channel->state == "listening" ? "停止监听" : "断开连接" : "建立连接");
+    if (channel)
+    {
+        QString text = stateText(channel->state);
+        if (channel->config.kind == "serial" && channel->appliedBaud)
+        {
+            text += QString("    %1 · %2 bps").arg(channel->config.port).arg(channel->appliedBaud);
+        }
+        text += QString("    接收 %1 B    发送 %2 B").arg(channel->rx).arg(channel->tx);
+        status->setText(text);
+        status->setToolTip(channel->error);
+    }
+    else
+    {
+        status->setText("尚未连接    选择端口开始接收");
+    }
+    QString serialText = channel && same && channel->appliedBaud ? QString("驱动已确认 %1 bps").arg(channel->appliedBaud)
+        : port->currentText() == "NULL" ? "尚未选择串口" : port->itemData(port->currentIndex(), Qt::ToolTipRole).toString();
+    if (port->currentText() == port->itemText(port->currentIndex()) && port->itemData(port->currentIndex(), Qt::UserRole + 1).toBool())
+    {
+        serialText += "\nUSB Serial/JTAG · 速率由 USB 决定";
+    }
+    serialInfo->setText(serialText);
+    mcpStatus->setText(mcp->isListening() ? QString("MCP 就绪  ·  %1").arg(mcp->serverPort()) : "MCP 离线");
+    mcpStatus->setToolTip(mcp->error.isEmpty() ? mcp->url() : mcp->error);
+}
+
+void Window::advancedSettings()
+{
+    Config before;
+    try
+    {
+        before = form();
+    }
+    catch (const std::exception &exception)
+    {
+        error(QString::fromUtf8(exception.what()));
+        return;
+    }
+    QDialog dialog(this);
+    dialog.setWindowTitle("连接参数");
+    dialog.resize(380, 430);
+    auto body = new QVBoxLayout(&dialog);
+    body->setContentsMargins(24, 20, 24, 20);
+    auto formLayout = new QFormLayout();
+    formLayout->setVerticalSpacing(12);
+    formLayout->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    formLayout->addRow("名称", connectionName);
+    formLayout->addRow("数据位", bits);
+    formLayout->addRow("校验位", parity);
+    formLayout->addRow("停止位", stopbits);
+    formLayout->addRow("流控", flow);
+    formLayout->addRow(dtr);
+    formLayout->addRow(rts);
+    body->addLayout(formLayout);
+    auto note = label("应用时检查驱动返回值；串口连接期间无需重新打开端口。", "muted");
+    note->setWordWrap(true);
+    body->addWidget(note);
+    auto apply = button("应用", "primary");
+    body->addWidget(apply);
+    connect(apply, &QPushButton::clicked, &dialog, &QDialog::accept);
+    for (auto control : QList<QWidget *> {connectionName, bits, parity, stopbits, flow, dtr, rts})
+    {
+        control->show();
+    }
+    const bool accepted = dialog.exec() == QDialog::Accepted;
+    if (accepted)
+    {
+        applyBaud();
+        if (active->channel && !connectionName->text().trimmed().isEmpty())
+        {
+            active->channel->name = connectionName->text().trimmed();
+            active->channel->config.name = connectionName->text().trimmed();
+            syncConnections();
+        }
+    }
+    else
+    {
+        loadForm(before);
+    }
+    for (auto control : QList<QWidget *> {connectionName, bits, parity, stopbits, flow, dtr, rts})
+    {
+        formLayout->removeWidget(control);
+        control->setParent(this);
+        control->hide();
+    }
+}
+
+void Window::applyTheme(bool dark)
+{
+    theme = Theme::make(dark);
+    setStyleSheet(theme.stylesheet());
+    QPalette palette;
+    palette.setColor(QPalette::Window, theme.background);
+    palette.setColor(QPalette::Base, theme.panel);
+    palette.setColor(QPalette::Button, theme.panel);
+    palette.setColor(QPalette::Text, theme.text);
+    palette.setColor(QPalette::WindowText, theme.text);
+    palette.setColor(QPalette::ButtonText, theme.text);
+    palette.setColor(QPalette::Highlight, theme.accent);
+    palette.setColor(QPalette::HighlightedText, dark ? QColor("#172337") : QColor("#ffffff"));
+    palette.setColor(QPalette::Mid, theme.muted);
+    setPalette(palette);
+    for (auto control : findChildren<IconButton *>())
+    {
+        control->theme = theme;
+        control->update();
+    }
+    for (auto pane : panes)
+    {
+        pane->applyAppearance();
+        pane->replay();
+    }
+    syncConnections();
+}
+
+void Window::setDataFont(const QFont &font)
+{
+    dataFont = font;
+    dataFont.setPointSize(qBound(8, font.pointSize(), 32));
+    for (auto pane : panes)
+    {
+        pane->applyAppearance();
+    }
+}
+
+void Window::error(const QString &message)
+{
+    statusBar()->showMessage("操作失败：" + message, 12000);
+}
+
+void Window::tabMenu(const QPoint &point)
+{
+    auto pane = tabPane(tabs, tabs->tabAt(point));
+    if (!pane)
+    {
+        return;
+    }
+    QMenu menu(this);
+    if (pane->channel)
+    {
+        auto channel = pane->channel;
+        const bool ready = channel->state == "connected" || channel->state == "listening" || channel->state == "connecting" || channel->state == "reconnecting";
+        auto disconnect = menu.addAction("断开连接", this, [channel, pane] { pane->repeat->setChecked(false); channel->close(); });
+        disconnect->setEnabled(ready);
+        auto reconnect = menu.addAction("重新连接", this, [channel] { channel->open(); });
+        reconnect->setEnabled(!ready);
+        menu.addAction("重命名…", this, [this, channel]
+        {
+            bool accepted = false;
+            const auto name = QInputDialog::getText(this, "重命名连接", "名称", QLineEdit::Normal, channel->name, &accepted);
+            if (accepted && !name.trimmed().isEmpty())
+            {
+                channel->name = name.trimmed();
+                channel->config.name = name.trimmed();
+                if (active && active->channel == channel)
+                {
+                    connectionName->setText(name.trimmed());
+                }
+                syncConnections();
+            }
+        });
+        menu.addSeparator();
+        menu.addAction("导出日志…", pane, &Pane::exportLog);
+    }
+    menu.addAction("清空显示", pane, &Pane::clearView);
+    menu.addSeparator();
+    menu.addAction("关闭连接", this, [this, pane] { closeTab(paneIndex(tabs, pane)); });
+    menu.exec(tabs->mapToGlobal(point));
+}
+
+void Window::saveSettings()
+{
+    for (auto pane : panes)
+    {
+        if (pane->channel)
+        {
+            viewSettings[pane->channel->config.key()] = pane->settings();
+        }
+    }
+    QJsonObject appearance = active ? active->settings() : QJsonObject();
+    appearance["theme"] = theme.dark ? "dark" : "light";
+    appearance["font_family"] = dataFont.family();
+    appearance["font_size"] = dataFont.pointSize();
+    QJsonObject connection = saved["connection"].toObject();
+    try
+    {
+        connection = form().json();
+    }
+    catch (...)
+    {
+    }
+    QSaveFile file(settingsPath);
+    QDir().mkpath(QFileInfo(settingsPath).absolutePath());
+    if (file.open(QIODevice::WriteOnly))
+    {
+        file.write(QJsonDocument(QJsonObject {{"connection", connection}, {"appearance", appearance}, {"views", viewSettings},
+            {"templates", templates}, {"allow_ai_control", engine->allowControl}}).toJson(QJsonDocument::Indented));
+        if (!file.commit())
+        {
+            error(file.errorString());
+        }
+    }
+    else
+    {
+        error(file.errorString());
+    }
+}
+
+void Window::resizeEvent(QResizeEvent *event)
+{
+    QMainWindow::resizeEvent(event);
+    QTimer::singleShot(0, this, &Window::adjustTabs);
+}
+
+void Window::closeEvent(QCloseEvent *event)
+{
+    closing = true;
+    timer.stop();
+    saveSettings();
+    engine->allowControl = false;
+    for (auto channel : engine->channels)
+    {
+        channel->close();
+    }
+    event->accept();
+}
+
+void Window::waveHelp()
+{
+    auto dialog = new QDialog(this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle("数值报文格式");
+    dialog->resize(640, 540);
+    auto body = new QVBoxLayout(dialog);
+    auto content = new QTextBrowser();
+    content->setHtml(R"(<h2>每个采样发送一行</h2><p>用 LF 或 CRLF 结束，串口、TCP、UDP 均支持。</p>
+        <h3>CSV</h3><pre>1.2,3.4,5.6</pre><h3>命名数值</h3><pre>temperature=25.6,voltage=3.3</pre>
+        <h3>JSON</h3><pre>{"temperature":25.6,"voltage":3.3}\n[1.2,3.4]</pre>
+        <h3>单片机 C 示例</h3><pre>printf("temperature=%.2f,voltage=%.3f\n", temperature, voltage);</pre>
+        <p>每行最多 16 个有限数值，每个来源保留 5000 个采样。普通日志会被忽略并计数。</p>
+        <p>滚轮缩放、拖动平移、双击恢复自动范围。波形显示数值报文，不测量 UART 物理电平。</p>)");
+    body->addWidget(content);
+    auto done = button("关闭");
+    connect(done, &QPushButton::clicked, dialog, &QDialog::close);
+    body->addWidget(done);
+    dialog->show();
+}
+
+void Window::openSettings()
+{
+    if (settingsDialog)
+    {
+        settingsDialog->show();
+        settingsDialog->raise();
+        settingsDialog->activateWindow();
+        return;
+    }
+    settingsDialog = new QDialog(this);
+    settingsDialog->setWindowTitle("设置");
+    settingsDialog->resize(920, 680);
+    auto body = new QVBoxLayout(settingsDialog);
+    body->setContentsMargins(20, 16, 20, 16);
+    auto pages = new QTabWidget();
+    auto appearance = new QWidget();
+    auto appearanceBody = new QVBoxLayout(appearance);
+    appearanceBody->setContentsMargins(20, 24, 20, 20);
+    auto formLayout = new QFormLayout();
+    formLayout->setVerticalSpacing(18);
+    auto themeChoice = combo({"浅色", "深色"});
+    themeChoice->setCurrentIndex(theme.dark ? 1 : 0);
+    connect(themeChoice, &QComboBox::currentIndexChanged, this, [this](int index) { applyTheme(index == 1); });
+    auto font = button(dataFont.family(), "outline");
+    connect(font, &QPushButton::clicked, this, [this, font]
+    {
+        bool accepted = false;
+        auto selected = QFontDialog::getFont(&accepted, dataFont, this, "数据字体");
+        if (accepted)
+        {
+            setDataFont(selected);
+            font->setText(selected.family());
+        }
+    });
+    auto size = new QSpinBox();
+    size->setRange(8, 32);
+    size->setValue(dataFont.pointSize());
+    connect(size, &QSpinBox::valueChanged, this, [this](int value)
+    {
+        auto font = dataFont;
+        font.setPointSize(value);
+        setDataFont(font);
+    });
+    formLayout->addRow("界面主题", themeChoice);
+    formLayout->addRow("数据字体", font);
+    formLayout->addRow("数据字号", size);
+    appearanceBody->addLayout(formLayout);
+    appearanceBody->addWidget(label("字体用于收发记录、终端与报文输入。Ctrl + 滚轮调整数据字号。", "muted"));
+    appearanceBody->addStretch();
+    pages->addTab(appearance, "外观");
+
+    auto mcpPage = new QWidget();
+    auto mcpBody = new QVBoxLayout(mcpPage);
+    mcpBody->setContentsMargins(16, 16, 16, 8);
+    auto address = new QLineEdit(mcp->url());
+    address->setReadOnly(true);
+    auto addressRow = horizontal();
+    addressRow->addWidget(address, 1);
+    auto copy = button("复制地址");
+    addressRow->addWidget(copy);
+    connect(copy, &QPushButton::clicked, this, [this] { QApplication::clipboard()->setText(mcp->url()); });
+    mcpBody->addLayout(addressRow);
+    auto permission = new QCheckBox("允许 AI 发送报文和控制连接");
+    permission->setChecked(engine->allowControl);
+    connect(permission, &QCheckBox::toggled, this, [this](bool checked)
+    {
+        engine->allowControl = checked;
+        saveSettings();
+    });
+    mcpBody->addWidget(permission);
+    mcpSummary = label("界面与 AI 共享同一连接，各自读取，不会消耗对方的数据。", "muted");
+    mcpBody->addWidget(mcpSummary);
+    auto mcpTabs = new QTabWidget();
+    mcpConnections = new QTreeWidget();
+    mcpConnections->setRootIsDecorated(false);
+    mcpConnections->setHeaderLabels({"连接", "协议", "状态", "连接 ID", "RX / TX"});
+    mcpConnections->setColumnWidth(0, 160);
+    mcpConnections->setColumnWidth(1, 110);
+    mcpConnections->setColumnWidth(2, 140);
+    mcpTabs->addTab(mcpConnections, "连接总览");
+    auto clients = new QWidget();
+    auto clientBody = new QVBoxLayout(clients);
+    clientBody->setContentsMargins(12, 12, 12, 12);
+    const QStringList names {"Codex", "Claude Code", "OpenCode CLI", "Claude Desktop"};
+    for (int i = 0; i < names.size(); ++i)
+    {
+        auto row = horizontal();
+        row->addWidget(label(names[i], "brand"));
+        row->addStretch();
+        auto configure = button("配置并检查", "outline");
+        row->addWidget(configure);
+        clientBody->addLayout(row);
+        auto result = label("保留其他配置，修改前创建备份", "muted");
+        result->setWordWrap(true);
+        clientBody->addWidget(result);
+        connect(configure, &QPushButton::clicked, this, [this, i, result] { configureClient(i, result); });
+    }
+    auto preview = new QPlainTextEdit();
+    preview->setReadOnly(true);
+    preview->setPlainText(QString("HTTP MCP: %1\n\nSTDIO: %2/SerialWorkbenchMCP.exe --url %1\n\n修改后请在客户端重新加载 MCP 配置。").arg(mcp->url(), QCoreApplication::applicationDirPath()));
+    clientBody->addWidget(preview, 1);
+    mcpTabs->addTab(clients, "客户端接入");
+    auditTable = new QTreeWidget();
+    auditTable->setRootIsDecorated(false);
+    auditTable->setHeaderLabels({"时间", "客户端", "工具", "结果", "耗时 ms", "错误"});
+    auditTable->setColumnWidth(0, 115);
+    auditTable->setColumnWidth(1, 160);
+    auditTable->setColumnWidth(2, 160);
+    mcpTabs->addTab(auditTable, "调用日志");
+    mcpBody->addWidget(mcpTabs, 1);
+    pages->addTab(mcpPage, "AI / MCP");
+    auto about = new QWidget();
+    auto aboutBody = new QVBoxLayout(about);
+    aboutBody->setContentsMargins(24, 24, 24, 24);
+    aboutBody->addWidget(label("Serial Workbench", "section"));
+    aboutBody->addWidget(label("原生 Qt C++ · " + Version, "muted"));
+    auto info = label("串口 · TCP · UDP\n收发记录 · ANSI 终端 · 数值控件\nHTTP / STDIO MCP 共享会话", "muted");
+    info->setWordWrap(true);
+    aboutBody->addWidget(info);
+    aboutBody->addStretch();
+    pages->addTab(about, "关于");
+    body->addWidget(pages, 1);
+    auto footer = horizontal();
+    footer->addStretch();
+    auto done = button("完成", "primary");
+    connect(done, &QPushButton::clicked, this, [this] { saveSettings(); settingsDialog->hide(); });
+    footer->addWidget(done);
+    body->addLayout(footer);
+    applyTheme(theme.dark);
+    settingsDialog->show();
+}
+
+// Token-based JSONC edits preserve comments and all unrelated client entries.
+struct JsonToken
+{
+    int start;
+    int end;
+    QString text;
+};
+
+static QList<JsonToken> jsonTokens(const QString &text)
+{
+    static const QRegularExpression expression(R"(\s+|//[^\r\n]*|/\*[\s\S]*?\*/|"(?:\\.|[^"\\])*"|[^\s])");
+    QList<JsonToken> tokens;
+    auto matches = expression.globalMatch(text);
+    while (matches.hasNext())
+    {
+        const auto match = matches.next();
+        const auto value = match.captured();
+        if (!value.trimmed().isEmpty() && !value.startsWith("//") && !value.startsWith("/*"))
+        {
+            tokens.append({static_cast<int>(match.capturedStart()), static_cast<int>(match.capturedEnd()), value});
+        }
+    }
+    return tokens;
+}
+
+static QPair<QMap<QString, QPair<int, int>>, int> jsonMembers(const QString &text, int start)
+{
+    const auto tokens = jsonTokens(text.mid(start));
+    if (tokens.isEmpty() || tokens.first().text != "{")
+    {
+        fail("配置节点需要 JSON 对象");
+    }
+    QMap<QString, QPair<int, int>> members;
+    int i = 1;
+    while (i < tokens.size())
+    {
+        if (tokens[i].text == "}")
+        {
+            return {members, tokens[i].start + start};
+        }
+        if (tokens[i].text == ",")
+        {
+            ++i;
+            continue;
+        }
+        const auto nameDocument = QJsonDocument::fromJson(("[" + tokens[i].text + "]").toUtf8());
+        if (!nameDocument.isArray() || !nameDocument.array()[0].isString() || i + 2 >= tokens.size() || tokens[i + 1].text != ":")
+        {
+            fail("JSON 配置语法无效");
+        }
+        const QString name = nameDocument.array()[0].toString();
+        i += 2;
+        const int begin = tokens[i].start + start;
+        int end = begin;
+        int depth = 0;
+        while (i < tokens.size())
+        {
+            const QString token = tokens[i].text;
+            if ((token == "," || token == "}") && depth == 0)
+            {
+                break;
+            }
+            if (token == "{" || token == "[")
+            {
+                ++depth;
+            }
+            else if (token == "}" || token == "]")
+            {
+                --depth;
+            }
+            end = tokens[i].end + start;
+            ++i;
+        }
+        members[name] = {begin, end};
+    }
+    fail("JSON 配置对象未闭合");
+}
+
+static QString mergeJson(QString text, const QString &section, const QJsonObject &entry)
+{
+    const auto tokens = jsonTokens(text);
+    QString cleaned;
+    for (int i = 0; i < tokens.size(); ++i)
+    {
+        if (!(tokens[i].text == "," && i + 1 < tokens.size() && (tokens[i + 1].text == "}" || tokens[i + 1].text == "]")))
+        {
+            cleaned += tokens[i].text;
+        }
+    }
+    if (!QJsonDocument::fromJson(cleaned.toUtf8()).isObject())
+    {
+        fail("现有 JSON/JSONC 配置无效，未修改文件");
+    }
+    const auto root = jsonMembers(text, 0);
+    const QString encoded = QString::fromUtf8(QJsonDocument(entry).toJson(QJsonDocument::Compact));
+    if (!root.first.contains(section))
+    {
+        const auto preceding = jsonTokens(text.left(root.second));
+        const bool comma = !root.first.isEmpty() && !preceding.isEmpty() && preceding.last().text != ",";
+        text.insert(root.second, QString(comma ? "," : "") + QString("\n  \"%1\": {\"serial-workbench\": %2}\n").arg(section, encoded));
+        return text;
+    }
+    const auto object = jsonMembers(text, root.first[section].first);
+    if (object.first.contains("serial-workbench"))
+    {
+        const auto range = object.first["serial-workbench"];
+        text.replace(range.first, range.second - range.first, encoded);
+    }
+    else
+    {
+        bool comma = !object.first.isEmpty();
+        const auto preceding = jsonTokens(text.left(object.second));
+        if (!preceding.isEmpty() && preceding.last().text == ",")
+        {
+            comma = false;
+        }
+        text.insert(object.second, QString(comma ? "," : "") + "\n    \"serial-workbench\": " + encoded + "\n  ");
+    }
+    return text;
+}
+
+void Window::configureClient(int index, QLabel *result)
+{
+    try
+    {
+        if (!mcp->isListening())
+        {
+            fail("MCP 未启动，请先解决端口占用");
+        }
+        const QString home = QDir::homePath();
+        QString path;
+        if (index == 0)
+        {
+            path = QDir(qEnvironmentVariable("CODEX_HOME", home + "/.codex")).filePath("config.toml");
+        }
+        else if (index == 1)
+        {
+            path = home + "/.claude.json";
+        }
+        else if (index == 2)
+        {
+            const auto base = qEnvironmentVariable("XDG_CONFIG_HOME", home + "/.config") + "/opencode";
+            path = base + (QFileInfo::exists(base + "/opencode.jsonc") ? "/opencode.jsonc" : "/opencode.json");
+        }
+        else
+        {
+            path = qEnvironmentVariable("APPDATA") + "/Claude/claude_desktop_config.json";
+        }
+        QFile file(path);
+        QString text = index == 0 ? QString() : "{}";
+        if (file.exists())
+        {
+            if (!file.open(QIODevice::ReadOnly))
+            {
+                fail(file.errorString());
+            }
+            text = QString::fromUtf8(file.readAll());
+            file.close();
+        }
+        if (index == 0)
+        {
+            // Replace only this application's table; preserve every other section.
+            const QString entry = "[mcp_servers.\"serial-workbench\"]\nurl = \"" + mcp->url() + "\"\n";
+            const QRegularExpression section(R"((?m)^\[mcp_servers\.(?:"serial-workbench"|'serial-workbench'|serial-workbench)\][^\n]*\n[\s\S]*?(?=^\[|\z))");
+            const auto match = section.match(text);
+            if (match.hasMatch())
+            {
+                text.replace(match.capturedStart(), match.capturedLength(), entry + "\n");
+            }
+            else
+            {
+                text += "\n" + entry;
+            }
+        }
+        else
+        {
+            QJsonObject entry;
+            if (index == 3)
+            {
+                const QString bridge = QCoreApplication::applicationDirPath() + "/SerialWorkbenchMCP.exe";
+                if (!QFileInfo::exists(bridge))
+                {
+                    fail("STDIO 桥接程序不存在");
+                }
+                entry = {{"command", bridge}, {"args", QJsonArray {"--url", mcp->url()}}};
+            }
+            else if (index == 2)
+            {
+                entry = {{"type", "remote"}, {"url", mcp->url()}, {"enabled", true}};
+            }
+            else
+            {
+                entry = {{"type", "http"}, {"url", mcp->url()}};
+            }
+            text = mergeJson(text, index == 2 ? "mcp" : "mcpServers", entry);
+        }
+        QDir().mkpath(QFileInfo(path).absolutePath());
+        if (file.exists() && !QFile::copy(path, path + "." + QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss-zzz") + ".bak"))
+        {
+            fail("配置备份失败，未修改原文件");
+        }
+        QSaveFile output(path);
+        if (!output.open(QIODevice::WriteOnly) || output.write(text.toUtf8()) < 0 || !output.commit())
+        {
+            fail("无法写入客户端配置");
+        }
+        // Native transport is already live; verify discovery and status on the same service.
+        const auto status = mcp->call("get_status", {}).toObject();
+        if (mcp->tools().size() != 9 || status["session_id"] != engine->journal.session)
+        {
+            fail("MCP 检查失败");
+        }
+        result->setText("配置已保存，服务检查通过。请重载客户端配置。\n" + path);
+    }
+    catch (const std::exception &exception)
+    {
+        result->setText("未完成：" + QString::fromUtf8(exception.what()));
+    }
+}
+}
