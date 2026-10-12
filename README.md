@@ -2,7 +2,7 @@
 
 一个面向嵌入式开发的 Windows 串口与网络调试助手。人在界面查看数据，Codex、Claude、OpenCode 等 AI 通过 MCP 同时读取同一份数据，无需再次打开串口。
 
-当前版本：0.11.5，Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
+当前版本：0.11.6，Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
 
 ![像素掌机主题工作台](docs/pixel-workspace.png)
 
