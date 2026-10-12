@@ -4,6 +4,77 @@
 
 namespace sw
 {
+namespace
+{
+// Mouse focus must not look like a selected action. Keep a separate cue for
+// keyboard navigation, including buttons supplied by Qt dialogs.
+class ButtonFocusFeedback : public QObject
+{
+  public:
+    using QObject::QObject;
+
+    bool eventFilter(QObject *watched, QEvent *event) override
+    {
+        auto button = qobject_cast<QAbstractButton *>(watched);
+        if (!button)
+        {
+            return false;
+        }
+
+        if (event->type() == QEvent::MouseButtonPress)
+        {
+            setKeyboardFocus(button, false);
+        }
+        else if (event->type() == QEvent::KeyPress)
+        {
+            setKeyboardFocus(button, true);
+        }
+        else if (event->type() == QEvent::FocusIn)
+        {
+            const auto reason = static_cast<QFocusEvent *>(event)->reason();
+            if (reason == Qt::TabFocusReason || reason == Qt::BacktabFocusReason || reason == Qt::ShortcutFocusReason)
+            {
+                setKeyboardFocus(button, true);
+            }
+            else if (reason != Qt::ActiveWindowFocusReason && reason != Qt::PopupFocusReason)
+            {
+                setKeyboardFocus(button, false);
+            }
+            button->update();
+        }
+        else if (event->type() == QEvent::FocusOut)
+        {
+            button->update();
+        }
+        return false;
+    }
+
+  private:
+    static void setKeyboardFocus(QAbstractButton *button, bool visible)
+    {
+        if (button->property("keyboardFocus").toBool() == visible)
+        {
+            return;
+        }
+        button->setProperty("keyboardFocus", visible);
+        button->style()->unpolish(button);
+        button->style()->polish(button);
+        button->update();
+    }
+};
+
+void installButtonFocusFeedback()
+{
+    static auto feedback = []
+    {
+        auto result = new ButtonFocusFeedback(qApp);
+        qApp->installEventFilter(result);
+        return result;
+    }();
+    Q_UNUSED(feedback);
+}
+} // namespace
+
 QString Theme::fontFamily(int pixels)
 {
     static const QMap<int, QString> families = []
@@ -64,6 +135,7 @@ Theme Theme::make(bool dark)
 
 QString Theme::stylesheet() const
 {
+    installButtonFocusFeedback();
     QString s = R"(
         QWidget { color: $text; font-family: "$font"; font-size: 14px; font-weight: normal; }
         QMainWindow, QDialog, QWidget#root { background: $bg; }
@@ -102,17 +174,17 @@ QString Theme::stylesheet() const
         QSpinBox::up-button, QSpinBox::down-button { width: 20px; border: none; }
         QSpinBox::up-arrow { image: url(:/icons/chevron-up.svg); width: 8px; height: 5px; }
         QSpinBox::down-arrow { image: url(:/icons/chevron-down.svg); width: 8px; height: 5px; }
-        QPushButton, QToolButton { background: transparent; border: 1px solid transparent; border-radius: 0; padding: 6px 12px; min-height: 22px; }
+        QPushButton, QToolButton { outline: none; background: transparent; border: 1px solid transparent; border-radius: 0; padding: 6px 12px; min-height: 22px; }
         QPushButton:hover, QToolButton:hover { color: $accent; }
         QPushButton:checked { color: $accent; font-weight: 600; }
-        QPushButton:focus, QToolButton:focus { color: $accent; }
+        QPushButton[keyboardFocus="true"]:focus, QToolButton[keyboardFocus="true"]:focus { color: $accent; }
         QPushButton:pressed, QToolButton:pressed { color: $text; padding-top: 7px; padding-bottom: 5px; }
         QPushButton#primary { background: $accent; color: $onaccent; border: 2px solid $text; border-bottom-width: 4px; padding: 6px 16px; }
-        QPushButton#primary:hover { background: $primaryhover; color: $onaccent; }
+        QPushButton#primary:hover, QPushButton#primary[keyboardFocus="true"]:focus { background: $primaryhover; color: $onaccent; }
         QPushButton#primary:pressed { color: $onaccent; border-bottom-width: 2px; padding-top: 8px; }
         QPushButton#primary:disabled { background: $line; color: $muted; border-color: $edge; }
         QPushButton#outline { color: $text; border: 1px solid $edge; border-bottom-width: 2px; background: $panel; }
-        QPushButton#outline:focus { border-color: $text; }
+        QPushButton#outline[keyboardFocus="true"]:focus { border-color: $text; color: $accent; }
         QPushButton#outline:hover { color: $accent; }
         QPushButton:disabled, QToolButton:disabled { color: $muted; }
         QPlainTextEdit, QTextEdit { border: 1px solid $edge; border-radius: 0; background: $panel; padding: 8px; selection-background-color: $accent; selection-color: $onaccent; }
@@ -408,6 +480,7 @@ QIcon icon(const QString &name, const QColor &color, int size)
 IconButton::IconButton(const QString &name, const QString &title, QWidget *parent)
     : QAbstractButton(parent), glyph(name)
 {
+    installButtonFocusFeedback();
     setFixedSize(34, 34);
     setToolTip(title);
     setAccessibleName(title);
@@ -454,7 +527,7 @@ void IconButton::paintEvent(QPaintEvent *)
     const QColor foreground = onRail ? QColor("#d7dfc4") : theme.muted;
     const QColor active = onRail ? QColor("#edaa50") : theme.accent;
     const QColor color = !isEnabled() ? theme.line
-        : isChecked() || hasFocus() || progress > 0.3 ? active : foreground;
+        : isChecked() || (hasFocus() && property("keyboardFocus").toBool()) || progress > 0.3 ? active : foreground;
     const qreal shift = isDown() ? 1.0 : -progress;
     const qreal extent = qMin(20.0, qreal(qMin(width(), height()) - 6)) + progress;
     drawIcon(p, glyph == "pause" && isChecked() ? "play" : glyph,
@@ -485,12 +558,18 @@ void Combo::paintEvent(QPaintEvent *event)
 {
     QComboBox::paintEvent(event);
     QPainter p(this);
-    const QColor color = palette().color(QPalette::Text);
-    const int x = width() - 18;
-    const int y = height() / 2 - 2;
-    p.fillRect(x, y, 2, 2, color);
-    p.fillRect(x + 6, y, 2, 2, color);
-    p.fillRect(x + 2, y + 2, 4, 2, color);
+    p.setRenderHint(QPainter::Antialiasing, false);
+    const auto group = isEnabled() ? QPalette::Active : QPalette::Disabled;
+    const QColor color = palette().color(group, QPalette::Text);
+    const int x = width() - 21;
+    const int y = (height() - 8) / 2;
+    // Four solid steps, centered in the reserved 28 px drop-down area.
+    for (int step = 0; step < 3; ++step)
+    {
+        p.fillRect(x + step * 2, y + step * 2, 4, 2, color);
+        p.fillRect(x + 10 - step * 2, y + step * 2, 4, 2, color);
+    }
+    p.fillRect(x + 6, y + 6, 2, 2, color);
 }
 
 ProtocolCombo::ProtocolCombo(QWidget *parent) : Combo(parent)

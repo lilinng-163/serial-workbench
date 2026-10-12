@@ -267,6 +267,73 @@ private slots:
         window.settingsDialog->hide();
         window.close();
     }
+    void buttonFocusFeedback()
+    {
+        QWidget host;
+        host.setStyleSheet(sw::Theme::make(false).stylesheet());
+        auto layout = new QHBoxLayout(&host);
+        auto action = new sw::IconButton("trash", "清空");
+        auto textAction = new QPushButton("导出");
+        auto toggle = new sw::IconButton("time", "时间戳");
+        toggle->setCheckable(true);
+        auto primary = new QPushButton("建立连接");
+        primary->setObjectName("primary");
+        layout->addWidget(action);
+        layout->addWidget(textAction);
+        layout->addWidget(toggle);
+        layout->addWidget(primary);
+        layout->addStretch();
+        host.resize(420, 100);
+        host.show();
+        host.activateWindow();
+        QTest::qWait(100);
+        QTest::mouseMove(&host, QPoint(400, 80));
+        action->setFocus(Qt::OtherFocusReason);
+        QTest::qWait(180);
+        const auto idle = action->grab().toImage();
+        const auto textIdle = textAction->grab().toImage();
+        const auto primaryIdle = primary->grab().toImage();
+
+        QSignalSpy activated(action, &QAbstractButton::clicked);
+        QTest::mouseClick(action, Qt::LeftButton);
+        QTest::mouseMove(&host, QPoint(400, 80));
+        QEvent leave(QEvent::Leave);
+        QApplication::sendEvent(action, &leave);
+        QTest::qWait(180);
+        QCOMPARE(activated.count(), 1);
+        QVERIFY(action->hasFocus());
+        QVERIFY(!action->property("keyboardFocus").toBool());
+        QCOMPARE(action->grab().toImage(), idle);
+
+        QTest::keyClick(action, Qt::Key_Tab);
+        QVERIFY(textAction->hasFocus());
+        QVERIFY(textAction->property("keyboardFocus").toBool());
+        QTest::keyClick(textAction, Qt::Key_Tab, Qt::ShiftModifier);
+        QVERIFY(action->hasFocus());
+        QVERIFY(action->property("keyboardFocus").toBool());
+        QVERIFY(action->grab().toImage() != idle);
+        QTest::keyClick(action, Qt::Key_Space);
+        QCOMPARE(activated.count(), 2);
+
+        QTest::mouseClick(textAction, Qt::LeftButton);
+        QTest::mouseMove(&host, QPoint(400, 80));
+        QVERIFY(!textAction->property("keyboardFocus").toBool());
+        QApplication::sendEvent(textAction, &leave);
+        QTest::qWait(180);
+        QCOMPARE(textAction->grab().toImage(), textIdle);
+        QTest::mouseClick(toggle, Qt::LeftButton);
+        QTest::mouseMove(&host, QPoint(400, 80));
+        QVERIFY(toggle->isChecked());
+        QVERIFY(!toggle->property("keyboardFocus").toBool());
+        QTest::keyClick(toggle, Qt::Key_Tab);
+        QVERIFY(primary->hasFocus());
+        QVERIFY(primary->grab().toImage() != primaryIdle);
+        QTest::mouseClick(primary, Qt::LeftButton);
+        QTest::mouseMove(&host, QPoint(400, 80));
+        QApplication::sendEvent(primary, &leave);
+        QTest::qWait(180);
+        QCOMPARE(primary->grab().toImage(), primaryIdle);
+    }
     void uiBaudAndPersistence()
     {
         QTemporaryDir directory;
