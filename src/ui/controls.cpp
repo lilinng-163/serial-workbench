@@ -212,7 +212,8 @@ QString Theme::stylesheet() const
         QMenu::item { padding: 10px 28px 10px 16px; border: 1px solid transparent; }
         QMenu::item:selected { background: $hover; border-color: $edge; }
         QMenu::separator { height: 1px; background: $line; margin: 5px 8px; }
-        QMenu::indicator:checked { image: url(:/icons/check.svg); background: $accent; width: 12px; height: 12px; }
+        QMenu::indicator { width: 18px; height: 18px; subcontrol-origin: padding; subcontrol-position: center left; image: none; background: transparent; }
+        QMenu::indicator:checked { image: url(:/icons/check.svg); background: $accent; }
         QCheckBox { spacing: 7px; background: transparent; }
         QCheckBox::indicator { width: 14px; height: 14px; border: 1px solid $edge; border-bottom-width: 2px; background: $panel; }
         QCheckBox::indicator:hover { border-color: $accent; }
