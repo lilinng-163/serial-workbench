@@ -163,12 +163,12 @@ QString Theme::stylesheet() const
         QComboBox#protocolSelector { background: $hover; border: 2px solid $edge; padding: 8px 28px 8px 10px; }
         QLineEdit#searchBox { padding: 5px 8px; background: $panel; }
         QLineEdit#searchBox:focus { padding: 4px 7px 5px 7px; }
-        QComboBox { padding-right: 28px; }
+        QComboBox { padding-right: 28px; combobox-popup: 0; }
         QComboBox:focus { padding-right: 27px; }
         QComboBox::drop-down { border: none; width: 28px; }
         QComboBox::down-arrow { image: none; }
         QComboBox QLineEdit, QComboBox QLineEdit:focus, QComboBox QLineEdit:hover { border: none; padding: 0; min-height: 0; background: transparent; }
-        QComboBox QAbstractItemView { background: $panel; color: $text; border: 2px solid $edge; selection-background-color: $hover; selection-color: $text; outline: none; padding: 4px; }
+        QComboBox QAbstractItemView { background: $panel; color: $text; border: none; selection-background-color: $hover; selection-color: $text; outline: none; padding: 4px; }
         QComboBox QAbstractItemView::item { min-height: 28px; padding: 4px 8px; }
         QSpinBox { padding-right: 22px; }
         QSpinBox::up-button, QSpinBox::down-button { width: 20px; border: none; }
@@ -331,6 +331,16 @@ void drawIcon(QPainter &p, const QString &name, QRectF rect, const QColor &color
         p.drawRect(1, 4, 4, 8);
         line(8, 5, 13, 10);
         line(13, 5, 8, 10);
+    }
+    else if (name == "wrap")
+    {
+        line(1, 2, 13, 2);
+        line(1, 6, 10, 6);
+        line(1, 12, 4, 12);
+        line(12, 7, 12, 11);
+        line(7, 11, 12, 11);
+        line(7, 11, 9, 9);
+        line(7, 11, 9, 13);
     }
     else if (name == "terminal")
     {
@@ -583,6 +593,10 @@ void Combo::showPopup()
     if (!menuPopup)
     {
         QComboBox::showPopup();
+        if (auto frame = qobject_cast<QFrame *>(view()->window()))
+        {
+            frame->setFrameShape(QFrame::NoFrame);
+        }
         return;
     }
     auto menu = new QMenu(this);

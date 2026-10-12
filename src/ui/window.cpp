@@ -443,6 +443,11 @@ Pane::Pane(Window *owner, const QString &instrumentKind) : QWidget(owner), windo
     hexDisplay->setObjectName("hexDisplay");
     hexDisplay->setCheckable(true);
     tools->addWidget(hexDisplay);
+    wrapLines = new IconButton("wrap", "自动换行（关闭后可横向滚动）");
+    wrapLines->setObjectName("wrapLines");
+    wrapLines->setCheckable(true);
+    wrapLines->setChecked(true);
+    tools->addWidget(wrapLines);
     cursorShape = new IconButton("cursor", "光标形状：方块 / 竖线 · Insert");
     cursorShape->setCheckable(true);
     cursorShape->setChecked(true);
@@ -561,6 +566,7 @@ Pane::Pane(Window *owner, const QString &instrumentKind) : QWidget(owner), windo
 
     connect(timestamps, &QAbstractButton::toggled, this, [this](bool checked) { log->timestamps = checked; replay(); });
     connect(hexDisplay, &QAbstractButton::toggled, this, [this](bool checked) { log->hex = checked; replay(); });
+    connect(wrapLines, &QAbstractButton::toggled, log, &LogView::setWrapping);
     connect(cursorShape, &QAbstractButton::toggled, this, [this](bool block)
     {
         terminal->blockCursor = block;
@@ -873,6 +879,7 @@ void Pane::setTerminal(bool enabled)
     follow->setVisible(!enabled);
     timestamps->setVisible(!enabled);
     hexDisplay->setVisible(!enabled);
+    wrapLines->setVisible(!enabled);
     cursorShape->setVisible(enabled);
     if (enabled)
     {
@@ -1013,7 +1020,8 @@ QJsonObject Pane::settings() const
         return settings;
     }
     const auto sizes = terminalMode ? senderSizes : splitter->sizes();
-    return {{"timestamps", log->timestamps}, {"hex_display", log->hex}, {"block_cursor", terminal->blockCursor},
+    return {{"timestamps", log->timestamps}, {"hex_display", log->hex}, {"wrap_lines", wrapLines->isChecked()},
+        {"block_cursor", terminal->blockCursor},
         {"terminal_mode", terminalMode}, {"encoding", encoding->currentText()},
         {"sender_sizes", QJsonArray {sizes.value(0, 600), sizes.value(1, 150)}}};
 }
@@ -1037,6 +1045,7 @@ void Pane::restore(const QJsonObject &settings)
     log->timestamps = settings.value("timestamps").toBool(true);
     timestamps->setChecked(log->timestamps);
     hexDisplay->setChecked(settings["hex_display"].toBool());
+    wrapLines->setChecked(settings.value("wrap_lines").toBool(true));
     cursorShape->setChecked(settings.value("block_cursor").toBool(true));
     encoding->setCurrentText(settings.value("encoding").toString("utf-8"));
     const auto sizes = settings["sender_sizes"].toArray();

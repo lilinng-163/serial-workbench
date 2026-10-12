@@ -33,6 +33,7 @@ public:
         bool cr = false;
     };
     QMap<QString, std::shared_ptr<Stream>> streams;
+    void setWrapping(bool enabled);
     void feed(const QJsonObject &event);
     void reset();
     void paintEvent(QPaintEvent *event) override;

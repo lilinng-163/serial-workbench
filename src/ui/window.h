@@ -45,6 +45,7 @@ public:
     IconButton *modeButton = nullptr;
     IconButton *timestamps = nullptr;
     IconButton *hexDisplay = nullptr;
+    IconButton *wrapLines = nullptr;
     IconButton *cursorShape = nullptr;
     QStackedWidget *display = nullptr;
     LogView *log = nullptr;

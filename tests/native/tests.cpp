@@ -267,6 +267,65 @@ private slots:
         window.settingsDialog->hide();
         window.close();
     }
+    void logWrappingAndPersistence()
+    {
+        sw::LogView log;
+        log.setFont(sw::Theme::defaultDataFont());
+        log.resize(300, 180);
+        log.show();
+        sw::Journal journal;
+        const QByteArray message = QString("长消息保留全部内容 %1 end-of-message\n")
+            .arg(QString(240, 'A')).toUtf8();
+        log.feed(journal.append("wrap-test", "rx", message));
+        const auto original = log.toPlainText();
+        QTRY_VERIFY(log.document()->firstBlock().layout()->lineCount() > 1);
+        QCOMPARE(log.horizontalScrollBar()->maximum(), 0);
+        const int narrowLines = log.document()->firstBlock().layout()->lineCount();
+        log.resize(600, 180);
+        QTRY_VERIFY(log.document()->firstBlock().layout()->lineCount() < narrowLines);
+
+        QTextCursor selection(log.document());
+        selection.select(QTextCursor::Document);
+        log.setTextCursor(selection);
+        log.setWrapping(false);
+        QTRY_VERIFY(log.horizontalScrollBar()->maximum() > 0);
+        QVERIFY(log.horizontalScrollBar()->isVisible());
+        QCOMPARE(log.document()->firstBlock().layout()->lineCount(), 1);
+        log.horizontalScrollBar()->setValue(log.horizontalScrollBar()->maximum());
+        QVERIFY(log.horizontalScrollBar()->value() > 0);
+        QCOMPARE(log.toPlainText(), original);
+        QCOMPARE(log.textCursor().selectedText(), selection.selectedText());
+        log.setWrapping(true);
+        QTRY_COMPARE(log.horizontalScrollBar()->maximum(), 0);
+        QVERIFY(!log.horizontalScrollBar()->isVisible());
+        QCOMPARE(log.toPlainText(), original);
+
+        QTemporaryDir directory;
+        const auto path = directory.filePath("wrap-settings.json");
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        {
+            sw::Window window(&engine, &mcp, path);
+            window.show();
+            auto pane = window.active;
+            QVERIFY(pane->wrapLines->isChecked());
+            QTest::mouseClick(pane->wrapLines, Qt::LeftButton);
+            QCOMPARE(pane->log->lineWrapMode(), QTextEdit::NoWrap);
+            pane->setTerminal(true);
+            QVERIFY(pane->wrapLines->isHidden());
+            pane->setTerminal(false);
+            QVERIFY(!pane->wrapLines->isHidden());
+            QVERIFY(!pane->wrapLines->isChecked());
+            window.close();
+        }
+        {
+            sw::Window restored(&engine, &mcp, path);
+            QVERIFY(!restored.active->wrapLines->isChecked());
+            QCOMPARE(restored.active->log->lineWrapMode(), QTextEdit::NoWrap);
+            restored.close();
+        }
+    }
+
     void buttonFocusFeedback()
     {
         QWidget host;

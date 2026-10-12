@@ -26,6 +26,8 @@
 
 收发工具栏直接提供暂停 / 继续、清空、跟随最新数据与日志导出；发送栏直接提供循环发送和毫秒间隔，不使用省略号隐藏这些操作。设置、垃圾桶、播放和暂停图标保持像素轮廓，并通过清晰的形状区分功能。
 
+接收区默认自动换行，工具栏的折行箭头可以切换；关闭后，长消息显示横向滚动条。切换只影响排版，原始报文、选择和日志导出保持完整。换行选择随页面显示设置保存，交互终端使用自己的字符网格。下拉列表采用平面列表样式，去掉外层黑框和上下菜单滚动带。
+
 ## 布局
 
 ```text
@@ -71,6 +73,7 @@
 | 收发工作台 | [浅色](pixel-workspace.png) / [深色](pixel-dark.png) |
 | 控件 | [波形](pixel-waveform.png) / [独立波形](pixel-floating-wave.png) |
 | 终端 | [终端](pixel-terminal.png) |
+| 长消息显示示例 | [自动换行](log-wrap.png) / [横向滚动](log-horizontal.png) |
 | 菜单与设置 | [新建页面](pixel-new-page.png) / [协议菜单](pixel-protocol.png) / [设置](pixel-settings.png) |
 | 布局 | [窄窗口](pixel-narrow.png) / [125% DPI](pixel-scale125.png) |
 | 初始状态 | [等待连接](pixel-empty.png) |

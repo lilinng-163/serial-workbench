@@ -2,7 +2,7 @@
 
 一个面向嵌入式开发的 Windows 串口与网络调试助手。人在界面查看数据，Codex、Claude、OpenCode 等 AI 通过 MCP 同时读取同一份数据，无需再次打开串口。
 
-当前版本：0.11.2，Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
+当前版本：0.11.3，Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
 
 ![像素掌机主题工作台](docs/pixel-workspace.png)
 
@@ -23,6 +23,8 @@
 # 自定义 MCP 端口
 .\dist\SerialWorkbenchNative\SerialWorkbench.exe --mcp-port 8877
 ```
+
+接收区默认自动换行，工具栏的折行箭头可切换。关闭后，长消息可通过底部横向滚动条查看；此选项会保存，且不改变原始数据或日志导出。
 
 顶部标签旁的「＋」先选择「新建收发页面」或「新建控件页面」。收发页面左侧填写串口或网络参数，右侧直接显示接收区和发送栏，不再套一层「收发」标签。多个串口和网络连接可同时运行；每个草稿保留自己的参数和发送文本。连接标签显示名称与状态方块：绿色表示连接或监听，黄色表示连接或恢复中，灰色表示断开，红色表示出错；悬停查看详情。
 
@@ -230,7 +232,7 @@ $env:MINGW_BIN = 'D:/lib/Qt/Tools/mingw1310_64/bin'
 .\scripts\build.ps1
 
 # 打包后的 HTTP / STDIO 集成测试，需要 Python MCP SDK
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.11.2
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.11.3
 ```
 
 测试覆盖独立读取与分页、真实 TCP/UDP socket、软件串口回环及重配置、UTF-8/GBK 分片解析、ANSI 颜色与终端、连接标签和布局、设置恢复、MCP HTTP/STDIO、权限、非阻塞等待和错误参数。实际 COM 硬件、USB 设备的实际线速及各 AI 客户端的完整对话需要在对应环境验证。

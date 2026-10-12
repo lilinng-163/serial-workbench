@@ -92,7 +92,18 @@ LogView::LogView(QWidget *parent) : QTextEdit(parent)
     setObjectName("monitor");
     setReadOnly(true);
     document()->setMaximumBlockCount(4000);
-    setLineWrapMode(QTextEdit::NoWrap);
+    setWordWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
+    setWrapping(true);
+}
+
+void LogView::setWrapping(bool enabled)
+{
+    setLineWrapMode(enabled ? QTextEdit::WidgetWidth : QTextEdit::NoWrap);
+    setHorizontalScrollBarPolicy(enabled ? Qt::ScrollBarAlwaysOff : Qt::ScrollBarAsNeeded);
+    if (follow)
+    {
+        verticalScrollBar()->setValue(verticalScrollBar()->maximum());
+    }
 }
 
 void LogView::paintEvent(QPaintEvent *event)
