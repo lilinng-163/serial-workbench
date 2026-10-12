@@ -12,6 +12,7 @@ class Instrument : public QWidget
 public:
     Instrument(const QString &kind, QWidget *parent = nullptr);
     QString kind;
+    QPointer<Window> helpWindow;
     QCheckBox *freeze = nullptr;
     QSpinBox *points = nullptr;
     WavePlot *plot = nullptr;
@@ -35,9 +36,13 @@ public:
     Config draft;
     qint64 cursor = 0;
     qint64 viewStart = 0;
-    QTabWidget *pages;
+    DetachableTabs *pages;
     QWidget *monitorPage;
-    QToolButton *controls;
+    IconButton *controls;
+    IconButton *modeButton;
+    IconButton *timestamps;
+    IconButton *hexDisplay;
+    IconButton *cursorShape;
     QStackedWidget *display;
     LogView *log;
     TerminalView *terminal;
@@ -72,6 +77,7 @@ public:
     void restore(const QJsonObject &settings);
     Instrument *addInstrument(const QString &kind, bool activate = true);
     void closeInstrument(int index);
+    void decoratePage(QWidget *page);
     QMenu *controlMenu();
     bool eventFilter(QObject *object, QEvent *event) override;
 };
@@ -80,7 +86,14 @@ class Window : public QMainWindow
 {
     Q_OBJECT
 public:
-    Window(Engine *engine, McpServer *mcp, const QString &settingsPath);
+    Window(Engine *engine, McpServer *mcp, const QString &settingsPath, Window *primary = nullptr);
+    Window *primary;
+    QList<QPointer<Window>> hosts;
+    Window *rootWindow();
+    Pane *findPane(Channel *channel);
+    Window *detachConnection(int index, const QPoint &position, bool systemMove = false);
+    void transferPane(Pane *pane, Window *target);
+    void attachPane(Pane *pane);
     Engine *engine;
     McpServer *mcp;
     Theme theme;
@@ -98,6 +111,8 @@ public:
     QStackedWidget *stack;
     IconButton *plus;
     IconButton *gear;
+    IconButton *parameterToggle;
+    bool parametersVisible = true;
     Combo *protocol;
     Combo *port;
     Combo *baud;
@@ -120,6 +135,10 @@ public:
     QLabel *status;
     QLabel *mcpStatus;
     QTimer timer;
+    QTimer portTimer;
+    QJsonArray lastPorts;
+    bool portsLoaded = false;
+    std::function<QJsonArray()> portProvider = [] { return Engine::ports(); };
     QElapsedTimer settingsRefresh;
     QDialog *settingsDialog = nullptr;
     QTreeWidget *mcpConnections = nullptr;
@@ -140,16 +159,18 @@ public:
     void loadForm(const Config &config);
     void refreshPorts();
     void protocolChanged();
-    void advancedSettings();
     void openSettings();
     void configureClient(int index, QLabel *result);
     void saveSettings();
     void applyTheme(bool dark);
+    void applyLocalTheme(bool dark);
+    void arrangeParameters();
     void setDataFont(const QFont &font);
     void error(const QString &message);
     void waveHelp();
     void tabMenu(const QPoint &point);
     void resizeEvent(QResizeEvent *event) override;
     void closeEvent(QCloseEvent *event) override;
+    bool nativeEvent(const QByteArray &type, void *message, qintptr *result) override;
 };
 }

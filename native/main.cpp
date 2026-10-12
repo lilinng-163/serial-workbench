@@ -14,7 +14,7 @@ int main(int argc, char *argv[])
     parser.addOption({"mcp-port", "Local MCP port", "port", "8765"});
     parser.addOption({"settings", "Settings file", "path", QCoreApplication::applicationDirPath() + "/settings.json"});
     parser.addOption({"demo", "Show generated example data"});
-    parser.addOption({"view", "Preview waveform, values, structured, settings or dark", "name"});
+    parser.addOption({"view", "Preview waveform, values, structured, settings, dark, search, terminal, detached, floating-wave, narrow or protocol", "name"});
     parser.addOption({"screenshot", "Save window preview", "path"});
     parser.addOption({"ready-file", "Write startup timing", "path"});
     parser.addOption({"quit-after", "Close after milliseconds", "ms"});
@@ -40,6 +40,7 @@ int main(int argc, char *argv[])
     sw::McpServer mcp(&engine);
     mcp.start(static_cast<quint16>(port));
     sw::Window window(&engine, &mcp, parser.value("settings"));
+    QPointer<QWidget> previewTarget = &window;
     QObject::connect(&instance, &QLocalServer::newConnection, &window, [&]
     {
         while (instance.hasPendingConnections())
@@ -95,6 +96,40 @@ int main(int argc, char *argv[])
         {
             window.applyTheme(true);
         }
+        else if (view == "search")
+        {
+            window.active->filter->setText("temperature");
+        }
+        else if (view == "terminal")
+        {
+            window.active->setTerminal(true);
+            window.active->terminal->blockCursor = false;
+            window.active->cursorShape->setChecked(false);
+        }
+        else if (view == "narrow")
+        {
+            window.resize(480, 640);
+        }
+        else if (view == "protocol")
+        {
+            window.protocol->showPopup();
+        }
+        else if (view == "detached" || view == "floating-wave")
+        {
+            auto pane = window.active;
+            auto detached = window.detachConnection(window.tabs->currentIndex(), QPoint(160, 120));
+            previewTarget = detached;
+            if (view == "floating-wave")
+            {
+                for (auto instrument : pane->instruments)
+                {
+                    if (instrument->kind == "waveform")
+                    {
+                        previewTarget = pane->pages->detachPage(pane->pages->indexOf(instrument), QPoint(250, 180));
+                    }
+                }
+            }
+        }
         else
         {
             for (auto instrument : window.active->instruments)
@@ -110,8 +145,17 @@ int main(int argc, char *argv[])
     {
         QTimer::singleShot(1600, &window, [&]
         {
-            QWidget *target = window.settingsDialog && window.settingsDialog->isVisible() ? static_cast<QWidget *>(window.settingsDialog) : &window;
-            target->grab().save(parser.value("screenshot"));
+            QWidget *target = window.settingsDialog && window.settingsDialog->isVisible() ? static_cast<QWidget *>(window.settingsDialog) : previewTarget.data();
+            if (target)
+            {
+                auto shot = target->grab();
+                if (auto popup = QApplication::activePopupWidget())
+                {
+                    QPainter painter(&shot);
+                    painter.drawPixmap(target->mapFromGlobal(popup->mapToGlobal(QPoint())), popup->grab());
+                }
+                shot.save(parser.value("screenshot"));
+            }
         });
     }
     if (parser.isSet("quit-after"))

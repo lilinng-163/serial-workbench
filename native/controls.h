@@ -1,6 +1,7 @@
 #pragma once
 #include <QtWidgets>
 #include "core.h"
+#include "docking.h"
 
 namespace sw
 {
@@ -44,11 +45,30 @@ class Combo : public QComboBox
 {
 public:
     explicit Combo(QWidget *parent = nullptr);
+    bool menuPopup = false;
+    void showPopup() override;
     void wheelEvent(QWheelEvent *event) override;
     void paintEvent(QPaintEvent *event) override;
 };
 
-class ConnectionBar : public QTabBar
+class ProtocolCombo : public Combo
+{
+public:
+    explicit ProtocolCombo(QWidget *parent = nullptr);
+    void showPopup() override;
+};
+
+class SearchBox : public QLineEdit
+{
+    Q_OBJECT
+public:
+    explicit SearchBox(QWidget *parent = nullptr);
+    IconButton *clearButton;
+    void resizeEvent(QResizeEvent *event) override;
+    void paintEvent(QPaintEvent *event) override;
+};
+
+class ConnectionBar : public TearTabBar
 {
 public:
     explicit ConnectionBar(QWidget *parent = nullptr);

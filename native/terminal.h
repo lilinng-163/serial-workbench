@@ -64,18 +64,22 @@ public:
     int rows = 32;
     bool enabledInput = false;
     bool caret = true;
+    bool blockCursor = true;
     QTimer blink;
     void feed(const QByteArray &data);
     void reset(const QString &encoding = "utf-8");
     QString text() const;
     void paintEvent(QPaintEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
+    void changeEvent(QEvent *event) override;
+    void resizeGrid();
     void keyPressEvent(QKeyEvent *event) override;
     void inputMethodEvent(QInputMethodEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
 signals:
     void transmit(const QByteArray &data);
     void zoomRequested(int steps);
+    void cursorShapeChanged(bool block);
 private:
     void csi(QChar command, const QString &parameters);
     void newline();

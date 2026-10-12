@@ -251,7 +251,7 @@ Channel::Channel(Engine *owner, const Config &configuration) : QObject(owner), e
     connect(&demoTimer, &QTimer::timeout, this, [this]
     {
         const double t = QDateTime::currentMSecsSinceEpoch() / 1000.0;
-        receive(QString("temperature=%1,voltage=%2,current=%3\n").arg(25 + 3 * std::sin(t), 0, 'f', 3).arg(3.3 + 0.2 * std::cos(t * 0.7), 0, 'f', 3).arg(0.4 + 0.1 * std::sin(t * 1.8), 0, 'f', 3).toUtf8());
+        receive(QString("temperature=%1,voltage=%2,current=%3\r\n").arg(25 + 3 * std::sin(t), 0, 'f', 3).arg(3.3 + 0.2 * std::cos(t * 0.7), 0, 'f', 3).arg(0.4 + 0.1 * std::sin(t * 1.8), 0, 'f', 3).toUtf8());
     });
     retryTimer.setInterval(300);
     connect(&retryTimer, &QTimer::timeout, this, [this]

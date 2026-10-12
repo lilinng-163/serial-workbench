@@ -8,7 +8,7 @@
 
 namespace sw
 {
-inline const QString Version = "0.7.0";
+inline const QString Version = "0.8.0";
 
 struct Config
 {

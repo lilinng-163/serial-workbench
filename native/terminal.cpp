@@ -492,11 +492,28 @@ void TerminalView::paintEvent(QPaintEvent *)
     {
         QColor color = theme.accent;
         color.setAlpha(150);
-        p.fillRect(QRectF(16 + std::min(columns - 1, x) * width, 12 + y * height, width, height), color);
+        p.fillRect(QRectF(16 + std::min(columns - 1, x) * width, 12 + y * height,
+            blockCursor ? width : 2, height), color);
     }
 }
 
 void TerminalView::resizeEvent(QResizeEvent *event)
+{
+    resizeGrid();
+    QWidget::resizeEvent(event);
+}
+
+void TerminalView::changeEvent(QEvent *event)
+{
+    QWidget::changeEvent(event);
+    if (event->type() == QEvent::FontChange)
+    {
+        resizeGrid();
+        update();
+    }
+}
+
+void TerminalView::resizeGrid()
 {
     const QFontMetricsF metrics(font());
     const int newColumns = qBound(20, int((width() - 32) / metrics.horizontalAdvance('M')), 240);
@@ -514,11 +531,19 @@ void TerminalView::resizeEvent(QResizeEvent *event)
     rows = newRows;
     x = qBound(0, x, columns - 1);
     y = qBound(0, y, rows - 1);
-    QWidget::resizeEvent(event);
 }
 
 void TerminalView::keyPressEvent(QKeyEvent *event)
 {
+    if (event->key() == Qt::Key_Insert && event->modifiers() == Qt::NoModifier)
+    {
+        blockCursor = !blockCursor;
+        caret = true;
+        update();
+        emit cursorShapeChanged(blockCursor);
+        event->accept();
+        return;
+    }
     if (!enabledInput)
     {
         event->ignore();

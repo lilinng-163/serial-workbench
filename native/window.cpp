@@ -1,6 +1,9 @@
 #include "window.h"
 #include <QTextCodec>
 #include <numeric>
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 
 namespace sw
 {
@@ -33,15 +36,6 @@ static Combo *combo(const QStringList &items, const QString &selected = {}, bool
         control->lineEdit()->setTextMargins(0, 0, 0, 0);
     }
     return control;
-}
-
-static QToolButton *menuButton(const QString &text, QMenu *menu)
-{
-    auto result = new QToolButton();
-    result->setText(text);
-    result->setMenu(menu);
-    result->setPopupMode(QToolButton::InstantPopup);
-    return result;
 }
 
 static QPushButton *button(const QString &text, const QString &name = {})
@@ -101,10 +95,9 @@ Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), 
         });
         connect(help, &QPushButton::clicked, this, [this]
         {
-            auto window = qobject_cast<Window *>(this->window());
-            if (window)
+            if (helpWindow)
             {
-                window->waveHelp();
+                helpWindow->waveHelp();
             }
         });
     }
@@ -126,9 +119,8 @@ Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), 
         else
         {
             parser = combo({"JSON / XML", "仅 JSON", "仅 XML"});
-            filter = new QLineEdit();
+            filter = new SearchBox();
             filter->setPlaceholderText("筛选解析记录");
-            filter->setClearButtonEnabled(true);
             filter->setMaximumWidth(210);
             tools->insertWidget(1, filter);
             connect(filter, &QLineEdit::textChanged, this, [this](const QString &text)
@@ -243,22 +235,53 @@ void Instrument::tick(Channel *channel)
     }
 }
 
+class SendFooter : public QWidget
+{
+public:
+    QBoxLayout *body = new QBoxLayout(QBoxLayout::LeftToRight, this);
+
+    SendFooter()
+    {
+        body->setContentsMargins(0, 0, 0, 0);
+        body->setSpacing(8);
+    }
+
+    QSize minimumSizeHint() const override
+    {
+        return QSize(300, body->minimumSize().height());
+    }
+
+    void resizeEvent(QResizeEvent *event) override
+    {
+        const auto direction = width() < 730 ? QBoxLayout::TopToBottom : QBoxLayout::LeftToRight;
+        if (body->direction() != direction)
+        {
+            body->setDirection(direction);
+            updateGeometry();
+        }
+        QWidget::resizeEvent(event);
+    }
+};
+
 Pane::Pane(Window *owner) : QWidget(owner), window(owner)
 {
     setObjectName("workspace");
     auto body = new QVBoxLayout(this);
     body->setContentsMargins(0, 0, 0, 0);
     body->setSpacing(0);
-    pages = new QTabWidget();
+    pages = new DetachableTabs();
     pages->setDocumentMode(true);
     pages->tabBar()->setDrawBase(false);
     pages->setTabsClosable(true);
     pages->tabBar()->setElideMode(Qt::ElideRight);
     connect(pages, &QTabWidget::tabCloseRequested, this, &Pane::closeInstrument);
-    controls = menuButton("添加控件", controlMenu());
-    controls->setIcon(icon("plus", window->theme.muted, 16));
-    controls->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    controls->setToolTip("为当前连接添加独立控件页");
+    controls = new IconButton("widgets", "添加控件 · 图表与数据");
+    auto widgetsMenu = controlMenu();
+    connect(controls, &QAbstractButton::clicked, this, [this, widgetsMenu]
+    {
+        widgetsMenu->popup(controls->mapToGlobal(QPoint(0, controls->height() + 4)));
+    });
+    connect(pages, &DetachableTabs::pageAttached, this, &Pane::decoratePage);
     pages->setCornerWidget(controls);
     body->addWidget(pages, 1);
     monitorPage = new QWidget();
@@ -269,38 +292,34 @@ Pane::Pane(Window *owner) : QWidget(owner), window(owner)
     auto toolbar = new QWidget();
     auto tools = horizontal(toolbar);
     tools->setContentsMargins(16, 8, 14, 6);
-    auto modes = new QButtonGroup(this);
-    auto logMode = button("日志");
-    logMode->setObjectName("logMode");
-    auto terminalButton = button("终端");
-    logMode->setCheckable(true);
-    terminalButton->setCheckable(true);
-    logMode->setChecked(true);
-    modes->addButton(logMode, 0);
-    modes->addButton(terminalButton, 1);
-    tools->addWidget(logMode);
-    tools->addWidget(terminalButton);
-    connect(modes, &QButtonGroup::idClicked, this, [this](int id) { setTerminal(id == 1); });
-    connect(terminalButton, &QPushButton::toggled, this, [this](bool enabled)
+    tools->setSpacing(4);
+    modeButton = new IconButton("terminal", "切换到交互终端");
+    modeButton->setObjectName("terminalMode");
+    modeButton->setCheckable(true);
+    tools->addWidget(modeButton);
+    connect(modeButton, &QAbstractButton::toggled, this, [this](bool enabled)
     {
-        if (terminalMode != enabled)
-        {
-            setTerminal(enabled);
-        }
+        if (terminalMode != enabled) { setTerminal(enabled); }
     });
-    terminalButton->setObjectName("terminalMode");
+    timestamps = new IconButton("clock", "显示时间戳");
+    timestamps->setObjectName("timestamps");
+    timestamps->setCheckable(true);
+    timestamps->setChecked(true);
+    tools->addWidget(timestamps);
+    hexDisplay = new IconButton("hex", "十六进制显示");
+    hexDisplay->setObjectName("hexDisplay");
+    hexDisplay->setCheckable(true);
+    tools->addWidget(hexDisplay);
+    cursorShape = new IconButton("cursor", "光标形状：方块 / 竖线 · Insert");
+    cursorShape->setCheckable(true);
+    cursorShape->setChecked(true);
+    cursorShape->hide();
+    tools->addWidget(cursorShape);
+    tools->addSpacing(8);
     tools->addStretch();
-    filter = new QLineEdit();
+    filter = new SearchBox();
     filter->setPlaceholderText("筛选收发内容");
-    filter->setClearButtonEnabled(true);
-    filter->setFixedWidth(210);
-    filter->hide();
-    tools->addWidget(filter);
-    auto search = new IconButton("search", "筛选收发内容");
-    search->setCheckable(true);
-    connect(search, &QAbstractButton::toggled, filter, &QWidget::setVisible);
-    connect(search, &QAbstractButton::clicked, filter, qOverload<>(&QWidget::setFocus));
-    tools->addWidget(search);
+    tools->addWidget(filter, 1);
     pause = new IconButton("pause", "暂停显示，后台继续接收");
     pause->setCheckable(true);
     tools->addWidget(pause);
@@ -308,12 +327,6 @@ Pane::Pane(Window *owner) : QWidget(owner), window(owner)
     connect(clear, &QAbstractButton::clicked, this, &Pane::clearView);
     tools->addWidget(clear);
     auto moreMenu = new QMenu(this);
-    auto timestamps = moreMenu->addAction("显示时间戳");
-    timestamps->setObjectName("timestamps");
-    timestamps->setCheckable(true);
-    timestamps->setChecked(true);
-    auto hex = moreMenu->addAction("十六进制显示");
-    hex->setCheckable(true);
     auto follow = moreMenu->addAction("跟随最新数据");
     follow->setCheckable(true);
     follow->setChecked(true);
@@ -346,12 +359,20 @@ Pane::Pane(Window *owner) : QWidget(owner), window(owner)
     payload->setPlaceholderText("输入待发送内容    Ctrl + Enter 发送");
     sendBody->addWidget(payload, 1);
     auto sendTools = horizontal();
+    sendTools->setSpacing(6);
     encoding = combo({"utf-8", "gbk", "ascii", "latin-1"});
     encoding->setFixedWidth(108);
     encoding->setToolTip("收发文本编码");
-    newline = combo({"无换行", "LF", "CR", "CRLF"}, "CRLF");
-    newline->setFixedWidth(100);
+    newline = combo({"None · 无换行", "LF · \\n", "CR · \\r", "CRLF · \\r\\n"});
+    newline->setCurrentIndex(3);
+    newline->menuPopup = true;
+    newline->setFixedWidth(152);
     newline->setToolTip("发送时追加的换行符");
+    const QStringList lineNames {"None · 不追加换行", "LF · \\n · Line Feed", "CR · \\r · Carriage Return", "CRLF · \\r\\n · Carriage Return + Line Feed"};
+    for (int i = 0; i < lineNames.size(); ++i)
+    {
+        newline->setItemData(i, lineNames[i], Qt::ToolTipRole);
+    }
     sendHex = new QCheckBox("HEX");
     sendTools->addWidget(encoding);
     sendTools->addWidget(newline);
@@ -360,11 +381,13 @@ Pane::Pane(Window *owner) : QWidget(owner), window(owner)
     peer->lineEdit()->setPlaceholderText("目标 IP:端口");
     peer->setMaximumWidth(210);
     peer->hide();
-    sendTools->addWidget(peer);
-    sendTools->addStretch();
+    auto actions = horizontal();
+    actions->setSpacing(6);
+    actions->addWidget(peer);
+    actions->addStretch();
     auto templateButton = new IconButton("template", "报文模板");
     connect(templateButton, &QAbstractButton::clicked, this, &Pane::templateMenu);
-    sendTools->addWidget(templateButton);
+    actions->addWidget(templateButton);
     auto sendOptions = new QMenu(this);
     auto optionPanel = new QWidget();
     auto optionBody = new QVBoxLayout(optionPanel);
@@ -384,12 +407,15 @@ Pane::Pane(Window *owner) : QWidget(owner), window(owner)
     {
         sendOptions->exec(options->mapToGlobal(QPoint(0, options->height())));
     });
-    sendTools->addWidget(options);
+    actions->addWidget(options);
     sendButton = button("发送", "primary");
     sendButton->setFixedWidth(94);
     connect(sendButton, &QPushButton::clicked, this, &Pane::sendCurrent);
-    sendTools->addWidget(sendButton);
-    sendBody->addLayout(sendTools);
+    actions->addWidget(sendButton);
+    auto footer = new SendFooter();
+    footer->body->addLayout(sendTools);
+    footer->body->addLayout(actions, 1);
+    sendBody->addWidget(footer);
     splitter->addWidget(sender);
     splitter->setStretchFactor(0, 1);
     splitter->setSizes(senderSizes);
@@ -397,8 +423,14 @@ Pane::Pane(Window *owner) : QWidget(owner), window(owner)
     pages->tabBar()->setTabButton(0, QTabBar::RightSide, nullptr);
     pages->tabBar()->setTabButton(0, QTabBar::LeftSide, nullptr);
 
-    connect(timestamps, &QAction::toggled, this, [this](bool checked) { log->timestamps = checked; replay(); });
-    connect(hex, &QAction::toggled, this, [this](bool checked) { log->hex = checked; replay(); });
+    connect(timestamps, &QAbstractButton::toggled, this, [this](bool checked) { log->timestamps = checked; replay(); });
+    connect(hexDisplay, &QAbstractButton::toggled, this, [this](bool checked) { log->hex = checked; replay(); });
+    connect(cursorShape, &QAbstractButton::toggled, this, [this](bool block)
+    {
+        terminal->blockCursor = block;
+        terminal->update();
+    });
+    connect(terminal, &TerminalView::cursorShapeChanged, cursorShape, &QAbstractButton::setChecked);
     connect(follow, &QAction::toggled, this, [this](bool checked) { log->follow = checked; });
     connect(filter, &QLineEdit::textChanged, this, [this](const QString &value) { log->filter = value; replay(); });
     connect(encoding, &QComboBox::currentTextChanged, this, [this](const QString &value)
@@ -519,6 +551,7 @@ void Pane::applyAppearance()
     payload->setFont(window->dataFont);
     payload->setStyleSheet(fontStyle);
     terminal->setFont(window->dataFont);
+    terminal->setStyleSheet(fontStyle);
     terminal->update();
     for (auto instrument : instruments)
     {
@@ -533,11 +566,21 @@ void Pane::applyAppearance()
             instrument->detail->setStyleSheet(fontStyle);
         }
     }
-    controls->setIcon(icon("plus", window->theme.muted, 16));
     for (auto control : findChildren<IconButton *>())
     {
         control->theme = window->theme;
         control->update();
+    }
+    for (auto detached : pages->floating)
+    {
+        if (!detached) { continue; }
+        detached->setStyleSheet(window->theme.stylesheet());
+        detached->setPalette(window->palette());
+        for (auto control : detached->findChildren<IconButton *>())
+        {
+            control->theme = window->theme;
+            control->update();
+        }
     }
 }
 
@@ -551,7 +594,8 @@ void Pane::tick()
         repeat->setChecked(false);
     }
     peer->setVisible(channel && (channel->config.kind == "tcp-server" || channel->config.kind == "udp"));
-    if (!channel || !isVisible())
+    if (!channel || (!isVisible() && !monitorPage->isVisible()
+        && std::none_of(instruments.cbegin(), instruments.cend(), [](auto item) { return item->isVisible(); })))
     {
         return;
     }
@@ -597,10 +641,12 @@ void Pane::tick()
             }
         }
     }
-    auto current = qobject_cast<Instrument *>(pages->currentWidget());
-    if (current)
+    for (auto instrument : instruments)
     {
-        current->tick(channel);
+        if (instrument->isVisible())
+        {
+            instrument->tick(channel);
+        }
     }
 }
 
@@ -635,15 +681,15 @@ void Pane::setTerminal(bool enabled)
     pause->setChecked(false);
     display->setCurrentWidget(enabled ? static_cast<QWidget *>(terminal) : log);
     sender->setVisible(!enabled);
-    auto modeButton = findChild<QPushButton *>("terminalMode");
     if (modeButton && modeButton->isChecked() != enabled)
     {
         modeButton->setChecked(enabled);
     }
-    if (!enabled)
-    {
-        findChild<QPushButton *>("logMode")->setChecked(true);
-    }
+    modeButton->setToolTip(enabled ? "返回收发日志" : "切换到交互终端");
+    filter->setVisible(!enabled);
+    timestamps->setVisible(!enabled);
+    hexDisplay->setVisible(!enabled);
+    cursorShape->setVisible(enabled);
     if (enabled)
     {
         terminal->setFocus();
@@ -702,7 +748,7 @@ void Pane::exportLog()
 void Pane::templateMenu()
 {
     QMenu menu(this);
-    for (const auto &value : window->templates)
+    for (const auto &value : window->rootWindow()->templates)
     {
         const auto item = value.toObject();
         menu.addAction(item["name"].toString(), this, [this, item]
@@ -713,7 +759,7 @@ void Pane::templateMenu()
             newline->setCurrentIndex(item["newline"].toInt());
         });
     }
-    if (!window->templates.isEmpty())
+    if (!window->rootWindow()->templates.isEmpty())
     {
         menu.addSeparator();
     }
@@ -723,7 +769,7 @@ void Pane::templateMenu()
         const QString name = QInputDialog::getText(this, "保存报文模板", "模板名称", QLineEdit::Normal, {}, &accepted);
         if (accepted && !name.trimmed().isEmpty())
         {
-            window->templates.append(QJsonObject {{"name", name.trimmed()}, {"payload", payload->toPlainText()}, {"hex_mode", sendHex->isChecked()}, {"encoding", encoding->currentText()}, {"newline", newline->currentIndex()}});
+            window->rootWindow()->templates.append(QJsonObject {{"name", name.trimmed()}, {"payload", payload->toPlainText()}, {"hex_mode", sendHex->isChecked()}, {"encoding", encoding->currentText()}, {"newline", newline->currentIndex()}});
             window->saveSettings();
         }
     });
@@ -749,7 +795,7 @@ void Pane::templateMenu()
                 return;
             }
         }
-        window->templates = document.array();
+        window->rootWindow()->templates = document.array();
         window->saveSettings();
     });
     menu.addAction("导出模板…", this, [this]
@@ -762,7 +808,7 @@ void Pane::templateMenu()
         QSaveFile file(path);
         if (file.open(QIODevice::WriteOnly))
         {
-            file.write(QJsonDocument(window->templates).toJson(QJsonDocument::Indented));
+            file.write(QJsonDocument(window->rootWindow()->templates).toJson(QJsonDocument::Indented));
             file.commit();
         }
     });
@@ -796,13 +842,14 @@ Instrument *Pane::addInstrument(const QString &kind, bool activate)
             {
                 if (activate)
                 {
-                    pages->setCurrentWidget(instrument);
+                    pages->activatePage(instrument);
                 }
                 return instrument;
             }
         }
     }
     auto instrument = new Instrument(kind);
+    instrument->helpWindow = window->rootWindow();
     instruments.append(instrument);
     const QString title = kind == "waveform" ? "数值波形" : kind == "values" ? "实时数值" : "JSON / XML";
     int number = 1;
@@ -811,15 +858,20 @@ Instrument *Pane::addInstrument(const QString &kind, bool activate)
     {
         titles.append(pages->tabText(i));
     }
+    for (auto detached : pages->floating)
+    {
+        if (detached)
+        {
+            titles.append(detached->title);
+        }
+    }
     while (titles.contains(title + " " + QString::number(number)))
     {
         ++number;
     }
-    const int index = pages->addTab(instrument, kind == "structured" ? title : title + " " + QString::number(number));
-    auto close = new IconButton("close", "关闭控件");
-    close->setFixedSize(22, 22);
-    connect(close, &QAbstractButton::clicked, this, [this, instrument] { closeInstrument(pages->indexOf(instrument)); });
-    pages->tabBar()->setTabButton(index, QTabBar::RightSide, close);
+    pages->addTab(instrument, kind == "structured" ? title : title + " " + QString::number(number));
+    decoratePage(instrument);
+
     if (instrument->parser)
     {
         connect(instrument->parser, &QComboBox::currentIndexChanged, this, [this, instrument](int mode)
@@ -837,18 +889,38 @@ Instrument *Pane::addInstrument(const QString &kind, bool activate)
     applyAppearance();
     if (activate)
     {
-        pages->setCurrentWidget(instrument);
+        pages->activatePage(instrument);
     }
     return instrument;
 }
 
-void Pane::closeInstrument(int index)
+void Pane::decoratePage(QWidget *page)
 {
-    if (index <= 0)
+    const int index = pages->indexOf(page);
+    if (index < 0)
     {
         return;
     }
+    if (page == monitorPage)
+    {
+        pages->tabBar()->setTabButton(index, QTabBar::RightSide, nullptr);
+        pages->tabBar()->setTabButton(index, QTabBar::LeftSide, nullptr);
+        return;
+    }
+    auto close = new IconButton("close", "关闭控件");
+    close->setFixedSize(22, 22);
+    close->theme = window->theme;
+    connect(close, &QAbstractButton::clicked, this, [this, page] { closeInstrument(pages->indexOf(page)); });
+    pages->tabBar()->setTabButton(index, QTabBar::RightSide, close);
+}
+
+void Pane::closeInstrument(int index)
+{
     auto instrument = qobject_cast<Instrument *>(pages->widget(index));
+    if (!instrument)
+    {
+        return;
+    }
     if (instrument->parser && channel)
     {
         channel->configureParser("off");
@@ -866,19 +938,22 @@ QJsonObject Pane::settings() const
         controls.append(instrument->settings());
     }
     const auto sizes = terminalMode ? senderSizes : splitter->sizes();
-    return {{"timestamps", log->timestamps}, {"terminal_mode", terminalMode}, {"encoding", encoding->currentText()},
+    return {{"timestamps", log->timestamps}, {"hex_display", log->hex}, {"block_cursor", terminal->blockCursor},
+        {"terminal_mode", terminalMode}, {"encoding", encoding->currentText()},
         {"instruments", controls}, {"sender_sizes", QJsonArray {sizes.value(0, 600), sizes.value(1, 150)}}};
 }
 
 void Pane::restore(const QJsonObject &settings)
 {
-    while (pages->count() > 1)
+    pages->restoreAll();
+    for (auto instrument : QList<Instrument *>(instruments))
     {
-        closeInstrument(pages->count() - 1);
+        closeInstrument(pages->indexOf(instrument));
     }
     log->timestamps = settings.value("timestamps").toBool(true);
-    const QSignalBlocker blocker(findChild<QAction *>("timestamps"));
-    findChild<QAction *>("timestamps")->setChecked(log->timestamps);
+    timestamps->setChecked(log->timestamps);
+    hexDisplay->setChecked(settings["hex_display"].toBool());
+    cursorShape->setChecked(settings.value("block_cursor").toBool(true));
     encoding->setCurrentText(settings.value("encoding").toString("utf-8"));
     auto list = settings.value("instruments").toArray();
     if (!settings.contains("instruments") && settings["show_wave"].toBool())
@@ -909,7 +984,7 @@ void Pane::restore(const QJsonObject &settings)
         QTimer::singleShot(0, this, [this] { splitter->setSizes(senderSizes); });
     }
     setTerminal(settings["terminal_mode"].toBool());
-    pages->setCurrentIndex(0);
+    pages->setCurrentWidget(monitorPage);
 }
 
 class AdaptiveStack : public QStackedWidget
@@ -925,12 +1000,13 @@ public:
     }
 };
 
-Window::Window(Engine *owner, McpServer *service, const QString &path)
-    : engine(owner), mcp(service), settingsPath(path)
+Window::Window(Engine *owner, McpServer *service, const QString &path, Window *main)
+    : QMainWindow(main, Qt::Window), primary(main), engine(owner), mcp(service), settingsPath(path)
 {
+    rootWindow()->hosts.append(this);
     setWindowTitle("Serial Workbench · Native " + Version);
     setWindowIcon(icon("port", QColor("#337de7"), 32));
-    setMinimumSize(960, 640);
+    setMinimumSize(480, 320);
     resize(1400, 900);
     QFile settingsFile(path);
     if (settingsFile.open(QIODevice::ReadOnly))
@@ -942,7 +1018,18 @@ Window::Window(Engine *owner, McpServer *service, const QString &path)
     const auto appearance = saved["appearance"].toObject();
     theme = Theme::make(appearance["theme"] == "dark");
     dataFont = QFont(appearance["font_family"].toString("Cascadia Mono"), qBound(8, appearance["font_size"].toInt(11), 32));
-    engine->allowControl = saved["allow_ai_control"].toBool();
+    if (!primary)
+    {
+        engine->allowControl = saved["allow_ai_control"].toBool();
+    }
+    else
+    {
+        setAttribute(Qt::WA_DeleteOnClose);
+        theme = primary->theme;
+        dataFont = primary->dataFont;
+        templates = primary->templates;
+        viewSettings = primary->viewSettings;
+    }
 
     auto root = new QWidget();
     root->setObjectName("root");
@@ -954,6 +1041,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path)
     auto railBody = new QVBoxLayout(rail);
     railBody->setContentsMargins(9, 16, 9, 12);
     auto workbench = new IconButton("port", "显示 / 隐藏连接参数");
+    parameterToggle = workbench;
     workbench->setCheckable(true);
     workbench->setChecked(true);
     railBody->addWidget(workbench);
@@ -966,7 +1054,16 @@ Window::Window(Engine *owner, McpServer *service, const QString &path)
     sidebar = new QFrame();
     sidebar->setObjectName("sidebar");
     sidebar->setFixedWidth(246);
-    connect(workbench, &QAbstractButton::toggled, sidebar, &QWidget::setVisible);
+    connect(workbench, &QAbstractButton::toggled, this, [this](bool visible)
+    {
+        parametersVisible = visible;
+        auto scroll = findChild<QScrollArea *>("parameterScroll");
+        if (scroll)
+        {
+            scroll->setVisible(visible);
+            if (visible) { scroll->raise(); }
+        }
+    });
     connect(workbench, &QAbstractButton::toggled, this, [this] { QTimer::singleShot(0, this, &Window::adjustTabs); });
     auto side = new QVBoxLayout(sidebar);
     side->setContentsMargins(20, 20, 20, 16);
@@ -974,7 +1071,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path)
     side->addWidget(label("Serial Workbench", "brand"));
     side->addSpacing(10);
     side->addWidget(label("连接参数", "section"));
-    protocol = combo({"串口", "TCP 客户端", "TCP 服务端", "UDP"});
+    protocol = new ProtocolCombo();
     side->addWidget(protocol);
     configStack = new AdaptiveStack();
     configStack->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
@@ -1001,6 +1098,32 @@ Window::Window(Engine *owner, McpServer *service, const QString &path)
     baud->setFixedHeight(38);
     baud->setToolTip("连接后选择新值会立即应用，并回读 Windows 驱动确认");
     serialBody->addWidget(baud);
+    bits = combo({"5", "6", "7", "8"}, "8");
+    parity = combo({"N", "E", "O", "M", "S"});
+    stopbits = combo({"1", "1.5", "2"});
+    flow = combo({"none", "rtscts", "xonxoff"});
+    parity->setToolTip("N: None · 无校验\nE: Even · 偶校验\nO: Odd · 奇校验\nM: Mark\nS: Space");
+    flow->setToolTip("none: 无流控\nrtscts: 硬件流控\nxonxoff: 软件流控");
+    auto serialGrid = new QGridLayout();
+    serialGrid->setHorizontalSpacing(10);
+    serialGrid->setVerticalSpacing(7);
+    serialGrid->addWidget(label("数据位", "muted"), 0, 0);
+    serialGrid->addWidget(label("校验", "muted"), 0, 1);
+    serialGrid->addWidget(bits, 1, 0);
+    serialGrid->addWidget(parity, 1, 1);
+    serialGrid->addWidget(label("停止位", "muted"), 2, 0);
+    serialGrid->addWidget(label("流控", "muted"), 2, 1);
+    serialGrid->addWidget(stopbits, 3, 0);
+    serialGrid->addWidget(flow, 3, 1);
+    serialBody->addSpacing(6);
+    serialBody->addLayout(serialGrid);
+    dtr = new QCheckBox("DTR");
+    rts = new QCheckBox("RTS");
+    auto signalControls = horizontal();
+    signalControls->addWidget(dtr);
+    signalControls->addWidget(rts);
+    signalControls->addStretch();
+    serialBody->addLayout(signalControls);
     serialInfo = label("尚未选择串口", "muted");
     serialInfo->setWordWrap(true);
     serialBody->addWidget(serialInfo);
@@ -1027,10 +1150,10 @@ Window::Window(Engine *owner, McpServer *service, const QString &path)
     network->addWidget(bindPort);
     configStack->addWidget(networkPanel);
     side->addWidget(configStack);
-    auto advanced = button("更多连接参数…");
-    advanced->setStyleSheet("text-align: left; padding-left: 0;");
-    connect(advanced, &QPushButton::clicked, this, &Window::advancedSettings);
-    side->addWidget(advanced);
+    side->addWidget(label("连接名称", "muted"));
+    connectionName = new QLineEdit();
+    connectionName->setPlaceholderText("可选 · 使用端口名称");
+    side->addWidget(connectionName);
     connectButton = button("建立连接", "primary");
     connectButton->setMinimumHeight(26);
     connect(connectButton, &QPushButton::clicked, this, &Window::connectionAction);
@@ -1039,21 +1162,14 @@ Window::Window(Engine *owner, McpServer *service, const QString &path)
     auto hint = label("已连接时修改波特率立即生效\n波特率以驱动回读结果为准", "muted");
     hint->setWordWrap(true);
     side->addWidget(hint);
-    layout->addWidget(sidebar);
-
-    connectionName = new QLineEdit(this);
-    connectionName->hide();
-    bits = combo({"5", "6", "7", "8"}, "8");
-    parity = combo({"N", "E", "O", "M", "S"});
-    stopbits = combo({"1", "1.5", "2"});
-    flow = combo({"none", "rtscts", "xonxoff"});
-    dtr = new QCheckBox("DTR");
-    rts = new QCheckBox("RTS");
-    for (auto control : QList<QWidget *> {bits, parity, stopbits, flow, dtr, rts})
-    {
-        control->setParent(this);
-        control->hide();
-    }
+    auto sideScroll = new QScrollArea();
+    sideScroll->setWidgetResizable(true);
+    sideScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    sideScroll->setWidget(sidebar);
+    sideScroll->setFixedWidth(246);
+    sideScroll->setMinimumHeight(0);
+    sideScroll->setObjectName("parameterScroll");
+    layout->addWidget(sideScroll);
     auto right = new QWidget();
     auto rightBody = new QVBoxLayout(right);
     rightBody->setContentsMargins(0, 0, 0, 0);
@@ -1068,12 +1184,22 @@ Window::Window(Engine *owner, McpServer *service, const QString &path)
     connect(tabs, &QWidget::customContextMenuRequested, this, &Window::tabMenu);
     connect(tabs, &QTabBar::currentChanged, this, &Window::activate);
     connect(tabs, &QTabBar::tabMoved, this, [this] { activate(tabs->currentIndex()); });
+    connect(tabs, &TearTabBar::tearRequested, this, [this](int index, const QPoint &position)
+    {
+        detachConnection(index, position, true);
+    });
     header->addWidget(tabs);
     plus = new IconButton("plus", "新建连接");
     plus->setObjectName("newConnection");
     connect(plus, &QAbstractButton::clicked, this, [this] { newConnection(); });
     header->addWidget(plus);
     header->addStretch();
+    if (primary)
+    {
+        auto dock = new IconButton("dock", "将本窗口的连接返回主工作台");
+        connect(dock, &QAbstractButton::clicked, this, &QWidget::close);
+        header->addWidget(dock);
+    }
     rightBody->addWidget(tabHeader);
     stack = new QStackedWidget();
     rightBody->addWidget(stack, 1);
@@ -1089,6 +1215,21 @@ Window::Window(Engine *owner, McpServer *service, const QString &path)
     connect(baud, &QComboBox::activated, this, [this] { applyBaud(); });
     connect(baud->lineEdit(), &QLineEdit::editingFinished, this, &Window::applyBaud);
     connect(port, &QComboBox::currentTextChanged, this, [this] { updateStatus(); });
+    for (auto control : {bits, parity, stopbits, flow})
+    {
+        connect(control, &QComboBox::activated, this, [this] { applyBaud(); });
+    }
+    connect(dtr, &QCheckBox::toggled, this, [this] { applyBaud(); });
+    connect(rts, &QCheckBox::toggled, this, [this] { applyBaud(); });
+    connect(connectionName, &QLineEdit::editingFinished, this, [this]
+    {
+        if (active && active->channel && !connectionName->text().trimmed().isEmpty())
+        {
+            active->channel->name = connectionName->text().trimmed();
+            active->channel->config.name = connectionName->text().trimmed();
+            syncConnections();
+        }
+    });
     newConnection();
     Config initial = Config::fromJson(saved["connection"].toObject());
     if (initial.port == "loop://")
@@ -1098,7 +1239,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path)
     active->draft = initial;
     loadForm(initial);
     active->restore(appearance);
-    applyTheme(theme.dark);
+    applyLocalTheme(theme.dark);
     connect(engine, &Engine::channelsChanged, this, &Window::syncConnections);
     timer.setInterval(40);
     settingsRefresh.start();
@@ -1109,7 +1250,8 @@ Window::Window(Engine *owner, McpServer *service, const QString &path)
             pane->tick();
         }
         updateStatus();
-        if (settingsDialog && settingsDialog->isVisible() && mcpConnections && settingsRefresh.elapsed() >= 250)
+        if (settingsDialog && mcpConnections && settingsRefresh.elapsed() >= 250
+            && (settingsDialog->isVisible() || mcpConnections->isVisible() || auditTable->isVisible()))
         {
             settingsRefresh.restart();
             mcpConnections->setUpdatesEnabled(false);
@@ -1135,12 +1277,117 @@ Window::Window(Engine *owner, McpServer *service, const QString &path)
     });
     timer.start();
     QTimer::singleShot(150, this, &Window::refreshPorts);
+    portTimer.setInterval(1000);
+    connect(&portTimer, &QTimer::timeout, this, &Window::refreshPorts);
+    portTimer.start();
     port->setFocus();
+}
+
+Window *Window::rootWindow()
+{
+    return primary ? primary : this;
+}
+
+Pane *Window::findPane(Channel *channel)
+{
+    for (auto hostWindow : rootWindow()->hosts)
+    {
+        if (!hostWindow)
+        {
+            continue;
+        }
+        for (auto pane : hostWindow->panes)
+        {
+            if (pane->channel == channel)
+            {
+                return pane;
+            }
+        }
+    }
+    return nullptr;
+}
+
+Window *Window::detachConnection(int index, const QPoint &position, bool systemMove)
+{
+    auto pane = tabPane(tabs, index);
+    if (!pane)
+    {
+        return nullptr;
+    }
+    auto detached = new Window(engine, mcp, settingsPath, rootWindow());
+    // Remove only the new window's unused placeholder; the real Pane is moved intact.
+    auto placeholder = detached->active;
+    detached->tabs->blockSignals(true);
+    detached->tabs->removeTab(0);
+    detached->tabs->blockSignals(false);
+    detached->stack->removeWidget(placeholder);
+    detached->panes.clear();
+    detached->active = nullptr;
+    delete placeholder;
+    transferPane(pane, detached);
+    detached->resize(1100, 760);
+    detached->move(position - QPoint(100, 14));
+    detached->show();
+    detached->raise();
+    detached->activateWindow();
+    if (systemMove)
+    {
+        beginNativeMove(detached);
+    }
+    return detached;
+}
+
+void Window::transferPane(Pane *pane, Window *target)
+{
+    if (!pane || target == this || !panes.contains(pane))
+    {
+        return;
+    }
+    if (active == pane && !pane->channel)
+    {
+        try
+        {
+            pane->draft = form();
+        }
+        catch (...)
+        {
+        }
+    }
+    pane->repeat->setChecked(false);
+    const QSignalBlocker blocker(tabs);
+    tabs->removeTab(paneIndex(tabs, pane));
+    panes.removeOne(pane);
+    stack->removeWidget(pane);
+    if (active == pane)
+    {
+        active = nullptr;
+    }
+    target->attachPane(pane);
+    if (!closing)
+    {
+        if (panes.isEmpty())
+        {
+            newConnection();
+        }
+        else
+        {
+            activate(tabs->currentIndex());
+        }
+    }
+    adjustTabs();
+    target->syncConnections();
 }
 
 Pane *Window::newConnection()
 {
     auto pane = new Pane(this);
+    attachPane(pane);
+    return pane;
+}
+
+void Window::attachPane(Pane *pane)
+{
+    pane->window = this;
     panes.append(pane);
     stack->addWidget(pane);
     tabs->blockSignals(true);
@@ -1155,12 +1402,12 @@ Pane *Window::newConnection()
     tabs->setCurrentIndex(index);
     activate(index);
     adjustTabs();
-    return pane;
+    pane->applyAppearance();
 }
 
 void Window::adjustTabs()
 {
-    tabs->setFixedWidth(std::min(tabs->sizeHint().width(), std::max(64, tabHeader->width() - 80)));
+    tabs->setFixedWidth(std::min(tabs->sizeHint().width(), std::max(64, tabHeader->width() - (primary ? 120 : 80))));
 }
 
 void Window::activate(int index)
@@ -1257,18 +1504,33 @@ void Window::protocolChanged()
 
 void Window::refreshPorts()
 {
+    const auto available = portProvider();
+    if ((portsLoaded && available == lastPorts) || port->view()->isVisible())
+    {
+        return;
+    }
+    portsLoaded = true;
+    lastPorts = available;
     const auto selected = port->currentText();
+    auto edit = port->lineEdit();
+    const int cursor = edit->cursorPosition();
+    const int start = edit->selectionStart();
+    const int length = edit->selectedText().size();
     const QSignalBlocker blocker(port);
+    const QSignalBlocker editBlocker(edit);
     port->clear();
     port->addItem("NULL");
-    for (const auto &value : Engine::ports())
+    for (const auto &value : available)
     {
         const auto item = value.toObject();
         port->addItem(item["port"].toString());
         port->setItemData(port->count() - 1, item["description"].toString(), Qt::ToolTipRole);
         port->setItemData(port->count() - 1, item["usb_serial_jtag"].toBool(), Qt::UserRole + 1);
     }
-    port->setCurrentText(selected.isEmpty() || selected == "loop://" ? "NULL" : selected);
+    port->setCurrentText(selected.isEmpty() ? "NULL" : selected);
+    edit->setCursorPosition(cursor);
+    if (start >= 0) { edit->setSelection(start, length); }
+    updateStatus();
 }
 
 void Window::connectionAction()
@@ -1285,41 +1547,42 @@ void Window::connectionAction()
         else
         {
             auto draft = active;
+            const QSignalBlocker engineBlocker(engine);
             syncing = true;
             auto channel = engine->open(config);
             syncing = false;
-            Pane *existing = nullptr;
-            for (auto pane : panes)
-            {
-                if (pane->channel == channel)
-                {
-                    existing = pane;
-                }
-            }
+            Pane *existing = findPane(channel);
             if (existing)
             {
-                tabs->setCurrentIndex(paneIndex(tabs, existing));
-                activate(paneIndex(tabs, existing));
+                auto hostWindow = existing->window;
+                hostWindow->tabs->setCurrentIndex(paneIndex(hostWindow->tabs, existing));
+                hostWindow->activate(paneIndex(hostWindow->tabs, existing));
+                hostWindow->showNormal();
+                hostWindow->raise();
+                hostWindow->activateWindow();
             }
             else if (!draft->channel)
             {
                 draft->setChannel(channel);
-                if (viewSettings.contains(config.key()))
+                if (rootWindow()->viewSettings.contains(config.key()))
                 {
-                    draft->restore(viewSettings[config.key()].toObject());
+                    draft->restore(rootWindow()->viewSettings[config.key()].toObject());
                 }
             }
             else
             {
                 auto pane = newConnection();
                 pane->setChannel(channel);
-                if (viewSettings.contains(config.key()))
+                if (rootWindow()->viewSettings.contains(config.key()))
                 {
-                    pane->restore(viewSettings[config.key()].toObject());
+                    pane->restore(rootWindow()->viewSettings[config.key()].toObject());
                 }
                 loadForm(config);
             }
-            syncConnections();
+            for (auto hostWindow : rootWindow()->hosts)
+            {
+                if (hostWindow) { hostWindow->syncConnections(); }
+            }
         }
     }
     catch (const std::exception &exception)
@@ -1386,6 +1649,10 @@ void Window::syncConnections()
         }
         if (!pane)
         {
+            if (primary || findPane(channel))
+            {
+                continue;
+            }
             const auto previous = active;
             pane = newConnection();
             pane->restore(viewSettings[channel->config.key()].toObject());
@@ -1434,7 +1701,7 @@ void Window::closeTab(int index)
     }
     if (pane->channel)
     {
-        viewSettings[pane->channel->config.key()] = pane->settings();
+        rootWindow()->viewSettings[pane->channel->config.key()] = pane->settings();
         engine->remove(pane->channel->id);
         return;
     }
@@ -1494,68 +1761,20 @@ void Window::updateStatus()
     mcpStatus->setToolTip(mcp->error.isEmpty() ? mcp->url() : mcp->error);
 }
 
-void Window::advancedSettings()
+void Window::applyTheme(bool dark)
 {
-    Config before;
-    try
+    if (primary)
     {
-        before = form();
-    }
-    catch (const std::exception &exception)
-    {
-        error(QString::fromUtf8(exception.what()));
+        primary->applyTheme(dark);
         return;
     }
-    QDialog dialog(this);
-    dialog.setWindowTitle("连接参数");
-    dialog.resize(380, 430);
-    auto body = new QVBoxLayout(&dialog);
-    body->setContentsMargins(24, 20, 24, 20);
-    auto formLayout = new QFormLayout();
-    formLayout->setVerticalSpacing(12);
-    formLayout->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    formLayout->addRow("名称", connectionName);
-    formLayout->addRow("数据位", bits);
-    formLayout->addRow("校验位", parity);
-    formLayout->addRow("停止位", stopbits);
-    formLayout->addRow("流控", flow);
-    formLayout->addRow(dtr);
-    formLayout->addRow(rts);
-    body->addLayout(formLayout);
-    auto note = label("应用时检查驱动返回值；串口连接期间无需重新打开端口。", "muted");
-    note->setWordWrap(true);
-    body->addWidget(note);
-    auto apply = button("应用", "primary");
-    body->addWidget(apply);
-    connect(apply, &QPushButton::clicked, &dialog, &QDialog::accept);
-    for (auto control : QList<QWidget *> {connectionName, bits, parity, stopbits, flow, dtr, rts})
+    for (auto hostWindow : hosts)
     {
-        control->show();
-    }
-    const bool accepted = dialog.exec() == QDialog::Accepted;
-    if (accepted)
-    {
-        applyBaud();
-        if (active->channel && !connectionName->text().trimmed().isEmpty())
-        {
-            active->channel->name = connectionName->text().trimmed();
-            active->channel->config.name = connectionName->text().trimmed();
-            syncConnections();
-        }
-    }
-    else
-    {
-        loadForm(before);
-    }
-    for (auto control : QList<QWidget *> {connectionName, bits, parity, stopbits, flow, dtr, rts})
-    {
-        formLayout->removeWidget(control);
-        control->setParent(this);
-        control->hide();
+        if (hostWindow) { hostWindow->applyLocalTheme(dark); }
     }
 }
 
-void Window::applyTheme(bool dark)
+void Window::applyLocalTheme(bool dark)
 {
     theme = Theme::make(dark);
     setStyleSheet(theme.stylesheet());
@@ -1585,11 +1804,18 @@ void Window::applyTheme(bool dark)
 
 void Window::setDataFont(const QFont &font)
 {
+    if (primary)
+    {
+        primary->setDataFont(font);
+        return;
+    }
     dataFont = font;
     dataFont.setPointSize(qBound(8, font.pointSize(), 32));
-    for (auto pane : panes)
+    for (auto hostWindow : hosts)
     {
-        pane->applyAppearance();
+        if (!hostWindow) { continue; }
+        hostWindow->dataFont = dataFont;
+        for (auto pane : hostWindow->panes) { pane->applyAppearance(); }
     }
 }
 
@@ -1633,6 +1859,10 @@ void Window::tabMenu(const QPoint &point)
         menu.addAction("导出日志…", pane, &Pane::exportLog);
     }
     menu.addAction("清空显示", pane, &Pane::clearView);
+    menu.addAction("移至独立窗口", this, [this, pane]
+    {
+        detachConnection(paneIndex(tabs, pane), QCursor::pos());
+    });
     menu.addSeparator();
     menu.addAction("关闭连接", this, [this, pane] { closeTab(paneIndex(tabs, pane)); });
     menu.exec(tabs->mapToGlobal(point));
@@ -1640,11 +1870,20 @@ void Window::tabMenu(const QPoint &point)
 
 void Window::saveSettings()
 {
-    for (auto pane : panes)
+    if (primary)
     {
-        if (pane->channel)
+        primary->saveSettings();
+        return;
+    }
+    for (auto hostWindow : hosts)
+    {
+        if (!hostWindow) { continue; }
+        for (auto pane : hostWindow->panes)
         {
-            viewSettings[pane->channel->config.key()] = pane->settings();
+            if (pane->channel)
+            {
+                viewSettings[pane->channel->config.key()] = pane->settings();
+            }
         }
     }
     QJsonObject appearance = active ? active->settings() : QJsonObject();
@@ -1680,19 +1919,112 @@ void Window::resizeEvent(QResizeEvent *event)
 {
     QMainWindow::resizeEvent(event);
     QTimer::singleShot(0, this, &Window::adjustTabs);
+    QTimer::singleShot(0, this, &Window::arrangeParameters);
+}
+
+void Window::arrangeParameters()
+{
+    auto scroll = findChild<QScrollArea *>("parameterScroll");
+    if (!scroll || !centralWidget())
+    {
+        return;
+    }
+    auto body = qobject_cast<QHBoxLayout *>(centralWidget()->layout());
+    const bool narrow = width() < 900;
+    const bool floating = body->indexOf(scroll) < 0;
+    if (narrow && !floating)
+    {
+        body->removeWidget(scroll);
+        scroll->hide();
+        const QSignalBlocker blocker(parameterToggle);
+        parameterToggle->setChecked(false);
+    }
+    else if (!narrow && floating)
+    {
+        body->insertWidget(1, scroll);
+        scroll->setVisible(parametersVisible);
+        const QSignalBlocker blocker(parameterToggle);
+        parameterToggle->setChecked(parametersVisible);
+    }
+    if (narrow)
+    {
+        scroll->setGeometry(54, 0, 246, centralWidget()->height());
+        scroll->raise();
+    }
+    status->setMaximumWidth(qMax(80, width() - (narrow ? 70 : 210)));
+    mcpStatus->setVisible(!narrow);
+    body->activate();
+    QTimer::singleShot(0, this, &Window::adjustTabs);
 }
 
 void Window::closeEvent(QCloseEvent *event)
 {
     closing = true;
     timer.stop();
+    portTimer.stop();
+    if (primary)
+    {
+        if (!primary->closing)
+        {
+            for (auto pane : QList<Pane *>(panes))
+            {
+                transferPane(pane, primary);
+            }
+            primary->raise();
+        }
+        primary->hosts.removeAll(this);
+        event->accept();
+        return;
+    }
     saveSettings();
+    for (auto hostWindow : QList<QPointer<Window>>(hosts))
+    {
+        if (hostWindow && hostWindow != this)
+        {
+            hostWindow->close();
+        }
+    }
+    for (auto tabs : findChildren<DetachableTabs *>())
+    {
+        tabs->restoreAll();
+    }
     engine->allowControl = false;
     for (auto channel : engine->channels)
     {
         channel->close();
     }
     event->accept();
+}
+
+bool Window::nativeEvent(const QByteArray &type, void *message, qintptr *result)
+{
+#ifdef Q_OS_WIN
+    const auto native = static_cast<MSG *>(message);
+    if (primary && native->message == WM_EXITSIZEMOVE)
+    {
+        for (auto target : primary->hosts)
+        {
+            if (target && target != this && cursorOver(target->tabs, QCursor::pos()))
+            {
+                QPointer<Window> guarded(target);
+                QTimer::singleShot(0, this, [this, guarded] {
+                    if (!guarded)
+                    {
+                        return;
+                    }
+                    closing = true;
+                    for (auto pane : QList<Pane *>(panes))
+                    {
+                        transferPane(pane, guarded);
+                    }
+                    close();
+                });
+                break;
+            }
+        }
+    }
+#endif
+    return QMainWindow::nativeEvent(type, message, result);
 }
 
 void Window::waveHelp()
@@ -1730,7 +2062,7 @@ void Window::openSettings()
     settingsDialog->resize(920, 680);
     auto body = new QVBoxLayout(settingsDialog);
     body->setContentsMargins(20, 16, 20, 16);
-    auto pages = new QTabWidget();
+    auto pages = new DetachableTabs();
     auto appearance = new QWidget();
     auto appearanceBody = new QVBoxLayout(appearance);
     appearanceBody->setContentsMargins(20, 24, 20, 20);
@@ -1788,7 +2120,7 @@ void Window::openSettings()
     mcpBody->addWidget(permission);
     mcpSummary = label("界面与 AI 共享同一连接，各自读取，不会消耗对方的数据。", "muted");
     mcpBody->addWidget(mcpSummary);
-    auto mcpTabs = new QTabWidget();
+    auto mcpTabs = new DetachableTabs();
     mcpConnections = new QTreeWidget();
     mcpConnections->setRootIsDecorated(false);
     mcpConnections->setHeaderLabels({"连接", "协议", "状态", "连接 ID", "RX / TX"});

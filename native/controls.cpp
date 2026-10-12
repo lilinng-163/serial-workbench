@@ -39,6 +39,7 @@ QString Theme::stylesheet() const
         QLabel#brand { font-weight: 600; font-size: 13px; }
         QLineEdit, QComboBox, QSpinBox { background: $panel; border: 1px solid $line; border-radius: 6px; padding: 6px 10px; min-height: 22px; }
         QLineEdit:focus, QComboBox:focus, QSpinBox:focus { border-color: $accent; }
+        QLineEdit#searchBox { border-radius: 16px; padding: 5px 8px; background: $side; }
         QComboBox { padding-right: 28px; }
         QComboBox::drop-down { border: none; width: 28px; }
         QComboBox::down-arrow { image: none; }
@@ -65,6 +66,8 @@ QString Theme::stylesheet() const
         QHeaderView::section { background: $side; border: none; border-bottom: 1px solid $line; padding: 9px 8px; color: $muted; }
         QTabWidget::pane { border: none; border-top: 1px solid $line; background: $panel; }
         QTabBar { background: transparent; }
+        QTabBar QToolButton { background: $side; border: none; padding: 0; min-height: 0; border-radius: 4px; }
+        QTabBar::scroller { width: 48px; }
         QTabBar::tab { background: transparent; padding: 10px 12px; border-bottom: 2px solid transparent; color: $muted; }
         QTabBar::tab:selected { color: $accent; border-bottom-color: $accent; background: $panel; }
         QTabBar::tab:hover { background: $hover; }
@@ -124,6 +127,44 @@ void drawIcon(QPainter &p, const QString &name, QRectF rect, const QColor &color
     {
         p.drawLine(-7, 0, 7, 0);
         p.drawLine(0, -7, 0, 7);
+    }
+    else if (name == "clock")
+    {
+        p.drawEllipse(QPointF(), 8, 8);
+        p.drawLine(0, -5, 0, 0);
+        p.drawLine(0, 0, 4, 2);
+    }
+    else if (name == "hex")
+    {
+        p.setFont(QFont("Cascadia Mono", 11, QFont::DemiBold));
+        p.drawText(QRectF(-12, -12, 24, 24), Qt::AlignCenter, "0x");
+    }
+    else if (name == "terminal")
+    {
+        p.drawRoundedRect(QRectF(-9, -8, 18, 16), 3, 3);
+        p.drawPolyline(QPolygonF {QPointF(-5, -3), QPointF(-2, 0), QPointF(-5, 3)});
+        p.drawLine(1, 3, 5, 3);
+    }
+    else if (name == "cursor")
+    {
+        p.drawLine(-3, -8, 3, -8);
+        p.drawLine(0, -8, 0, 8);
+        p.drawLine(-3, 8, 3, 8);
+    }
+    else if (name == "dock")
+    {
+        p.drawRoundedRect(QRectF(-9, -8, 18, 16), 2, 2);
+        p.drawLine(-9, -3, 9, -3);
+        p.drawLine(5, 2, -4, 2);
+        p.drawPolyline(QPolygonF {QPointF(-1, -1), QPointF(-4, 2), QPointF(-1, 5)});
+    }
+    else if (name == "widgets")
+    {
+        p.drawRoundedRect(QRectF(-8, -8, 6, 6), 1, 1);
+        p.drawRoundedRect(QRectF(2, -8, 6, 6), 1, 1);
+        p.drawRoundedRect(QRectF(-8, 2, 6, 6), 1, 1);
+        p.drawLine(5, 2, 5, 8);
+        p.drawLine(2, 5, 8, 5);
     }
     else if (name == "close")
     {
@@ -291,7 +332,82 @@ void Combo::paintEvent(QPaintEvent *event)
     p.drawPolyline(QPolygonF {center + QPointF(-3, -1.5), center + QPointF(0, 1.5), center + QPointF(3, -1.5)});
 }
 
-ConnectionBar::ConnectionBar(QWidget *parent) : QTabBar(parent)
+ProtocolCombo::ProtocolCombo(QWidget *parent) : Combo(parent)
+{
+    addItems({"串口", "TCP 客户端", "TCP 服务端", "UDP"});
+    setObjectName("protocolSelector");
+}
+
+void Combo::showPopup()
+{
+    if (!menuPopup)
+    {
+        QComboBox::showPopup();
+        return;
+    }
+    auto menu = new QMenu(this);
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    menu->setMinimumWidth(width());
+    for (int i = 0; i < count(); ++i)
+    {
+        const auto description = itemData(i, Qt::ToolTipRole).toString();
+        auto action = menu->addAction(description.isEmpty() ? itemText(i) : description);
+        action->setCheckable(true);
+        action->setChecked(i == currentIndex());
+        connect(action, &QAction::triggered, this, [this, i]
+        {
+            setCurrentIndex(i);
+            emit activated(i);
+        });
+    }
+    menu->popup(mapToGlobal(QPoint(0, height() + 5)));
+    auto fade = new QPropertyAnimation(menu, "windowOpacity", menu);
+    fade->setDuration(110);
+    fade->setStartValue(0.0);
+    fade->setEndValue(1.0);
+    fade->setEasingCurve(QEasingCurve::OutCubic);
+    fade->start(QAbstractAnimation::DeleteWhenStopped);
+}
+
+void ProtocolCombo::showPopup()
+{
+    menuPopup = true;
+    Combo::showPopup();
+}
+
+SearchBox::SearchBox(QWidget *parent) : QLineEdit(parent)
+{
+    setObjectName("searchBox");
+    setClearButtonEnabled(false);
+    setTextMargins(23, 0, 24, 0);
+    setMinimumWidth(70);
+    setMaximumWidth(250);
+    clearButton = new IconButton("close", "清空搜索", this);
+    clearButton->setObjectName("clearSearch");
+    clearButton->setFixedSize(24, 24);
+    clearButton->hide();
+    clearButton->setFocusPolicy(Qt::NoFocus);
+    connect(clearButton, &QAbstractButton::clicked, this, [this] { clear(); setFocus(); });
+    connect(this, &QLineEdit::textChanged, clearButton, [this](const QString &text)
+    {
+        clearButton->setVisible(!text.isEmpty());
+    });
+}
+
+void SearchBox::resizeEvent(QResizeEvent *event)
+{
+    QLineEdit::resizeEvent(event);
+    clearButton->move(width() - clearButton->width() - 5, (height() - clearButton->height()) / 2);
+}
+
+void SearchBox::paintEvent(QPaintEvent *event)
+{
+    QLineEdit::paintEvent(event);
+    QPainter painter(this);
+    drawIcon(painter, "search", QRectF(11, (height() - 16) / 2.0, 16, 16), palette().color(QPalette::Mid));
+}
+
+ConnectionBar::ConnectionBar(QWidget *parent) : TearTabBar(parent)
 {
     setObjectName("connections");
     setDrawBase(false);

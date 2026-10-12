@@ -43,7 +43,7 @@ async def check(url, bridge, allow):
     async with streamable_http_client(url) as (read, write, _):
         async with ClientSession(read, write) as client:
             initialized = await client.initialize()
-            assert initialized.serverInfo.version == "0.7.0"
+            assert initialized.serverInfo.version == "0.8.0"
             assert len((await client.list_tools()).tools) == 9
             status = unpack(await client.call_tool("get_status"))
             assert status["implementation"] == "Qt C++"
