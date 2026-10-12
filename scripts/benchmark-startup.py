@@ -6,12 +6,13 @@ from pathlib import Path
 import socket
 import statistics
 import subprocess
+import sys
 import tempfile
 import time
 
-from smoke_native import close_window
-
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tests" / "integration"))
+from smoke_native import close_window
 user32 = ctypes.windll.user32
 callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 
@@ -35,7 +36,7 @@ def visible_window(pid):
 
 
 results = {}
-for name, folder in (("Python 0.6.0", "SerialWorkbench"), ("Qt C++ 0.7.0", "SerialWorkbenchNative")):
+for name, folder in (("Python legacy", "SerialWorkbench"), ("Qt C++", "SerialWorkbenchNative")):
     samples = []
     for run in range(3):
         with tempfile.TemporaryDirectory(dir=ROOT / "build") as temporary:

@@ -11,7 +11,7 @@ QString Theme::fontFamily(int pixels)
         QMap<int, QString> loaded;
         for (int size : {8, 12})
         {
-            const auto path = QString(":/native/fonts/fusion-pixel-%1px-monospaced-zh_hans.otf").arg(size);
+            const auto path = QString(":/fonts/fusion-pixel-%1px-monospaced-zh_hans.otf").arg(size);
             const int id = QFontDatabase::addApplicationFont(path);
             const auto names = QFontDatabase::applicationFontFamilies(id);
             loaded[size] = names.isEmpty() ? QString("Consolas") : names.first();
@@ -23,16 +23,19 @@ QString Theme::fontFamily(int pixels)
 
 QFont Theme::interfaceFont()
 {
-    QFont font(fontFamily(), 12);
-    font.setStyleStrategy(QFont::NoAntialias);
+    QFont font("Microsoft YaHei UI");
+    font.setPixelSize(14);
+    font.setStyleStrategy(QFont::PreferAntialias);
     return font;
 }
 
 QFont Theme::defaultDataFont()
 {
-    QFont font(fontFamily(12), 18);
+    const auto families = QFontDatabase::families();
+    QFont font(families.contains("Cascadia Mono") ? "Cascadia Mono" : "Consolas", 12);
     font.setStyleHint(QFont::Monospace);
-    font.setStyleStrategy(QFont::NoAntialias);
+    font.setFixedPitch(true);
+    font.setStyleStrategy(QFont::PreferAntialias);
     return font;
 }
 
@@ -62,7 +65,7 @@ Theme Theme::make(bool dark)
 QString Theme::stylesheet() const
 {
     QString s = R"(
-        QWidget { color: $text; font-family: "$font"; font-size: 16px; font-weight: normal; }
+        QWidget { color: $text; font-family: "$font"; font-size: 14px; font-weight: normal; }
         QMainWindow, QDialog, QWidget#root { background: $bg; }
         QFrame#sidebar { background: $side; border-right: 2px solid $edge; }
         QFrame#rail { background: $rail; border-right: 2px solid $rail; }
@@ -71,15 +74,15 @@ QString Theme::stylesheet() const
         QWidget#monitorToolbar { background: $side; border-bottom: 1px solid $line; }
         QWidget#sender { background: $side; border-top: 1px solid $line; }
         QLabel { background: transparent; border: none; }
-        QLabel#muted { color: $muted; font-size: 16px; }
-        QLabel#section { font-size: 16px; color: $text; padding: 0 0 8px 0; border-bottom: 2px solid $edge; }
-        QLabel#brand { font-size: 16px; }
+        QLabel#muted { color: $muted; font-size: 13px; }
+        QLabel#section { font-size: 14px; font-weight: 600; color: $text; padding: 0 0 8px 0; border-bottom: 2px solid $edge; }
+        QLabel#brand { font-size: 14px; }
         QLabel#themeTitle { font-size: 24px; }
         QWidget#pixelBrand { background: $rail; border: 2px solid $rail; border-bottom: 4px solid $edge; }
-        QLabel#brandTitle { color: #f6f4e8; font-size: 24px; }
-        QLabel#brandSubtitle { color: #d7dfc4; font-size: 16px; }
-        QLabel#brandMark { color: #edaa50; font-size: 24px; }
-        QLabel#senderLabel { color: $muted; font-size: 16px; }
+        QLabel#brandTitle { color: #f6f4e8; font-family: "$pixelFont"; font-size: 24px; }
+        QLabel#brandSubtitle { color: #d7dfc4; font-size: 13px; }
+        QLabel#brandMark { color: #edaa50; font-family: "$pixelFont"; font-size: 24px; }
+        QLabel#senderLabel { color: $muted; font-size: 13px; }
         QLabel#connectionHint { color: $muted; padding: 10px 0 0 0; border-top: 1px solid $line; }
         QLineEdit, QComboBox, QSpinBox { background: $panel; border: 1px solid $edge; border-bottom-width: 2px; border-radius: 0; padding: 6px 10px; min-height: 22px; selection-background-color: $accent; selection-color: $onaccent; }
         QLineEdit:hover, QComboBox:hover, QSpinBox:hover { border-color: $text; }
@@ -96,8 +99,8 @@ QString Theme::stylesheet() const
         QComboBox QAbstractItemView::item { min-height: 28px; padding: 4px 8px; }
         QSpinBox { padding-right: 22px; }
         QSpinBox::up-button, QSpinBox::down-button { width: 20px; border: none; }
-        QSpinBox::up-arrow { image: url(:/native/chevron-up.svg); width: 8px; height: 5px; }
-        QSpinBox::down-arrow { image: url(:/native/chevron-down.svg); width: 8px; height: 5px; }
+        QSpinBox::up-arrow { image: url(:/icons/chevron-up.svg); width: 8px; height: 5px; }
+        QSpinBox::down-arrow { image: url(:/icons/chevron-down.svg); width: 8px; height: 5px; }
         QPushButton, QToolButton { background: transparent; border: 1px solid transparent; border-radius: 0; padding: 6px 12px; min-height: 22px; }
         QPushButton:hover, QToolButton:hover { background: $hover; border-color: $edge; }
         QPushButton:checked { background: $hover; border-color: $edge; }
@@ -131,11 +134,11 @@ QString Theme::stylesheet() const
         QMenu::item { padding: 10px 28px 10px 16px; border: 1px solid transparent; }
         QMenu::item:selected { background: $hover; border-color: $edge; }
         QMenu::separator { height: 1px; background: $line; margin: 5px 8px; }
-        QMenu::indicator:checked { image: url(:/native/check.svg); background: $accent; width: 12px; height: 12px; }
+        QMenu::indicator:checked { image: url(:/icons/check.svg); background: $accent; width: 12px; height: 12px; }
         QCheckBox { spacing: 7px; background: transparent; }
         QCheckBox::indicator { width: 14px; height: 14px; border: 1px solid $edge; border-bottom-width: 2px; background: $panel; }
         QCheckBox::indicator:hover { border-color: $accent; }
-        QCheckBox::indicator:checked { border-color: $text; background: $accent; image: url(:/native/check.svg); }
+        QCheckBox::indicator:checked { border-color: $text; background: $accent; image: url(:/icons/check.svg); }
         QScrollArea { border: none; background: transparent; }
         QScrollBar:vertical { background: $side; width: 10px; margin: 0; }
         QScrollBar:horizontal { background: $side; height: 10px; margin: 0; }
@@ -147,7 +150,8 @@ QString Theme::stylesheet() const
         QStatusBar::item { border: none; }
         QToolTip { background: $panel; color: $text; border: 2px solid $edge; padding: 6px; }
     )";
-    const QMap<QString, QString> colors{{"$font", fontFamily()},
+    const QMap<QString, QString> colors{{"$font", interfaceFont().family()},
+                                      {"$pixelFont", fontFamily()},
                                         {"$text", text.name()},
                                         {"$muted", muted.name()},
                                         {"$side", sidebar.name()},

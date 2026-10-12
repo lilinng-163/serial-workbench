@@ -5,7 +5,8 @@ build/
 dist/
 .codebase-memory/
 *.spec
-!SerialWorkbench.spec
-!SerialWorkbenchMCP.spec
+!legacy/python/SerialWorkbench.spec
+!legacy/python/SerialWorkbenchMCP.spec
 *.log
 settings.json
+CMakeUserPresets.json

@@ -15,7 +15,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamable_http_client
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def unpack(result):
@@ -39,13 +39,15 @@ def close_window(process):
     process.wait(timeout=10)
 
 
-async def check(url, bridge, allow):
+async def check(url, bridge, allow, expected_version=None):
     async with streamable_http_client(url) as (read, write, _):
         async with ClientSession(read, write) as client:
             initialized = await client.initialize()
-            assert initialized.serverInfo.version == "0.9.0"
+            if expected_version:
+                assert initialized.serverInfo.version == expected_version
             assert len((await client.list_tools()).tools) == 9
             status = unpack(await client.call_tool("get_status"))
+            assert status["version"] == initialized.serverInfo.version
             assert status["implementation"] == "Qt C++"
             assert status["allow_ai_control"] is allow
             assert status["process"]["username"]
@@ -103,6 +105,7 @@ async def check(url, bridge, allow):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--app-dir", type=Path, default=ROOT / "dist" / "SerialWorkbenchNative")
+    parser.add_argument("--expected-version")
     args = parser.parse_args()
     executable = args.app_dir.resolve() / "SerialWorkbench.exe"
     for allow in (False, True):
@@ -124,7 +127,7 @@ def main():
                 else:
                     raise TimeoutError("Native MCP did not start")
                 time.sleep(0.3)
-                asyncio.run(check(f"http://127.0.0.1:{port}/mcp", executable.with_name("SerialWorkbenchMCP.exe"), allow))
+                asyncio.run(check(f"http://127.0.0.1:{port}/mcp", executable.with_name("SerialWorkbenchMCP.exe"), allow, args.expected_version))
             finally:
                 close_window(process)
 

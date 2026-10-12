@@ -2,17 +2,17 @@
 
 一个面向嵌入式开发的 Windows 串口与网络调试助手。人在界面查看数据，Codex、Claude、OpenCode 等 AI 通过 MCP 同时读取同一份数据，无需再次打开串口。
 
-当前版本：0.9.0，Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
+当前版本：0.10.0，Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
 
 ![像素掌机主题工作台](docs/pixel-workspace.png)
 
-默认采用「像素掌机」主题：灰绿面板、深绿侧栏和琥珀按键。中文点阵字体随程序内置，
-无需安装；设置中可选择浅色或深色，并可单独调整数据区字体、字号或恢复像素默认。
-收发区默认使用较大的 24px 点阵字形，便于读数。
+默认采用「像素掌机」主题：灰绿面板、深绿侧栏和琥珀按键。菜单、参数和说明采用平滑的微软雅黑 UI，收发数据采用等宽字体。像素字体仅保留在品牌标题，
+让像素风与长时间阅读兼顾。设置中可选择浅色或深色，单独调整数据字体、字号或恢复推荐字体。
+旧版默认点阵数据字体自动迁移，其他自选字体保留。
 
 ## 启动
 
-双击 `start.bat` 或 `start-native.bat` 启动原生版；也可直接运行 `dist/SerialWorkbenchNative/SerialWorkbench.exe`。
+双击根目录 `start.bat` 或 `scripts/start.bat` 启动原生版；也可直接运行 `dist/SerialWorkbenchNative/SerialWorkbench.exe`。
 
 分发时复制整个 `SerialWorkbenchNative` 文件夹，保留 Qt DLL 和插件目录。`SerialWorkbenchMCP.exe` 是原生 STDIO 桥接程序。首次启动默认端口为 `NULL`，不会自动连接设备。
 
@@ -222,16 +222,21 @@ claude mcp add --transport http serial-workbench http://127.0.0.1:8765/mcp
 
 ```powershell
 # 配置、编译、原生测试、部署 Qt 运行库
-.\build-native.ps1
+# 配置本机工具链，也可使用脚本的 -QtRoot / -CompilerBin 参数
+$env:QTDIR = 'D:/lib/Qt/6.11.1/mingw_64'
+$env:MINGW_BIN = 'D:/lib/Qt/Tools/mingw1310_64/bin'
+.\scripts\build.ps1
 
 # 打包后的 HTTP / STDIO 集成测试，需要 Python MCP SDK
-.\.venv\Scripts\python.exe tests/smoke_native.py
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.10.0
 ```
 
 测试覆盖独立读取与分页、真实 TCP/UDP socket、软件串口回环及重配置、UTF-8/GBK 分片解析、ANSI 颜色与终端、连接标签和布局、设置恢复、MCP HTTP/STDIO、权限、非阻塞等待和错误参数。实际 COM 硬件、USB 设备的实际线速及各 AI 客户端的完整对话需要在对应环境验证。
 
-原生入口在 `native/main.cpp`；连接、数据历史和解析在 `native/core.cpp`，MCP 在 `native/mcp.cpp`，STDIO 桥在 `native/bridge.cpp`，工作台与设置在 `native/window.cpp`，标签分离和系统窗口移动在 `native/docking.cpp`，矢量图标及波形绘制在 `native/controls.cpp`，日志与终端在 `native/terminal.cpp`。程序目录的 `settings.json` 保存表单、模板、外观、各连接视图及 AI 权限，启动时不自动打开设备。
+工程按职责组织：`src/app/` 为桌面入口，`src/core/` 为连接与数据处理，`src/mcp/` 为共享 MCP 服务，`src/ui/` 为界面与控件，`src/bridge/` 为 STDIO 桥。资源在 `resources/`，构建脚本在 `scripts/`，测试在 `tests/`，CMake 公共规则在 `cmake/`。构建产物仅放入 `build/`，分发产物放入 `dist/`。详细目录、CMake 目标和手动构建方式见 [工程结构](docs/project-structure.md)。
 
-0.9.0 的主题规则和验证结果见 [像素主题说明](docs/pixel-theme.md)。独立窗口及 Windows 11 布局实现验证见 [0.8.0 验证记录](docs/workspace-0.8-validation.md)。
+程序目录的 `settings.json` 保存表单、模板、外观、各连接视图及 AI 权限，启动时不自动打开设备。
 
-旧 Python 实现保留在 `serial_assistant/`，`run.py` 可单独启动；历史打包版位于 `dist/SerialWorkbench/`，供回退使用。原生迁移在 `feat/qt-native-workbench` 分支开发，Python 0.6.0 基线提交为 `7e74c8c`。
+主题与字体规则见 [像素主题说明](docs/pixel-theme.md)。独立窗口及 Windows 11 布局实现验证见 [0.8.0 验证记录](docs/workspace-0.8-validation.md)。
+
+旧 Python 实现及其测试、依赖和打包脚本完整归档至 [legacy/python](legacy/python/README.md)。历史打包版仍位于 `dist/SerialWorkbench/`，供回退使用；Python 0.6.0 基线提交为 `7e74c8c`。

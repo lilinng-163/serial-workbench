@@ -120,7 +120,7 @@ void LogView::paintEvent(QPaintEvent *event)
     drawIcon(painter, "port", badge.adjusted(8, 8, -8, -8), theme.green);
 
     QFont title = Theme::interfaceFont();
-    title.setPixelSize(24);
+    title.setPixelSize(22);
     painter.setFont(title);
     painter.setPen(theme.text);
     painter.drawText(QRect(0, top + 82, viewport()->width(), 30), Qt::AlignCenter, "等待设备数据");

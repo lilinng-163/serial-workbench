@@ -1,0 +1,35 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "windows-release",
+      "displayName": "Windows / Qt MinGW / Release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/native-release",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_PREFIX_PATH": "$env{QTDIR}",
+        "CMAKE_CXX_COMPILER": "$env{MINGW_BIN}/g++.exe",
+        "BUILD_TESTING": true
+      },
+      "environment": { "PATH": "$env{MINGW_BIN};$env{QTDIR}/bin;$penv{PATH}" }
+    },
+    {
+      "name": "windows-debug",
+      "displayName": "Windows / Qt MinGW / Debug",
+      "inherits": "windows-release",
+      "binaryDir": "${sourceDir}/build/native-debug",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "windows-release", "configurePreset": "windows-release" },
+    { "name": "windows-debug", "configurePreset": "windows-debug" }
+  ],
+  "testPresets": [
+    { "name": "windows-release", "configurePreset": "windows-release", "output": { "outputOnFailure": true } },
+    { "name": "windows-debug", "configurePreset": "windows-debug", "output": { "outputOnFailure": true } }
+  ]
+}

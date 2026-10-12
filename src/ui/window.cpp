@@ -1026,13 +1026,13 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     theme = Theme::make(appearance["theme"] == "dark");
     dataFont = Theme::defaultDataFont();
     const auto savedFamily = appearance["font_family"].toString();
-    const bool previousDefault = !appearance.contains("pixel_theme")
-        && savedFamily == "Cascadia Mono" && appearance["font_size"].toInt(11) == 11;
+    const bool previousDefault = !appearance["readable_type"].toBool()
+        && savedFamily == Theme::fontFamily(12) && appearance["font_size"].toInt() == 18;
     if (!savedFamily.isEmpty() && !previousDefault)
     {
         dataFont.setFamily(savedFamily);
-        dataFont.setPointSize(qBound(8, appearance["font_size"].toInt(18), 32));
-        dataFont.setStyleStrategy(savedFamily.startsWith("Fusion Pixel") ? QFont::NoAntialias : QFont::PreferDefault);
+        dataFont.setPointSize(qBound(8, appearance["font_size"].toInt(12), 32));
+        dataFont.setStyleStrategy(savedFamily.startsWith("Fusion Pixel") ? QFont::NoAntialias : QFont::PreferAntialias);
     }
     if (!primary)
     {
@@ -1859,7 +1859,7 @@ void Window::setDataFont(const QFont &font)
     }
     dataFont = font;
     dataFont.setPointSize(qBound(8, font.pointSize(), 32));
-    dataFont.setStyleStrategy(dataFont.family().startsWith("Fusion Pixel") ? QFont::NoAntialias : QFont::PreferDefault);
+    dataFont.setStyleStrategy(dataFont.family().startsWith("Fusion Pixel") ? QFont::NoAntialias : QFont::PreferAntialias);
     for (auto hostWindow : hosts)
     {
         if (!hostWindow) { continue; }
@@ -1938,6 +1938,7 @@ void Window::saveSettings()
     QJsonObject appearance = active ? active->settings() : QJsonObject();
     appearance["theme"] = theme.dark ? "dark" : "light";
     appearance["pixel_theme"] = true;
+    appearance["readable_type"] = true;
     appearance["font_family"] = dataFont.family();
     appearance["font_size"] = dataFont.pointSize();
     QJsonObject connection = saved["connection"].toObject();
@@ -2117,7 +2118,7 @@ void Window::openSettings()
     auto appearanceBody = new QVBoxLayout(appearance);
     appearanceBody->setContentsMargins(20, 24, 20, 20);
     appearanceBody->addWidget(label("像素掌机", "themeTitle"));
-    appearanceBody->addWidget(label("灰绿屏幕 / 琥珀按键 / 点阵字形", "muted"));
+    appearanceBody->addWidget(label("灰绿面板 / 琥珀按键 / 清晰文字", "muted"));
     appearanceBody->addSpacing(20);
     auto formLayout = new QFormLayout();
     formLayout->setVerticalSpacing(18);
@@ -2148,7 +2149,7 @@ void Window::openSettings()
     formLayout->addRow("数据字体", font);
     formLayout->addRow("数据字号", size);
     appearanceBody->addLayout(formLayout);
-    auto resetFont = button("恢复像素字体", "outline");
+    auto resetFont = button("恢复推荐字体", "outline");
     connect(resetFont, &QPushButton::clicked, this, [this, font, size]
     {
         setDataFont(Theme::defaultDataFont());
@@ -2157,7 +2158,7 @@ void Window::openSettings()
         size->setValue(dataFont.pointSize());
     });
     appearanceBody->addWidget(resetFont, 0, Qt::AlignLeft);
-    appearanceBody->addWidget(label("界面使用内置中文像素字体。数据区可自选字体，Ctrl + 滚轮调整字号。", "muted"));
+    appearanceBody->addWidget(label("界面使用清晰中文字体，像素字仅用于品牌标题。数据区可自选字体，Ctrl + 滚轮调整字号。", "muted"));
     appearanceBody->addStretch();
     pages->addTab(appearance, "外观");
 

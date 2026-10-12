@@ -1,0 +1,3 @@
+#pragma once
+
+#define SERIAL_WORKBENCH_VERSION "@PROJECT_VERSION@"

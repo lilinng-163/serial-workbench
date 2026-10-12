@@ -1,36 +1,34 @@
 cmake_minimum_required(VERSION 3.21)
-project(SerialWorkbench VERSION 0.9.0 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+project(SerialWorkbench
+    VERSION 0.10.0
+    DESCRIPTION "Native serial and network workbench with shared MCP access"
+    LANGUAGES CXX
+)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Widgets Network SerialPort Test Core5Compat)
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
+    message(FATAL_ERROR "Use an out-of-source build: cmake -S . -B build/native")
+endif()
 
-add_library(workbench_core native/core.cpp native/core.h native/mcp.cpp native/mcp.h)
-target_link_libraries(workbench_core PUBLIC Qt6::Network Qt6::SerialPort Qt6::Core5Compat)
-target_include_directories(workbench_core PUBLIC native)
+include(CTest)
+include(GNUInstallDirs)
+include(cmake/ProjectOptions.cmake)
 
-qt_add_executable(SerialWorkbench WIN32 native/main.cpp native/window.cpp native/window.h native/controls.cpp native/controls.h native/terminal.cpp native/terminal.h native/docking.cpp native/docking.h)
-target_link_libraries(SerialWorkbench PRIVATE workbench_core Qt6::Widgets)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Widgets Network SerialPort Core5Compat)
+if(BUILD_TESTING)
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Test)
+endif()
 
-qt_add_executable(SerialWorkbenchMCP native/bridge.cpp)
-target_link_libraries(SerialWorkbenchMCP PRIVATE Qt6::Network)
+configure_file(cmake/workbench_version.h.in generated/workbench_version.h @ONLY)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-enable_testing()
-qt_add_executable(native_tests native/tests.cpp native/window.cpp native/window.h native/controls.cpp native/controls.h native/terminal.cpp native/terminal.h native/docking.cpp native/docking.h)
-target_link_libraries(native_tests PRIVATE workbench_core Qt6::Widgets Qt6::Test)
-foreach(target SerialWorkbench native_tests)
-    qt_add_resources(${target} "workbench_icons" PREFIX "/" FILES native/check.svg native/chevron-up.svg native/chevron-down.svg native/fonts/fusion-pixel-8px-monospaced-zh_hans.otf native/fonts/fusion-pixel-12px-monospaced-zh_hans.otf native/fonts/OFL.txt)
-endforeach()
-set_target_properties(native_tests SerialWorkbenchMCP PROPERTIES WIN32_EXECUTABLE FALSE)
-add_test(NAME native_tests COMMAND native_tests -platform offscreen -o ${CMAKE_BINARY_DIR}/native-tests.txt,txt)
+add_subdirectory(src)
+if(BUILD_TESTING)
+    add_subdirectory(tests/native)
+endif()
 
-foreach(target workbench_core SerialWorkbench SerialWorkbenchMCP native_tests)
-    if(MSVC)
-        target_compile_options(${target} PRIVATE /W4 /utf-8)
-    else()
-        target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-unused-parameter)
-    endif()
-endforeach()
+install(FILES resources/fonts/OFL.txt resources/fonts/README.md
+    DESTINATION licenses/FusionPixel
+)
+install(DIRECTORY resources/fonts/LICENSES DESTINATION licenses/FusionPixel)

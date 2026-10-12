@@ -97,7 +97,7 @@ public:
     Engine *engine;
     McpServer *mcp;
     Theme theme;
-    QFont dataFont {"Cascadia Mono", 11};
+    QFont dataFont;
     QString settingsPath;
     QJsonObject saved;
     QJsonObject viewSettings;

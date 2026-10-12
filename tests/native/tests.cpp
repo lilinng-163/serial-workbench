@@ -13,13 +13,16 @@ private slots:
         QApplication::setFont(sw::Theme::interfaceFont());
     }
 
-    void pixelFontAndMigration()
+    void readableFontsAndMigration()
     {
         const QFont font = sw::Theme::defaultDataFont();
         const auto raw = QRawFont::fromFont(font);
         QVERIFY(raw.isValid());
-        QVERIFY(raw.supportsCharacter(0x4e2d));
-        QVERIFY(raw.supportsCharacter(0x7aef));
+        QVERIFY(raw.supportsCharacter('M'));
+        QCOMPARE(font.styleStrategy(), QFont::PreferAntialias);
+        const auto brandRaw = QRawFont::fromFont(QFont(sw::Theme::fontFamily()));
+        QVERIFY(brandRaw.isValid());
+        QVERIFY(brandRaw.supportsCharacter('S'));
         const auto interfaceRaw = QRawFont::fromFont(sw::Theme::interfaceFont());
         for (const QChar character : QString("连接参数端口波特率数据校验停止位流控设置发送搜索"))
         {
@@ -41,7 +44,7 @@ private slots:
         };
         sw::Engine engine;
         sw::McpServer mcp(&engine);
-        writeAppearance("Cascadia Mono", 11);
+        writeAppearance(sw::Theme::fontFamily(12), 18);
         {
             sw::Window window(&engine, &mcp, path);
             QCOMPARE(window.dataFont.family(), font.family());
@@ -278,15 +281,13 @@ private slots:
         QVERIFY(pane->sender->isVisible());
         if (QGuiApplication::platformName() == "windows")
         {
-            // CJK fonts contain half-width Latin and full-width Han glyphs.
-            // Validate the actual cell advances rather than font metadata.
+            // ASCII protocol dumps must retain equal character cells.
             const QFontMetrics terminalMetrics(pane->terminal->font());
             const int cell = terminalMetrics.horizontalAdvance('M');
             for (int character = 32; character < 127; ++character)
             {
                 QCOMPARE(terminalMetrics.horizontalAdvance(QChar(character)), cell);
             }
-            QCOMPARE(terminalMetrics.horizontalAdvance(QChar(0x4e2d)), cell * 2);
         }
         QVERIFY(pane->newline->itemText(3).contains("\\r\\n"));
         QVERIFY(pane->newline->itemText(3).contains("CRLF"));

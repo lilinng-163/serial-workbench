@@ -1,5 +1,6 @@
 #pragma once
 
+#include "workbench_version.h"
 #include <QtCore>
 #include <QtNetwork>
 #include <QtSerialPort>
@@ -8,7 +9,7 @@
 
 namespace sw
 {
-inline const QString Version = "0.9.0";
+inline const QString Version = QStringLiteral(SERIAL_WORKBENCH_VERSION);
 
 struct Config
 {
