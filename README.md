@@ -21,6 +21,14 @@
 
 ## 启动
 
+无需编译时，打开 [GitHub Releases](https://github.com/lilinng-163/serial-workbench/releases/latest)，下载 `SerialWorkbench-0.14.1-windows-x64.exe`，双击即可运行。单文件版内置 Qt 运行库，首次启动自动展开到 `%LOCALAPPDATA%\SerialWorkbench\runtime\`，后续启动复用缓存；配置保存在 `%LOCALAPPDATA%\SerialWorkbench\settings.json`。
+
+也可下载 `SerialWorkbench-0.14.1-windows-x64-portable.zip`，完整解压后双击其中的 `SerialWorkbench.exe`。便携版把配置保存在解压目录，适合携带和直接配置 `SerialWorkbenchMCP.exe`。桌面程序均不需要安装 Python 或 Qt。Release 同时提供 `SHA256SUMS.txt` 校验文件。
+
+无需编译时，打开 [GitHub Releases](https://github.com/lilinng-163/serial-workbench/releases/latest)，下载 `SerialWorkbench-0.14.1-windows-x64.exe`，双击即可运行。单文件版内置 Qt 运行库，首次启动自动展开到 `%LOCALAPPDATA%\SerialWorkbench\runtime\`，后续启动复用缓存；配置保存在 `%LOCALAPPDATA%\SerialWorkbench\settings.json`。
+
+也可下载 `SerialWorkbench-0.14.1-windows-x64-portable.zip`，完整解压后双击其中的 `SerialWorkbench.exe`。便携版把配置保存在解压目录，适合携带和直接配置 `SerialWorkbenchMCP.exe`。桌面程序均不需要安装 Python 或 Qt。Release 同时提供 `SHA256SUMS.txt` 校验文件。
+
 双击根目录 `start.bat` 或 `scripts/start.bat` 启动原生版；也可直接运行 `dist/SerialWorkbenchNative/SerialWorkbench.exe`。
 
 分发时复制整个 `SerialWorkbenchNative` 文件夹，保留 Qt DLL 和插件目录。`SerialWorkbenchMCP.exe` 是原生 STDIO 桥接程序。首次启动默认端口为 `NULL`，不会自动连接设备。端口自动检测插拔，下拉列表显示 COM 名称与设备描述；选中后显示制造商、USB VID/PID 和序列号，悬停可查看设备路径。设备未提供的信息自动省略。
@@ -275,6 +283,28 @@ python -m venv .venv
 ```
 
 测试覆盖独立读取与分页、真实 TCP/UDP socket、软件串口回环及重配置、UTF-8/GBK 分片解析、ANSI 颜色与终端、连接标签和布局、设置恢复、MCP HTTP/STDIO、权限、非阻塞等待和错误参数。实际 COM 硬件、USB 设备的实际线速及各 AI 客户端的完整对话需要在对应环境验证。
+
+### 生成 Release 下载包
+
+先使用构建脚本生成 `dist/SerialWorkbenchNative`，再使用 NSIS 制作单文件启动器。传入当前 Qt 版本的源码目录，用于收集模块及第三方许可证：
+
+```powershell
+.\scripts\package-release.ps1 -QtSourceRoot 'D:/lib/Qt/6.11.1/Src' -MakeNSIS makensis
+.\.venv\Scripts\python.exe tests/integration/smoke_release.py --expected-version 0.14.1
+```
+
+产物位于 `dist/releases/`，包含单文件 EXE、便携 ZIP 和 SHA-256 校验文件。打包仅复制程序、运行库、插件与许可证，排除本机 `settings.json` 及其备份。发布包测试在不含 Qt SDK 的 PATH 下验证便携版、单文件首次与缓存启动、Unicode 路径、参数传递及 HTTP/STDIO 共享会话。
+
+### 生成 Release 下载包
+
+先使用构建脚本生成 `dist/SerialWorkbenchNative`，再使用 NSIS 制作单文件启动器。传入当前 Qt 版本的源码目录，用于收集模块及第三方许可证：
+
+```powershell
+.\scripts\package-release.ps1 -QtSourceRoot 'D:/lib/Qt/6.11.1/Src' -MakeNSIS makensis
+.\.venv\Scripts\python.exe tests/integration/smoke_release.py --expected-version 0.14.1
+```
+
+产物位于 `dist/releases/`，包含单文件 EXE、便携 ZIP 和 SHA-256 校验文件。打包仅复制程序、运行库、插件与许可证，排除本机 `settings.json` 及其备份。发布包测试在不含 Qt SDK 的 PATH 下验证便携版、单文件首次与缓存启动、Unicode 路径、参数传递及 HTTP/STDIO 共享会话。
 
 工程按职责组织：`src/app/` 为桌面入口，`src/core/` 为连接与数据处理，`src/mcp/` 为共享 MCP 服务，`src/ui/` 为界面与控件，`src/bridge/` 为 STDIO 桥。资源在 `resources/`，构建脚本在 `scripts/`，测试在 `tests/`，CMake 公共规则在 `cmake/`。构建产物仅放入 `build/`，分发产物放入 `dist/`。详细目录、CMake 目标和手动构建方式见 [工程结构](docs/project-structure.md)。
 

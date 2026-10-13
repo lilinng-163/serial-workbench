@@ -13,7 +13,7 @@ serial/
 │   ├── ui/                 # 工作台、控件、终端和窗口停靠
 │   └── bridge/             # MCP STDIO 桥入口
 ├── resources/              # 字体、图标和许可证
-├── scripts/                # 构建、启动、启动耗时测量
+├── scripts/                # 构建、启动、Release 打包与启动耗时测量
 ├── tests/
 │   ├── native/             # QtTest 回归测试
 │   └── integration/        # 打包版 HTTP / STDIO 测试
@@ -65,6 +65,9 @@ cmake --install build/custom --prefix dist/install
 ```
 
 项目 `LICENSE` 同时安装至分发目录根部。
+
+`scripts/package-release.ps1` 从已部署的运行目录收集可分发文件，用 NSIS 的 `scripts/release-launcher.nsi` 生成单文件启动版，并生成完整便携 ZIP 与 SHA-256 清单。阶段目录放入 `build/release-*`，最终附件放入 `dist/releases/`；个人设置不进入附件。`tests/integration/smoke_release.py` 验证实际下载产物的运行行为。
+
 常规 CMake 安装将程序放入 `bin/`，字体许可证放入 `licenses/`；Qt 运行库需使用 `windeployqt` 部署。
 一键构建脚本 `scripts/build.ps1` 会完成配置、编译、测试、安装和 Qt 部署，并使用 `CMAKE_INSTALL_BINDIR=.` 生成可直接启动的便携目录：
 
