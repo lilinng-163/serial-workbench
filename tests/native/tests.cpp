@@ -21,6 +21,90 @@ class NativeTests : public QObject
 {
     Q_OBJECT
 private slots:
+    void waveformDragMatchesScreen_data()
+    {
+        QTest::addColumn<int>("plotWidth");
+        QTest::addColumn<qreal>("range");
+        QTest::addColumn<qreal>("scale");
+
+        QTest::newRow("compact-short-history") << 212 << 100.0 << 4.0;
+        QTest::newRow("wide-short-history") << 912 << 100.0 << 4.0;
+        QTest::newRow("wide-long-history") << 912 << 5000.0 << 4.0;
+        QTest::newRow("wide-high-zoom") << 912 << 5000.0 << 20.0;
+    }
+
+    void waveformDragMatchesScreen()
+    {
+        QFETCH(int, plotWidth);
+        QFETCH(qreal, range);
+        QFETCH(qreal, scale);
+
+        sw::WavePlot plot;
+        plot.resize(plotWidth + 88, 360);
+        plot.series["signal"] = {{0, 0}, {range, 1}};
+        plot.zoom = scale;
+
+        const auto mouse = [&plot](QEvent::Type type, const QPointF &position,
+                                  Qt::MouseButton button, Qt::MouseButtons buttons)
+        {
+            QMouseEvent event(type, position, plot.mapToGlobal(position.toPoint()),
+                              button, buttons, Qt::NoModifier);
+            QApplication::sendEvent(&plot, &event);
+        };
+        const auto drag = [&mouse](const QPointF &start, const QPointF &end,
+                                  Qt::MouseButton button = Qt::LeftButton)
+        {
+            mouse(QEvent::MouseButtonPress, start, button, button);
+            mouse(QEvent::MouseMove, end, Qt::NoButton, button);
+            mouse(QEvent::MouseButtonRelease, end, button, Qt::NoButton);
+        };
+        const QPointF start(100, 100);
+
+        drag(start, start + QPointF(10.25, 0));
+        const qreal displacement = -plot.offset / (range / scale) * plotWidth;
+        QVERIFY2(qAbs(displacement - 10.25) < 0.000001,
+                 "The curve must move the same number of screen pixels as the mouse.");
+        QCOMPARE(plot.cursor().shape(), Qt::ArrowCursor);
+
+        const qreal once = plot.offset;
+        plot.offset = 0;
+        mouse(QEvent::MouseButtonPress, start, Qt::LeftButton, Qt::LeftButton);
+        for (int step = 1; step <= 5; ++step)
+        {
+            mouse(QEvent::MouseMove, start + QPointF(step * 2.05, 0), Qt::NoButton, Qt::LeftButton);
+        }
+        mouse(QEvent::MouseButtonRelease, start + QPointF(10.25, 0), Qt::LeftButton, Qt::NoButton);
+        QVERIFY(qAbs(plot.offset - once) < 0.000001);
+
+        mouse(QEvent::MouseMove, start + QPointF(40, 0), Qt::NoButton, Qt::NoButton);
+        drag(QPointF(20, 100), QPointF(30, 100));
+        drag(start, start + QPointF(10, 0), Qt::RightButton);
+        QVERIFY(qAbs(plot.offset - once) < 0.000001);
+
+        drag(start, start + QPointF(plotWidth * scale, 0));
+        QVERIFY(qAbs(plot.offset - (range / scale - range)) < 0.000001);
+        drag(start, start - QPointF(plotWidth * scale, 0));
+        QCOMPARE(plot.offset, 0.0);
+
+        drag(start, start + QPointF(plotWidth * scale, 0));
+        for (int step = 0; step < 30; ++step)
+        {
+            QWheelEvent wheel(start, plot.mapToGlobal(start.toPoint()), QPoint(), QPoint(0, -120),
+                              Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+            QApplication::sendEvent(&plot, &wheel);
+        }
+        QCOMPARE(plot.zoom, 1.0);
+        QCOMPARE(plot.offset, 0.0);
+        drag(start, start + QPointF(10, 0));
+        QCOMPARE(plot.offset, 0.0);
+
+        plot.zoom = scale;
+        plot.offset = -range / 2;
+        mouse(QEvent::MouseButtonDblClick, start, Qt::LeftButton, Qt::LeftButton);
+        QCOMPARE(plot.zoom, 1.0);
+        QCOMPARE(plot.offset, 0.0);
+    }
+
     void sshProfilesAndSession()
     {
         QTemporaryDir directory;

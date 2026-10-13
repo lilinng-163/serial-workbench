@@ -861,6 +861,35 @@ WavePlot::WavePlot(QWidget *parent) : QWidget(parent)
 {
     setMinimumSize(200, 150);
     setMouseTracking(true);
+    setToolTip("滚轮缩放；放大后按住左键拖动；双击恢复全部采样");
+}
+
+QRectF WavePlot::plotArea() const
+{
+    return QRectF(rect()).adjusted(64, 34, -24, -48);
+}
+
+qreal WavePlot::sampleSpan() const
+{
+    qreal minimum = std::numeric_limits<qreal>::max();
+    qreal maximum = std::numeric_limits<qreal>::lowest();
+
+    for (const auto &points : series)
+    {
+        for (const auto &point : points)
+        {
+            minimum = std::min(minimum, point.x());
+            maximum = std::max(maximum, point.x());
+        }
+    }
+
+    return maximum < minimum ? 1.0 : std::max(1.0, maximum - minimum);
+}
+
+void WavePlot::clampOffset()
+{
+    const qreal range = sampleSpan();
+    offset = series.isEmpty() ? 0 : qBound(range / zoom - range, offset, 0.0);
 }
 
 void WavePlot::setSamples(const QJsonObject &data)
@@ -884,6 +913,7 @@ void WavePlot::setSamples(const QJsonObject &data)
             }
         }
     }
+    clampOffset();
     update();
 }
 
@@ -892,7 +922,7 @@ void WavePlot::paintEvent(QPaintEvent *)
     QPainter p(this);
     p.fillRect(rect(), theme.panel);
     p.setRenderHint(QPainter::Antialiasing);
-    const QRectF area = QRectF(rect()).adjusted(64, 34, -24, -48);
+    const QRectF area = plotArea();
     p.setPen(QPen(theme.line, 1));
     for (int i = 0; i <= 8; ++i)
     {
@@ -970,29 +1000,64 @@ void WavePlot::paintEvent(QPaintEvent *)
 void WavePlot::wheelEvent(QWheelEvent *event)
 {
     zoom = qBound(1.0, zoom * (event->angleDelta().y() > 0 ? 1.2 : 1 / 1.2), 100.0);
+    clampOffset();
     update();
     event->accept();
 }
 
 void WavePlot::mousePressEvent(QMouseEvent *event)
 {
-    lastMouse = event->pos();
+    if (event->button() == Qt::LeftButton && !series.isEmpty()
+        && plotArea().contains(event->position()))
+    {
+        dragging = true;
+        lastMouse = event->position();
+        setCursor(Qt::ClosedHandCursor);
+        event->accept();
+        return;
+    }
+
+    QWidget::mousePressEvent(event);
 }
 
 void WavePlot::mouseMoveEvent(QMouseEvent *event)
 {
-    if (event->buttons() & Qt::LeftButton)
+    if (dragging && (event->buttons() & Qt::LeftButton))
     {
-        offset -= (event->pos().x() - lastMouse.x()) * 2 / zoom;
-        lastMouse = event->pos();
+        const qreal pixels = event->position().x() - lastMouse.x();
+        const qreal width = qMax(1.0, plotArea().width());
+
+        // 将屏幕位移换算为当前可见的采样范围，保持曲线与鼠标同步。
+        offset -= pixels * sampleSpan() / zoom / width;
+        lastMouse = event->position();
+        clampOffset();
         update();
+        event->accept();
+        return;
     }
+
+    QWidget::mouseMoveEvent(event);
+}
+
+void WavePlot::mouseReleaseEvent(QMouseEvent *event)
+{
+    if (dragging && event->button() == Qt::LeftButton)
+    {
+        dragging = false;
+        unsetCursor();
+        event->accept();
+        return;
+    }
+
+    QWidget::mouseReleaseEvent(event);
 }
 
 void WavePlot::mouseDoubleClickEvent(QMouseEvent *)
 {
     zoom = 1;
     offset = 0;
+    dragging = false;
+    unsetCursor();
     update();
 }
 } // namespace sw

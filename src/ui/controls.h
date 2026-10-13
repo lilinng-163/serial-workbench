@@ -129,12 +129,19 @@ class WavePlot : public QWidget
     QMap<QString, QVector<QPointF>> series;
     qreal zoom = 1;
     qreal offset = 0;
-    QPoint lastMouse;
+    QPointF lastMouse;
     void setSamples(const QJsonObject &data);
     void paintEvent(QPaintEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
+
+  private:
+    QRectF plotArea() const;
+    qreal sampleSpan() const;
+    void clampOffset();
+    bool dragging = false;
 };
 } // namespace sw

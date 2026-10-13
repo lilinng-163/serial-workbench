@@ -4,7 +4,7 @@
 
 一个面向嵌入式开发的 Windows 串口、网络与 SSH 调试助手。人在界面查看数据，Codex、Claude、OpenCode、Pi Agent 等 AI 通过 MCP 同时读取同一份数据，无需再次打开串口。
 
-当前版本：0.14.0，Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
+当前版本：0.14.1，Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
 
 ## 功能概览
 
@@ -105,7 +105,7 @@ SSH 使用 Windows 自带的 `ssh.exe`，沿用 `~/.ssh/config` 的 `HostName`�
 
 ## 波形
 
-数值数据按 LF 分行，可使用 CRLF，支持以下格式，每行最多 16 个数值：
+数值数据按 CR、LF 或 CRLF 分行，支持以下格式，每行最多 16 个数值：
 
 ```text
 1.2,3.4,5.6
@@ -114,7 +114,9 @@ temperature=25.6,voltage=3.3
 [1.2,3.4,5.6]
 ```
 
-支持串口、TCP 和 UDP。流式数据跨接收块时自动拼接；网络不同发送方分别解析。每个发送方保留最近 5000 个采样，界面最多显示 16 条曲线。横轴是采样序号，纵轴是报文中的数值；MCP 同时返回主机接收时间。冻结、滚轮缩放、拖动平移、图例切换和自动缩放均可使用。
+支持串口、TCP 和 UDP。流式数据跨接收块时自动拼接；网络不同发送方分别解析。每个发送方保留最近 5000 个采样，界面最多显示 16 条曲线。横轴是采样序号，纵轴是报文中的数值；MCP 同时返回主机接收时间。支持冻结、滚轮缩放、拖动平移、曲线图例和自动缩放。
+
+放大后可在绘图区按住左键拖动，曲线按鼠标的屏幕位移平移，灵敏度随窗口宽度和可见采样范围换算。平移限制在保留的采样范围内；完整显示全部采样时不平移。双击绘图区或点击「自动缩放」恢复全部采样。
 
 非数值日志会被忽略并计数。原始二进制数据仍可显示、导出和被 MCP 读取，但不自动转换成波形；设备需输出上面的逐行数值格式。本工具不是直接测量 UART 电平时序的逻辑分析仪。
 
@@ -269,7 +271,7 @@ $env:MINGW_BIN = 'D:/lib/Qt/Tools/mingw1310_64/bin'
 # 打包后的 HTTP / STDIO 集成测试，需要 Python MCP SDK
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r tests/integration/requirements.txt
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.14.0
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.14.1
 ```
 
 测试覆盖独立读取与分页、真实 TCP/UDP socket、软件串口回环及重配置、UTF-8/GBK 分片解析、ANSI 颜色与终端、连接标签和布局、设置恢复、MCP HTTP/STDIO、权限、非阻塞等待和错误参数。实际 COM 硬件、USB 设备的实际线速及各 AI 客户端的完整对话需要在对应环境验证。
