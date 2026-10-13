@@ -1,4 +1,7 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #include "terminal.h"
+#include <QInputMethod>
 
 namespace sw
 {
@@ -320,6 +323,9 @@ void TerminalView::reset(const QString &encoding)
     decoder.reset((codec ? codec : QTextCodec::codecForName("UTF-8"))->makeDecoder());
     ansi = {};
     x = y = 0;
+    preeditText.clear();
+    selecting = false;
+    selectionActive = false;
     grid = QVector<QVector<Cell>>(rows, QVector<Cell>(columns));
     update();
 }
@@ -491,6 +497,10 @@ void TerminalView::feed(const QByteArray &data)
         }
     }
     update();
+    if (hasFocus())
+    {
+        QApplication::inputMethod()->update(Qt::ImCursorRectangle);
+    }
 }
 
 QString TerminalView::text() const
@@ -515,17 +525,32 @@ void TerminalView::paintEvent(QPaintEvent *)
     const QFontMetricsF metrics(font());
     const qreal width = metrics.horizontalAdvance('M');
     const qreal height = metrics.height() * 1.15;
+    int selectionStart = selectionAnchor.y() * columns + selectionAnchor.x();
+    int selectionEnd = selectionCursor.y() * columns + selectionCursor.x();
+    if (selectionStart > selectionEnd)
+    {
+        std::swap(selectionStart, selectionEnd);
+    }
+    const bool highlightSelection = selecting || selectionActive;
     for (int row = 0; row < rows; ++row)
     {
         for (int col = 0; col < columns; ++col)
         {
             const auto &cell = grid[row][col];
             const QRectF box(16 + col * width, 12 + row * height, width, height);
+            const int position = row * columns + col;
+            const bool selected = highlightSelection && selectionStart <= position && position <= selectionEnd;
             if (cell.background.isValid())
             {
                 p.fillRect(box, cell.background);
             }
-            p.setPen(cell.foreground.isValid() ? cell.foreground : theme.text);
+            if (selected)
+            {
+                QColor selection = theme.accent;
+                selection.setAlpha(170);
+                p.fillRect(box, selection);
+            }
+            p.setPen(selected ? theme.panel : cell.foreground.isValid() ? cell.foreground : theme.text);
             QFont current = font();
             current.setBold(cell.bold);
             p.setFont(current);
@@ -538,6 +563,15 @@ void TerminalView::paintEvent(QPaintEvent *)
         color.setAlpha(150);
         p.fillRect(QRectF(16 + std::min(columns - 1, x) * width, 12 + y * height,
             blockCursor ? width : 2, height), color);
+    }
+    if (!preeditText.isEmpty())
+    {
+        const qreal left = 16 + std::min(columns - 1, x) * width;
+        const qreal top = 12 + y * height;
+        p.setPen(theme.accent);
+        p.setFont(font());
+        p.drawText(QPointF(left, top + metrics.ascent()), preeditText);
+        p.fillRect(QRectF(left, top + metrics.height(), metrics.horizontalAdvance(preeditText), 1), theme.accent);
     }
 }
 
@@ -575,6 +609,14 @@ void TerminalView::resizeGrid()
     rows = newRows;
     x = qBound(0, x, columns - 1);
     y = qBound(0, y, rows - 1);
+    selectionAnchor.setX(qBound(0, selectionAnchor.x(), columns - 1));
+    selectionAnchor.setY(qBound(0, selectionAnchor.y(), rows - 1));
+    selectionCursor.setX(qBound(0, selectionCursor.x(), columns - 1));
+    selectionCursor.setY(qBound(0, selectionCursor.y(), rows - 1));
+    if (hasFocus())
+    {
+        QApplication::inputMethod()->update(Qt::ImCursorRectangle);
+    }
 }
 
 bool TerminalView::event(QEvent *event)
@@ -611,25 +653,91 @@ void TerminalView::keyPressEvent(QKeyEvent *event)
         return;
     }
     QByteArray data;
+    const auto modifiedKey = [event](QChar final)
+    {
+        const Qt::KeyboardModifiers modifiers = event->modifiers()
+            & (Qt::ShiftModifier | Qt::AltModifier | Qt::ControlModifier | Qt::MetaModifier);
+        if (modifiers == Qt::NoModifier)
+        {
+            return QByteArray("\x1b[") + final.toLatin1();
+        }
+        int modifier = 1;
+        if (modifiers & Qt::ShiftModifier) { modifier += 1; }
+        if (modifiers & Qt::AltModifier) { modifier += 2; }
+        if (modifiers & Qt::ControlModifier) { modifier += 4; }
+        if (modifiers & Qt::MetaModifier) { modifier += 8; }
+        return QByteArray("\x1b[1;") + QByteArray::number(modifier) + final.toLatin1();
+    };
+    const bool control = event->modifiers() & Qt::ControlModifier;
+    const bool shift = event->modifiers() & Qt::ShiftModifier;
+    if (control && shift && event->key() == Qt::Key_C && copyShortcutEnabled)
+    {
+        copySelection();
+        event->accept();
+        return;
+    }
+    if (control && shift && event->key() == Qt::Key_V && pasteShortcutEnabled)
+    {
+        pasteClipboard();
+        event->accept();
+        return;
+    }
+    if (control && event->key() == Qt::Key_C && copyShortcutEnabled && hasSelection())
+    {
+        copySelection();
+        event->accept();
+        return;
+    }
+    if ((control && event->key() == Qt::Key_Left) || (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_Left))
+    {
+        data = modifiedKey('D');
+    }
+    else if ((control && event->key() == Qt::Key_Right) || (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_Right))
+    {
+        data = modifiedKey('C');
+    }
+    else if (event->key() == Qt::Key_Home)
+    {
+        const auto modifiers = event->modifiers()
+            & (Qt::ShiftModifier | Qt::AltModifier | Qt::ControlModifier | Qt::MetaModifier);
+        data = modifiers == Qt::NoModifier ? QByteArray("\x1b[7~") : modifiedKey('H');
+    }
+    else if (event->key() == Qt::Key_End)
+    {
+        const auto modifiers = event->modifiers()
+            & (Qt::ShiftModifier | Qt::AltModifier | Qt::ControlModifier | Qt::MetaModifier);
+        data = modifiers == Qt::NoModifier ? QByteArray("\x1b[4~") : modifiedKey('F');
+    }
+    else if (event->key() == Qt::Key_PageUp)
+    {
+        data = "\x1b[5~";
+    }
+    else if (event->key() == Qt::Key_PageDown)
+    {
+        data = "\x1b[6~";
+    }
+    else if (event->key() == Qt::Key_Insert)
+    {
+        data = "\x1b[2~";
+    }
     const QMap<int, QByteArray> keys {{Qt::Key_Return, "\r"}, {Qt::Key_Enter, "\r"}, {Qt::Key_Tab, "\t"},
         {Qt::Key_Up, "\x1b[A"}, {Qt::Key_Down, "\x1b[B"}, {Qt::Key_Right, "\x1b[C"}, {Qt::Key_Left, "\x1b[D"},
-        {Qt::Key_Home, "\x1b[H"}, {Qt::Key_End, "\x1b[F"}, {Qt::Key_Delete, "\x1b[3~"}, {Qt::Key_Backspace, "\x7f"}, {Qt::Key_Escape, "\x1b"}};
-    if (event->key() == Qt::Key_Backtab
-        || (event->key() == Qt::Key_Tab && (event->modifiers() & Qt::ShiftModifier)))
+        {Qt::Key_Delete, "\x1b[3~"}, {Qt::Key_Backspace, "\x7f"}, {Qt::Key_Escape, "\x1b"}};
+    if (data.isEmpty())
     {
-        data = "\x1b[Z";
-    }
-    else if ((event->modifiers() & Qt::ControlModifier) && event->key() == Qt::Key_V)
-    {
-        data = QApplication::clipboard()->text().toUtf8();
-    }
-    else if ((event->modifiers() & Qt::ControlModifier) && event->key() >= Qt::Key_A && event->key() <= Qt::Key_Z)
-    {
-        data.append(char(event->key() - Qt::Key_A + 1));
-    }
-    else
-    {
-        data = keys.value(event->key(), event->text().toUtf8());
+        if (event->key() == Qt::Key_Backtab
+            || (event->key() == Qt::Key_Tab && (event->modifiers() & Qt::ShiftModifier)))
+        {
+            data = "\x1b[Z";
+        }
+        else if ((event->modifiers() & Qt::ControlModifier) && event->key() >= Qt::Key_A && event->key() <= Qt::Key_Z)
+        {
+            data.append(char(event->key() - Qt::Key_A + 1));
+        }
+        else
+        {
+            data = keys.value(event->key(), event->text().toUtf8());
+        }
     }
     if (!data.isEmpty())
     {
@@ -640,11 +748,151 @@ void TerminalView::keyPressEvent(QKeyEvent *event)
 
 void TerminalView::inputMethodEvent(QInputMethodEvent *event)
 {
-    if (enabledInput && !event->commitString().isEmpty())
+    if (!enabledInput)
     {
-        emit transmit(event->commitString().toUtf8());
+        event->ignore();
+        return;
     }
+    preeditText = event->preeditString();
+    if (!event->commitString().isEmpty()) { emit transmit(event->commitString().toUtf8()); }
+    update();
+    QApplication::inputMethod()->update(Qt::ImCursorRectangle);
     event->accept();
+}
+
+QVariant TerminalView::inputMethodQuery(Qt::InputMethodQuery query) const
+{
+    if (query == Qt::ImEnabled) { return enabledInput; }
+    if (query == Qt::ImCursorRectangle || query == Qt::ImAnchorRectangle)
+    {
+        const QFontMetricsF metrics(font());
+        const qreal width = metrics.horizontalAdvance('M');
+        const qreal height = metrics.height() * 1.15;
+        return QRectF(16 + std::min(columns - 1, x) * width, 12 + y * height,
+            std::max<qreal>(2, width), height);
+    }
+    if (query == Qt::ImCursorPosition || query == Qt::ImAnchorPosition)
+    {
+        return y * columns + x;
+    }
+    if (query == Qt::ImFont) { return font(); }
+    return QWidget::inputMethodQuery(query);
+}
+
+void TerminalView::focusInEvent(QFocusEvent *event)
+{
+    QWidget::focusInEvent(event);
+    QApplication::inputMethod()->update(Qt::ImEnabled | Qt::ImCursorRectangle);
+}
+
+bool TerminalView::hasSelection() const
+{
+    return selecting || selectionActive;
+}
+
+QPoint TerminalView::cellAt(const QPointF &position) const
+{
+    const QFontMetricsF metrics(font());
+    const qreal width = qMax<qreal>(1, metrics.horizontalAdvance('M'));
+    const qreal height = qMax<qreal>(1, metrics.height() * 1.15);
+    return QPoint(qBound(0, int((position.x() - 16) / width), columns - 1),
+        qBound(0, int((position.y() - 12) / height), rows - 1));
+}
+
+QString TerminalView::selectedText() const
+{
+    if (!hasSelection()) { return {}; }
+    int start = selectionAnchor.y() * columns + selectionAnchor.x();
+    int end = selectionCursor.y() * columns + selectionCursor.x();
+    if (start > end) { std::swap(start, end); }
+    QStringList lines;
+    const int firstRow = start / columns;
+    const int lastRow = end / columns;
+    for (int row = firstRow; row <= lastRow; ++row)
+    {
+        const int firstColumn = row == firstRow ? start % columns : 0;
+        const int lastColumn = row == lastRow ? end % columns : columns - 1;
+        QString line;
+        for (int col = firstColumn; col <= lastColumn; ++col)
+        {
+            line += grid[row][col].character;
+        }
+        while (line.endsWith(' ')) { line.chop(1); }
+        lines.append(line);
+    }
+    return lines.join('\n');
+}
+
+void TerminalView::copySelection()
+{
+    const QString value = selectedText();
+    if (!value.isEmpty())
+    {
+        QApplication::clipboard()->setText(value);
+    }
+}
+
+void TerminalView::pasteClipboard()
+{
+    if (enabledInput)
+    {
+        const QByteArray value = QApplication::clipboard()->text().toUtf8();
+        if (!value.isEmpty()) { emit transmit(value); }
+    }
+}
+
+void TerminalView::mousePressEvent(QMouseEvent *event)
+{
+    if (event->button() == Qt::RightButton)
+    {
+        if (enabledInput && rightClickPasteEnabled)
+        {
+            setFocus(Qt::MouseFocusReason);
+            pasteClipboard();
+            event->accept();
+            return;
+        }
+        event->ignore();
+        return;
+    }
+    if (event->button() == Qt::LeftButton)
+    {
+        setFocus(Qt::MouseFocusReason);
+        selectionAnchor = cellAt(event->position());
+        selectionCursor = selectionAnchor;
+        selecting = true;
+        selectionActive = false;
+        update();
+        event->accept();
+        return;
+    }
+    QWidget::mousePressEvent(event);
+}
+
+void TerminalView::mouseMoveEvent(QMouseEvent *event)
+{
+    if (selecting && (event->buttons() & Qt::LeftButton))
+    {
+        selectionCursor = cellAt(event->position());
+        update();
+        event->accept();
+        return;
+    }
+    QWidget::mouseMoveEvent(event);
+}
+
+void TerminalView::mouseReleaseEvent(QMouseEvent *event)
+{
+    if (event->button() == Qt::LeftButton && selecting)
+    {
+        selectionCursor = cellAt(event->position());
+        selecting = false;
+        selectionActive = selectionAnchor != selectionCursor;
+        update();
+        event->accept();
+        return;
+    }
+    QWidget::mouseReleaseEvent(event);
 }
 
 void TerminalView::wheelEvent(QWheelEvent *event)

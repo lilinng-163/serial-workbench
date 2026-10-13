@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Identify the account that owns the actual process, not inherited env vars."""
 
 import getpass

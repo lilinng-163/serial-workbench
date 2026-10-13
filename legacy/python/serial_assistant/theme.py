@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Shared color tokens for widgets, plots, and received text."""
 
 PALETTES = {

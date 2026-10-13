@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 import json
 
 from serial_assistant.structured import StructuredDecoder

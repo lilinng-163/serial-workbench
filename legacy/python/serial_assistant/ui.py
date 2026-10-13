@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Windows serial/network workbench with independent connection views."""
 
 from dataclasses import asdict

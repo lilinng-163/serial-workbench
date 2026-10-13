@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #include "docking.h"
 #ifdef Q_OS_WIN
 #include <windows.h>

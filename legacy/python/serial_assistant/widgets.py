@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Painted controls with legible indicators and short, interruptible motion."""
 
 from PySide6.QtCore import QEasingCurve, QPointF, Property, QPropertyAnimation, QSize, Qt, Signal

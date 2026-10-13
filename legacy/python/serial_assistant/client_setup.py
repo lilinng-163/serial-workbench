@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Merge only this server into client settings and check the actual MCP service."""
 
 import asyncio

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Bounded stream extraction of JSON and XML embedded in device logs."""
 
 import codecs

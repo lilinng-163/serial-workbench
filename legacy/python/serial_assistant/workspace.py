@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Independent connection tabs, each with a live monitor and optional waveform."""
 
 import json

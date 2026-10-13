@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Bounded, non-destructive event journal and incremental waveform decoding."""
 
 from collections import deque

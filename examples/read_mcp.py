@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Run with the project Python while the desktop application is open."""
 
 import asyncio

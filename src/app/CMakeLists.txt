@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 qt_add_executable(SerialWorkbench WIN32 main.cpp)
 workbench_configure_target(SerialWorkbench)
 target_link_libraries(SerialWorkbench PRIVATE workbench_ui)

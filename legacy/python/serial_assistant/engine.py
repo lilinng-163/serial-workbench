@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Single transport owner; GUI and MCP share this engine without consuming reads."""
 
 from concurrent.futures import ThreadPoolExecutor

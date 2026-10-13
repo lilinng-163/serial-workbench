@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """One desktop window per Windows account and MCP port."""
 
 import hashlib

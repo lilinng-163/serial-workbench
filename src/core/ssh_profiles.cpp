@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #include "ssh_profiles.h"
 
 #include <QCryptographicHash>

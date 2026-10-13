@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #include "window.h"
 
 int main(int argc, char *argv[])

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Qt rendering for the same ANSI styles in monitor and terminal views."""
 
 from itertools import groupby

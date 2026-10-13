@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Exercise packaged native HTTP/stdio transports with the official MCP SDK."""
 
 import argparse
@@ -45,7 +47,7 @@ async def check(url, bridge, allow, expected_version=None):
             initialized = await client.initialize()
             if expected_version:
                 assert initialized.serverInfo.version == expected_version
-            assert len((await client.list_tools()).tools) == 9
+            assert len((await client.list_tools()).tools) == 10
             status = unpack(await client.call_tool("get_status"))
             assert status["version"] == initialized.serverInfo.version
             assert status["implementation"] == "Qt C++"
@@ -57,7 +59,7 @@ async def check(url, bridge, allow, expected_version=None):
             async with stdio_client(params) as (sr, sw):
                 async with ClientSession(sr, sw) as second:
                     await second.initialize()
-                    assert len((await second.list_tools()).tools) == 9
+                    assert len((await second.list_tools()).tools) == 10
                     other = unpack(await second.call_tool("read_events", {}))
                     assert other["session_id"] == events["session_id"]
                     assert other["events"][:len(events["events"])] == events["events"]
@@ -105,7 +107,7 @@ async def check(url, bridge, allow, expected_version=None):
                     assert invalid.isError
                     status = unpack(await client.call_tool("get_status"))
                     assert status["session_id"] == events["session_id"]
-                    print("PASS HTTP/stdio, 9 tools, shared history, baud reconfiguration, long poll, loopback, waveform, reconnect, validation")
+                    print("PASS HTTP/stdio, 10 tools, shared history, baud reconfiguration, long poll, loopback, waveform, reconnect, validation")
 
 
 def main():

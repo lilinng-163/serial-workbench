@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #include "core.h"
 
 #include <QTextCodec>
@@ -316,6 +318,7 @@ void Channel::status(const QString &value, const QString &message, bool reset)
 
 void Channel::releaseTransport()
 {
+    if (scriptProcessor) { scriptProcessor->configure(scriptEnabled ? scriptProgram : nullptr); }
     demoTimer.stop();
     for (auto object : {static_cast<QObject *>(serial), static_cast<QObject *>(client), static_cast<QObject *>(listener), static_cast<QObject *>(udp)})
     {
@@ -661,7 +664,8 @@ QJsonObject Channel::describe() const
     return {{"id", id}, {"name", name}, {"state", state}, {"error", error}, {"config", config.json()},
         {"rx_bytes", rx}, {"tx_bytes", tx}, {"peers", QJsonArray::fromStringList(peers.keys())},
         {"local_address", localAddress}, {"serial_generation", generation}, {"reconnect_attempts", attempts},
-        {"parser_mode", parserMode}, {"applied_baudrate", appliedBaud}};
+        {"parser_mode", parserMode}, {"applied_baudrate", appliedBaud},
+        {"script_enabled", scriptEnabled}, {"script_error", scriptError}, {"script_frames", scriptFrames}};
 }
 
 void Channel::receive(const QByteArray &data, const QString &peer)
@@ -682,6 +686,7 @@ void Channel::receive(const QByteArray &data, const QString &peer)
         sources.insert(key, std::make_shared<Source>());
     }
     auto &source = *sources[key];
+    if (scriptEnabled && scriptProcessor) { scriptProcessor->submit(data, peer, event["seq"].toInteger()); }
     parseWave(source, data);
     if (parserMode != "off")
     {
@@ -760,8 +765,12 @@ void Channel::parseWave(Source &source, const QByteArray &data)
 {
     source.wavePending += data;
     int end = -1;
-    while ((end = source.wavePending.indexOf('\n')) >= 0)
+    while (true)
     {
+        const int cr = source.wavePending.indexOf('\r');
+        const int lf = source.wavePending.indexOf('\n');
+        end = cr < 0 ? lf : lf < 0 ? cr : qMin(cr, lf);
+        if (end < 0) { break; }
         QByteArray line = source.wavePending.left(end).trimmed();
         source.wavePending.remove(0, end + 1);
         if (source.discarding || line.size() > 8192)
@@ -826,6 +835,62 @@ void Channel::parseWave(Source &source, const QByteArray &data)
         source.wavePending.clear();
         source.discarding = true;
     }
+}
+
+void Channel::configureScript(const QString &code, bool enabled)
+{
+    if (enabled && config.kind != "serial")
+    {
+        throw ScriptError(0, "脚本解析仅适用于串口会话");
+    }
+    auto program = enabled ? FrameScriptProgram::compile(code) : nullptr;
+    if (!scriptProcessor && enabled)
+    {
+        scriptProcessor = new FrameScriptProcessor(this);
+        connect(scriptProcessor, &FrameScriptProcessor::samplesReady, this,
+                [this](const QString &peer, const QJsonArray &samples, qint64 eventSequence)
+        {
+            if (!scriptEnabled) { return; }
+            const auto key = peer.isEmpty() ? QString("default") : peer;
+            if (!sources.contains(key)) { return; }
+            auto &source = *sources[key];
+            for (const auto &sample : samples)
+            {
+                const auto values = sample.toObject();
+                ++scriptFrames;
+
+                const QString text = QString::fromUtf8(QJsonDocument(values).toJson(QJsonDocument::Compact));
+                const QJsonObject record {{"seq", ++source.scriptCount}, {"event_seq", eventSequence},
+                    {"time", now()}, {"format", "script"}, {"peer", peer}, {"text", text},
+                    {"pretty", QString::fromUtf8(QJsonDocument(values).toJson(QJsonDocument::Indented))}, {"value", values}};
+                source.scriptBytes += QJsonDocument(record).toJson().size();
+                source.scriptRecords.push_back(record);
+                while (source.scriptRecords.size() > 500 || source.scriptBytes > 2 * 1024 * 1024)
+                {
+                    source.scriptBytes -= QJsonDocument(source.scriptRecords.front()).toJson().size();
+                    source.scriptRecords.pop_front();
+                }
+            }
+            emit engine->eventAdded();
+        });
+        connect(scriptProcessor, &FrameScriptProcessor::failed, this, [this](const QString &message)
+        {
+            if (!scriptEnabled) { return; }
+            scriptEnabled = false;
+            scriptError = message;
+            scriptProcessor->configure(nullptr);
+            engine->journal.append(id, "status", {}, {}, "脚本解析已停用：" + message);
+            emit engine->eventAdded();
+            emit engine->channelsChanged();
+        });
+    }
+    scriptCode = code;
+    scriptProgram = program;
+    scriptEnabled = enabled;
+    scriptError.clear();
+    scriptFrames = 0;
+    if (scriptProcessor) { scriptProcessor->configure(program); }
+    emit engine->channelsChanged();
 }
 
 void Channel::configureParser(const QString &mode, const QString &encoding)
@@ -1023,6 +1088,21 @@ QJsonObject Channel::waveform(int limit) const
 
 QJsonObject Channel::structured(qint64 after, int limit, const QJsonObject &cursors) const
 {
+    auto result = readRecords(after, limit, cursors, false);
+    result["mode"] = parserMode;
+    return result;
+}
+
+QJsonObject Channel::scriptResults(qint64 after, int limit, const QJsonObject &cursors) const
+{
+    auto result = readRecords(after, limit, cursors, true);
+    result["enabled"] = scriptEnabled;
+    result["error"] = scriptError;
+    return result;
+}
+
+QJsonObject Channel::readRecords(qint64 after, int limit, const QJsonObject &cursors, bool script) const
+{
     if (after < 0 || limit < 1 || limit > 500)
     {
         fail("解析游标 >= 0，limit 范围 1..500");
@@ -1031,10 +1111,13 @@ QJsonObject Channel::structured(qint64 after, int limit, const QJsonObject &curs
     for (auto it = sources.begin(); it != sources.end(); ++it)
     {
         const auto &source = *it.value();
+        const auto &history = script ? source.scriptRecords : source.records;
+        const qint64 count = script ? source.scriptCount : source.parsedCount;
         const qint64 cursor = cursors.value(it.key()).toInteger(after);
+        if (cursor < 0) { fail("解析游标不能为负数"); }
         QJsonArray records;
         bool more = false;
-        for (const auto &record : source.records)
+        for (const auto &record : history)
         {
             if (record["seq"].toInteger() > cursor)
             {
@@ -1046,10 +1129,10 @@ QJsonObject Channel::structured(qint64 after, int limit, const QJsonObject &curs
                 records.append(record);
             }
         }
-        const qint64 oldest = source.records.empty() ? source.parsedCount + 1 : source.records.front()["seq"].toInteger();
-        result[it.key()] = QJsonObject {{"records", records}, {"next_cursor", more ? records.last().toObject()["seq"].toInteger() : source.parsedCount},
+        const qint64 oldest = history.empty() ? count + 1 : history.front()["seq"].toInteger();
+        result[it.key()] = QJsonObject {{"records", records}, {"next_cursor", more ? records.last().toObject()["seq"].toInteger() : count},
             {"has_more", more}, {"gap", cursor < oldest - 1}, {"oldest_cursor", oldest}};
     }
-    return {{"channel_id", id}, {"sources", result}, {"mode", parserMode}};
+    return {{"channel_id", id}, {"sources", result}};
 }
 }

@@ -14,8 +14,9 @@ Archive SHA256: `bfa39b3b9943aaa7f9266839e42dbbcd2b76abba37d60379a0ca10b225450ad
 The 12px archive is `fusion-pixel-font-12px-monospaced-otf-v2026.09.01.zip`,
 SHA256 `52f90d89a51ad49a1227b3d68e3d378edcd8571fe5172bf10d89c7b4ae4a7356`.
 
-The 8px font is used at 24px for the short English brand title only.
-Functional UI text uses antialiased Microsoft YaHei UI at 14px; data uses
-Cascadia Mono (Consolas fallback) at 12pt by default. The 12px pixel font remains
-available as an optional data font. Settings can restore the recommended
+The brand title uses antialiased Segoe UI. Functional UI text uses
+antialiased Microsoft YaHei UI at 14px; data uses
+Cascadia Mono (Consolas fallback) at 12pt by default, with Microsoft YaHei UI for Chinese glyphs. The 12px pixel font remains
+available as an optional data font, and both embedded fonts support migration
+from older settings. Settings can restore the recommended
 readable font without changing the pixel theme.

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 # Compile the UI once for the app and tests. Object linkage keeps Qt resource
 # registration present in both executables.
 add_library(workbench_ui OBJECT
@@ -9,6 +11,10 @@ add_library(workbench_ui OBJECT
     terminal.h
     docking.cpp
     docking.h
+    script_editor.cpp
+    script_results.cpp
+    parameter_grip.cpp
+    parameter_grip.h
 )
 workbench_configure_target(workbench_ui)
 target_include_directories(workbench_ui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")

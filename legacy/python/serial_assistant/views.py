@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Stream-aware monitor and terminal widgets."""
 import codecs
 import pyte

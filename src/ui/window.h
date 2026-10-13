@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 #include "terminal.h"
 #include "mcp.h"
@@ -47,12 +49,22 @@ public:
     IconButton *hexDisplay = nullptr;
     IconButton *wrapLines = nullptr;
     IconButton *cursorShape = nullptr;
+    IconButton *clipboardButton = nullptr;
     QStackedWidget *display = nullptr;
     LogView *log = nullptr;
     TerminalView *terminal = nullptr;
     QPlainTextEdit *payload = nullptr;
     QWidget *sender = nullptr;
     Splitter *splitter = nullptr;
+    Splitter *receiveSplitter = nullptr;
+    QFrame *scriptPanel = nullptr;
+    QTreeWidget *scriptTable = nullptr;
+    QLabel *scriptSummary = nullptr;
+    IconButton *scriptCollapse = nullptr;
+    QJsonObject scriptCursors;
+    qint64 scriptViewStart = 0;
+    bool scriptCollapsed = false;
+    int scriptPanelHeight = 164;
     QList<int> senderSizes {600, 176};
     Combo *encoding = nullptr;
     Combo *newline = nullptr;
@@ -69,6 +81,16 @@ public:
     IconButton *exportButton = nullptr;
     QLineEdit *filter = nullptr;
     bool terminalMode = false;
+    QString scriptCode = FrameScriptProgram::example();
+    bool scriptRequested = false;
+    QPointer<QDialog> scriptDialog;
+    bool supportsScript() const;
+    void applyScript(const QString &code, bool enabled);
+    void openScriptEditor();
+    void buildScriptResults();
+    void refreshScriptResults();
+    void clearScriptResults();
+    void resizeScriptResults();
     void setChannel(Channel *channel);
     void tick();
     void sendCurrent();
@@ -77,6 +99,7 @@ public:
     void replay();
     void exportLog();
     void templateMenu();
+    void clipboardMenu();
     void applyAppearance();
     QJsonObject settings() const;
     void restore(const QJsonObject &settings);
@@ -116,6 +139,8 @@ public:
     IconButton *plus;
     IconButton *gear;
     IconButton *parameterToggle;
+    QWidget *parameterGrip = nullptr;
+    int parameterWidth = 246;
     bool parametersVisible = true;
     Combo *protocol;
     Combo *port;
@@ -141,7 +166,13 @@ public:
     QLabel *localLabel;
     QLabel *serialInfo;
     QLabel *portDetails;
+    StatusLed *connectionLed;
+    QLabel *connectionState;
     QPushButton *connectButton;
+    QWidget *scriptControls;
+    QCheckBox *scriptToggle;
+    IconButton *scriptEdit;
+    QLabel *scriptHint;
     QLabel *status;
     QLabel *mcpStatus;
     QTimer timer;
@@ -186,10 +217,12 @@ public:
     void applyTheme(bool dark);
     void applyLocalTheme(bool dark);
     void arrangeParameters();
+    void resizeParameters(int width);
     void setDataFont(const QFont &font);
     void error(const QString &message);
     void waveHelp();
     void tabMenu(const QPoint &point);
+    void beginTabRename(int index);
     void resizeEvent(QResizeEvent *event) override;
     void closeEvent(QCloseEvent *event) override;
     bool nativeEvent(const QByteArray &type, void *message, qintptr *result) override;

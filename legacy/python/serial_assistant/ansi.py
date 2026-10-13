@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """ANSI SGR styles shared by the log monitor and terminal renderer."""
 
 from dataclasses import dataclass, replace

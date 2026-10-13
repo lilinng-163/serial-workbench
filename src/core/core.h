@@ -1,6 +1,9 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 
 #include "workbench_version.h"
+#include "frame_script.h"
 #include <QtCore>
 #include <QtNetwork>
 #include <QtSerialPort>
@@ -63,6 +66,9 @@ struct Source
     std::deque<QJsonObject> records;
     qint64 parsedCount = 0;
     qsizetype parsedBytes = 0;
+    std::deque<QJsonObject> scriptRecords;
+    qint64 scriptCount = 0;
+    qsizetype scriptBytes = 0;
 };
 
 class Engine;
@@ -82,6 +88,10 @@ public:
     QString error;
     QString parserMode = "off";
     QString parserEncoding = "utf-8";
+    QString scriptCode = FrameScriptProgram::example();
+    QString scriptError;
+    bool scriptEnabled = false;
+    qint64 scriptFrames = 0;
     qint64 rx = 0;
     qint64 tx = 0;
     int appliedBaud = 0;
@@ -110,13 +120,18 @@ public:
     QJsonObject send(const QByteArray &data, const QString &peer = {}, const QString &origin = "gui");
     void status(const QString &value, const QString &message = {}, bool reset = false);
     void configureParser(const QString &mode, const QString &encoding = "utf-8");
+    void configureScript(const QString &code, bool enabled);
     QJsonObject waveform(int limit = 1000) const;
     QJsonObject structured(qint64 after = 0, int limit = 100, const QJsonObject &cursors = {}) const;
+    QJsonObject scriptResults(qint64 after = 0, int limit = 100, const QJsonObject &cursors = {}) const;
 
 private:
+    FrameScriptProcessor *scriptProcessor = nullptr;
+    std::shared_ptr<const FrameScriptProgram> scriptProgram;
     void parseWave(Source &source, const QByteArray &data);
     void parseStructured(Source &source, const QByteArray &data, qint64 eventSequence, const QString &peer);
     void releaseTransport();
+    QJsonObject readRecords(qint64 after, int limit, const QJsonObject &cursors, bool script) const;
     void watchSocket(QTcpSocket *socket, const QString &peer);
 };
 

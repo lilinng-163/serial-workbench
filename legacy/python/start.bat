@@ -1,3 +1,5 @@
+REM SPDX-License-Identifier: Apache-2.0
+
 @echo off
 cd /d "%~dp0"
 if not exist ".venv\Scripts\pythonw.exe" (

@@ -1,8 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+
 add_library(workbench_core STATIC
     core.cpp
     core.h
     ssh_profiles.cpp
     ssh_profiles.h
+    frame_script.cpp
+    frame_script.h
+    script_worker.cpp
 )
 workbench_configure_target(workbench_core)
 target_include_directories(workbench_core PUBLIC

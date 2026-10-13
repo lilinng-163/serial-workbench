@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Readable log lines independent of serial/TCP receive chunk boundaries."""
 
 import codecs

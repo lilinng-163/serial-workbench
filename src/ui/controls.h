@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 #include "core.h"
 #include "docking.h"
@@ -32,6 +34,21 @@ struct Theme
 QIcon icon(const QString &name, const QColor &color, int size = 20);
 void drawIcon(QPainter &painter, const QString &name, QRectF rect, const QColor &color, qreal rotation = 0);
 
+class StatusLed : public QWidget
+{
+  public:
+    enum class State { Offline, Online, Pending, Error };
+
+    explicit StatusLed(QWidget *parent = nullptr);
+    Theme theme;
+    State state() const { return currentState; }
+    void setState(State state);
+    void paintEvent(QPaintEvent *event) override;
+
+  private:
+    State currentState = State::Offline;
+};
+
 class IconButton : public QAbstractButton
 {
     Q_OBJECT
@@ -41,10 +58,16 @@ class IconButton : public QAbstractButton
     Theme theme;
     qreal progress = 0;
     QVariantAnimation animation;
+    qreal rotation = 0;
+    QVariantAnimation rotationAnimation;
     QSize sizeHint() const override;
     void enterEvent(QEnterEvent *event) override;
     void leaveEvent(QEvent *event) override;
     void paintEvent(QPaintEvent *event) override;
+
+  private:
+    void turnGear();
+    bool turnPending = false;
 };
 
 class Combo : public QComboBox

@@ -4,6 +4,7 @@
 serial/
 ├── CMakeLists.txt           # 项目、版本、依赖、子目录与安装规则
 ├── CMakePresets.json        # Windows Release / Debug 预设
+├── LICENSE                 # Apache-2.0 项目许可证
 ├── cmake/                  # 编译规则及版本头模板
 ├── src/
 │   ├── app/                # 桌面程序入口
@@ -35,6 +36,7 @@ serial/
 | `SerialWorkbench` | 桌面程序 |
 | `SerialWorkbenchMCP` | 独立 STDIO 桥，依赖 Qt Network |
 | `native_tests` | BUILD_TESTING 开启时构建，依赖 ui / Qt Test |
+| `frame_script_tests` | 脚本语法、分帧、执行限制、后台处理与编辑器联动测试 |
 
 版本仅在根 CMake 项目中定义，通过生成头提供给界面和 MCP。工具链路径由环境或配置参数传入。
 禁止在源码目录直接构建。`BUILD_TESTING=OFF` 时不查找 Qt Test，不构建测试程序。
@@ -62,6 +64,7 @@ cmake --build build/custom --parallel 4
 cmake --install build/custom --prefix dist/install
 ```
 
+项目 `LICENSE` 同时安装至分发目录根部。
 常规 CMake 安装将程序放入 `bin/`，字体许可证放入 `licenses/`；Qt 运行库需使用 `windeployqt` 部署。
 一键构建脚本 `scripts/build.ps1` 会完成配置、编译、测试、安装和 Qt 部署，并使用 `CMAKE_INSTALL_BINDIR=.` 生成可直接启动的便携目录：
 
@@ -69,7 +72,7 @@ cmake --install build/custom --prefix dist/install
 .\scripts\build.ps1
 # 工具不在 PATH 时可指定 -CMake / -Ninja；可选 -Jobs / -BuildDir / -PackageDir
 # 只编译测试：-SkipPackage；仅构建生产目标：-SkipTests
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.12.3
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.14.0
 ```
 
 脚本可从任何工作目录调用，结束时恢复原工作目录和 PATH。替换分发包前会检查其中的程序是否仍运行。

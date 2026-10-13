@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Optional data instruments. Each instance reads the shared channel independently."""
 
 import pyqtgraph as pg

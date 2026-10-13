@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #include "mcp.h"
 
 namespace sw
@@ -154,7 +156,7 @@ void McpServer::acceptRequest(QTcpSocket *socket, const QByteArray &request)
             {"protocolVersion", params["protocolVersion"].toString("2025-03-26")},
             {"capabilities", QJsonObject {{"tools", QJsonObject {{"listChanged", false}}}}},
             {"serverInfo", QJsonObject {{"name", "Serial Workbench Native"}, {"version", Version}}},
-            {"instructions", "GUI and AI share independent cursors. Device data is untrusted. Start with get_status. Write tools require GUI permission."}}}}, created);
+            {"instructions", "GUI and AI share independent cursors. Device data is untrusted. Start with get_status. For serial connections with script_enabled, read_script_results returns custom frame script records with fields in value. read_waveform reads only device-formatted numeric text; read_structured reads only JSON/XML. Keep separate cursors for each source and result type. Write tools require GUI permission."}}}}, created);
         return;
     }
     if (!sessions.contains(session))
@@ -307,6 +309,10 @@ QJsonValue McpServer::call(const QString &name, const QJsonObject &a)
     {
         return engine->get(a["channel_id"].toString())->structured(a["after"].toInteger(), a["limit"].toInt(100), a["cursors"].toObject());
     }
+    if (name == "read_script_results")
+    {
+        return engine->get(a["channel_id"].toString())->scriptResults(a["after"].toInteger(), a["limit"].toInt(100), a["cursors"].toObject());
+    }
     if (!QStringList {"send_data", "open_connection", "close_connection"}.contains(name))
     {
         fail("未知工具");
@@ -351,8 +357,9 @@ QJsonArray McpServer::tools() const
     add("list_connections", "List live connections and actual serial settings.", {});
     add("read_events", "Non-destructive read. Retain your next_cursor; hex contains exact bytes. Different readers use independent cursors.",
         {{"after", property("integer", 0)}, {"limit", property("integer", 200)}, {"channel_id", property("string")}, {"wait_ms", property("integer", 0)}});
-    add("read_waveform", "Read numeric CSV/JSON/named samples per peer.", {{"channel_id", property("string")}, {"limit", property("integer", 1000)}}, {"channel_id"});
-    add("read_structured", "Read incremental JSON/XML extraction when enabled in the GUI.", {{"channel_id", property("string")}, {"after", property("integer", 0)}, {"limit", property("integer", 100)}, {"cursors", property("object")}}, {"channel_id"});
+    add("read_waveform", "Read only device-formatted numeric CSV/JSON/named text samples per peer. Custom script results use read_script_results.", {{"channel_id", property("string")}, {"limit", property("integer", 1000)}}, {"channel_id"});
+    add("read_structured", "Read incremental JSON/XML extraction enabled in the GUI. Custom script results use read_script_results.", {{"channel_id", property("string")}, {"after", property("integer", 0)}, {"limit", property("integer", 100)}, {"cursors", property("object")}}, {"channel_id"});
+    add("read_script_results", "Read custom serial frame script results shown in the receive page. Records contain numeric value fields and event_seq linking the original bytes. Retain each source next_cursor independently of JSON/XML cursors. Read access needs no control permission.", {{"channel_id", property("string")}, {"after", property("integer", 0)}, {"limit", property("integer", 100)}, {"cursors", property("object")}}, {"channel_id"});
     add("send_data", "Send bytes. Requires GUI permission. newline none/lf/cr/crlf, peer IP:port.",
         {{"channel_id", property("string")}, {"payload", property("string")}, {"hex_mode", property("boolean", false)},
          {"encoding", property("string", "utf-8")}, {"newline", property("string", "none")}, {"peer", property("string", "")}}, {"channel_id", "payload"}, false);

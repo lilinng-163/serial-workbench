@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Measure process launch to first visible HWND, using isolated settings and ports."""
 import ctypes
 from ctypes import wintypes

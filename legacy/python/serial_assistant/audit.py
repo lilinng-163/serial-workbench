@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Client identity and bounded MCP tool-call accounting."""
 
 from collections import deque

@@ -1,6 +1,9 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #include "window.h"
 #include "ssh_profiles.h"
 #include <QtTest>
+#include <algorithm>
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
@@ -103,9 +106,26 @@ private slots:
         QCOMPARE(transmitted.count(), 2);
         QCOMPARE(transmitted.last().first().toByteArray(), QByteArray("\x1b[Z"));
         QVERIFY(terminal->hasFocus());
+        QTest::keyClick(terminal, Qt::Key_Home, Qt::KeypadModifier);
+        QCOMPARE(transmitted.count(), 3);
+        QCOMPARE(transmitted.last().first().toByteArray(), QByteArray("\x1b[7~"));
+        QTest::keyClick(terminal, Qt::Key_End, Qt::KeypadModifier);
+        QCOMPARE(transmitted.count(), 4);
+        QCOMPARE(transmitted.last().first().toByteArray(), QByteArray("\x1b[4~"));
+        QVERIFY(terminal->inputMethodQuery(Qt::ImEnabled).toBool());
+        const QRectF inputRectangle = terminal->inputMethodQuery(Qt::ImCursorRectangle).toRectF();
+        QVERIFY(terminal->rect().contains(inputRectangle.toRect()));
+        QInputMethodEvent preedit("ni", {});
+        QApplication::sendEvent(terminal, &preedit);
+        QCOMPARE(terminal->preeditText, QString("ni"));
+        QInputMethodEvent commit;
+        commit.setCommitString("你");
+        QApplication::sendEvent(terminal, &commit);
+        QCOMPARE(transmitted.count(), 5);
+        QCOMPARE(transmitted.last().first().toByteArray(), QString("你").toUtf8());
         terminal->enabledInput = false;
         QTest::keyClick(terminal, Qt::Key_Tab);
-        QCOMPARE(transmitted.count(), 2);
+        QCOMPARE(transmitted.count(), 5);
         QVERIFY(!terminal->hasFocus());
         window.close();
     }
@@ -114,6 +134,53 @@ private slots:
     {
         QApplication::setStyle("Fusion");
         QApplication::setFont(sw::Theme::interfaceFont());
+    }
+
+    void gearRotationAndToolbarHints()
+    {
+        sw::IconButton gear("gear", "设置");
+        QSignalSpy turns(&gear.rotationAnimation, &QVariantAnimation::finished);
+        QEnterEvent enter(gear.rect().center(), gear.rect().center(), gear.rect().center());
+        QEvent leave(QEvent::Leave);
+
+        QApplication::sendEvent(&gear, &enter);
+        QTest::qWait(190);
+        QVERIFY(gear.progress > 0.9);
+        QVERIFY(gear.rotation > 0 && gear.rotation < 360);
+        QTRY_COMPARE(turns.count(), 1);
+        QCOMPARE(gear.rotationAnimation.endValue().toReal(), 360.0);
+        QCOMPARE(gear.rotation, 0.0);
+
+        QApplication::sendEvent(&gear, &leave);
+        QTest::qWait(190);
+        QVERIFY(gear.progress < 0.1);
+        QVERIFY(gear.rotation > 0 && gear.rotation < 360);
+        QTRY_COMPARE(turns.count(), 2);
+        QCOMPARE(gear.rotation, 0.0);
+
+        QApplication::sendEvent(&gear, &enter);
+        QTest::qWait(60);
+        const qreal beforeLeave = gear.rotation;
+        QApplication::sendEvent(&gear, &leave);
+        QCOMPARE(gear.rotation, beforeLeave);
+        QTRY_COMPARE(turns.count(), 4);
+        QCOMPARE(gear.rotation, 0.0);
+
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        for (const auto control : window.active->monitorPage->findChildren<sw::IconButton *>())
+        {
+            QVERIFY(control->text().isEmpty());
+            QVERIFY(!control->toolTip().isEmpty());
+        }
+        QCOMPARE(window.active->modeButton->size(), QSize(36, 36));
+        window.active->setTerminal(true);
+        QVERIFY(window.active->modeButton->text().isEmpty());
+        QCOMPARE(window.active->modeButton->toolTip(), QString("返回收发日志"));
+        QCOMPARE(window.active->modeButton->accessibleName(), window.active->modeButton->toolTip());
+        window.close();
     }
 
     void readableFontsAndMigration()
@@ -150,6 +217,11 @@ private slots:
         writeAppearance(sw::Theme::fontFamily(12), 18);
         {
             sw::Window window(&engine, &mcp, path);
+            window.ensurePolished();
+            auto title = window.findChild<QLabel *>("brandTitle");
+            QVERIFY(title);
+            QVERIFY(!title->font().family().contains("Fusion Pixel", Qt::CaseInsensitive));
+            QVERIFY(window.active->terminal->font().families().contains("Microsoft YaHei UI"));
             QCOMPARE(window.dataFont.family(), font.family());
             QCOMPARE(window.dataFont.pointSize(), font.pointSize());
             window.close();
@@ -248,6 +320,240 @@ private slots:
         QTest::qWait(150);
         QCOMPARE(channel->tx, stopped);
         window.close();
+    }
+
+    void connectionIndicatorFollowsSelectedPage()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        window.show();
+        auto capture = [&window](const QString &name)
+        {
+            const auto directory = qEnvironmentVariable("SW_UI_CAPTURE_DIR");
+            if (!directory.isEmpty())
+            {
+                QCoreApplication::processEvents();
+                window.sidebar->grab().save(QDir(directory).filePath(name));
+                window.grab().save(QDir(directory).filePath("workspace-" + name));
+            }
+        };
+
+        QCOMPARE(window.connectionLed->state(), sw::StatusLed::State::Offline);
+        QCOMPARE(window.connectionState->text(), QString("未连接"));
+        QCOMPARE(window.connectButton->text(), QString("建立连接"));
+        capture("connection-offline.png");
+
+        window.port->setCurrentText("loop://");
+        QTest::mouseClick(window.connectButton, Qt::LeftButton);
+        auto receive = window.active;
+        auto channel = receive->channel;
+        QVERIFY(channel);
+        QCOMPARE(channel->state, QString("connected"));
+        QCOMPARE(window.connectionLed->state(), sw::StatusLed::State::Online);
+        QCOMPARE(window.connectionState->text(), QString("已连接"));
+        QCOMPARE(window.connectButton->text(), QString("断开连接"));
+        capture("connection-online.png");
+        window.applyTheme(true);
+        capture("connection-online-dark.png");
+        window.applyTheme(false);
+
+        const auto captureDirectory = qEnvironmentVariable("SW_UI_CAPTURE_DIR");
+        if (!captureDirectory.isEmpty())
+        {
+            receive->setTerminal(true);
+            channel->receive("\r\nuser@device:~$ status\r\n"
+                             "Serial Workbench | connection online\r\n"
+                             "CPU 8%   Memory 124 MB   Latency 2 ms\r\n"
+                             "终端已就绪，支持中文输入与复制粘贴。\r\n"
+                             "user@device:~$ ");
+            QTest::qWait(160);
+            capture("terminal-controls.png");
+            auto toolbar = receive->monitorPage->findChild<QWidget *>("monitorToolbar");
+            QVERIFY(toolbar);
+            QVERIFY(toolbar->grab().save(QDir(captureDirectory).filePath("toolbar-terminal.png")));
+            const QRect gearRect(window.gear->mapTo(&window, QPoint()), window.gear->size());
+            QVERIFY(window.grab().copy(gearRect).save(QDir(captureDirectory).filePath("gear.png")));
+            auto title = window.findChild<QLabel *>("brandTitle");
+            QVERIFY(title);
+            const QRect titleRect(title->mapTo(&window, QPoint()), title->size());
+            QVERIFY(window.grab().copy(titleRect).save(QDir(captureDirectory).filePath("brand-title.png")));
+            QTest::mouseMove(window.gear, window.gear->rect().center());
+            QEnterEvent enter(window.gear->rect().center(), window.gear->rect().center(),
+                              window.gear->mapToGlobal(window.gear->rect().center()));
+            QApplication::sendEvent(window.gear, &enter);
+            QTest::qWait(200);
+            QVERIFY(window.grab().copy(gearRect).save(QDir(captureDirectory).filePath("gear-hover.png")));
+            QTest::mouseMove(toolbar, toolbar->rect().center());
+            QEvent leave(QEvent::Leave);
+            QApplication::sendEvent(window.gear, &leave);
+            window.applyTheme(true);
+            capture("terminal-controls-dark.png");
+            window.applyTheme(false);
+            receive->setTerminal(false);
+            QTest::qWait(120);
+            capture("controls-log.png");
+            window.applyTheme(true);
+            capture("controls-log-dark.png");
+            window.applyTheme(false);
+        }
+
+        window.newConnection();
+        QVERIFY(!window.active->channel);
+        QCOMPARE(channel->state, QString("connected"));
+        QCOMPARE(window.connectionLed->state(), sw::StatusLed::State::Offline);
+        QCOMPARE(window.connectionState->text(), QString("未连接"));
+        QCOMPARE(window.connectButton->text(), QString("建立连接"));
+
+        auto waveform = window.newInstrument("waveform", channel);
+        QCOMPARE(window.parameterPane, receive);
+        QCOMPARE(window.connectionLed->state(), sw::StatusLed::State::Online);
+        QCOMPARE(window.connectionState->text(), QString("已连接"));
+        QTest::mouseClick(window.connectButton, Qt::LeftButton);
+        QCOMPARE(channel->state, QString("closed"));
+        QCOMPARE(window.active, waveform);
+        QCOMPARE(window.connectionLed->state(), sw::StatusLed::State::Offline);
+        QCOMPARE(window.connectionState->text(), QString("已断开"));
+        QCOMPARE(window.connectButton->text(), QString("建立连接"));
+
+        QTest::mouseClick(window.connectButton, Qt::LeftButton);
+        QCOMPARE(channel->state, QString("connected"));
+        QCOMPARE(window.connectionLed->state(), sw::StatusLed::State::Online);
+        QCOMPARE(window.connectionState->text(), QString("已连接"));
+        QCOMPARE(window.connectButton->text(), QString("断开连接"));
+        window.close();
+    }
+
+    void connectionIndicatorDistinguishesPendingAndFailure()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        window.show();
+        window.port->setCurrentText("loop://");
+        window.connectionAction();
+        auto channel = window.active->channel;
+        QVERIFY(channel);
+
+        // Drive the real state notification without opening a network connection.
+        channel->status("connecting");
+        QCOMPARE(window.connectionLed->state(), sw::StatusLed::State::Pending);
+        QCOMPARE(window.connectionState->text(), QString("连接中"));
+        QCOMPARE(window.connectButton->text(), QString("取消连接"));
+        QTest::mouseClick(window.connectButton, Qt::LeftButton);
+        QCOMPARE(channel->state, QString("closed"));
+        QCOMPARE(window.connectionLed->state(), sw::StatusLed::State::Offline);
+        QCOMPARE(window.connectionState->text(), QString("已断开"));
+
+        channel->status("reconnecting", "Device temporarily unavailable");
+        QCOMPARE(window.connectionLed->state(), sw::StatusLed::State::Pending);
+        QCOMPARE(window.connectionState->text(), QString("重连中"));
+        QCOMPARE(window.connectButton->text(), QString("停止重连"));
+
+        channel->status("error", "Connection failed");
+        QCOMPARE(window.connectionLed->state(), sw::StatusLed::State::Error);
+        QCOMPARE(window.connectionState->text(), QString("连接异常"));
+        QCOMPARE(window.connectButton->text(), QString("建立连接"));
+
+        channel->status("listening");
+        QCOMPARE(window.connectionLed->state(), sw::StatusLed::State::Online);
+        QCOMPARE(window.connectionState->text(), QString("监听中"));
+        QCOMPARE(window.connectButton->text(), QString("停止监听"));
+        QTest::mouseClick(window.connectButton, Qt::LeftButton);
+        QCOMPARE(channel->state, QString("closed"));
+        QCOMPARE(window.connectionLed->state(), sw::StatusLed::State::Offline);
+        QCOMPARE(window.connectionState->text(), QString("已断开"));
+        window.close();
+    }
+
+    void customReceiveTabTitleSurvivesConnectionAndDetach()
+    {
+        QTemporaryDir directory;
+        const auto path = directory.filePath("settings.json");
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        {
+            sw::Window window(&engine, &mcp, path);
+            window.show();
+            auto receive = window.active;
+            const int index = pageIndex(&window, receive);
+            QTest::mouseDClick(window.tabs, Qt::LeftButton, Qt::NoModifier, window.tabs->tabRect(index).center());
+            QTRY_VERIFY(window.tabs->findChild<QLineEdit *>("tabTitleEditor") != nullptr);
+            auto editor = window.tabs->findChild<QLineEdit *>("tabTitleEditor");
+            QVERIFY(editor);
+            QTest::keyClicks(editor, "Bench A");
+            QTest::keyClick(editor, Qt::Key_Escape);
+            QTRY_COMPARE(window.tabs->tabText(index), QString("新收发页"));
+            QTRY_VERIFY(window.tabs->findChild<QLineEdit *>("tabTitleEditor") == nullptr);
+
+            window.beginTabRename(index);
+            editor = window.tabs->findChild<QLineEdit *>("tabTitleEditor");
+            QVERIFY(editor);
+            QTest::keyClicks(editor, "Bench A");
+            QTest::keyClick(editor, Qt::Key_Return);
+            QCOMPARE(window.tabs->tabText(index), QString("Bench A"));
+            QCOMPARE(receive->pageTitle, QString("Bench A"));
+
+            window.port->setCurrentText("loop://");
+            window.connectionAction();
+            QVERIFY(receive->channel);
+            QCOMPARE(window.tabs->tabText(pageIndex(&window, receive)), QString("Bench A"));
+            QCOMPARE(receive->channel->name, QString("loop://"));
+            window.applyTheme(true);
+            QCOMPARE(window.tabs->tabText(pageIndex(&window, receive)), QString("Bench A"));
+
+            auto detached = window.detachConnection(pageIndex(&window, receive), QPoint(200, 180));
+            QVERIFY(detached);
+            QCOMPARE(detached->tabs->tabText(pageIndex(detached, receive)), QString("Bench A"));
+            QCOMPARE(detached->windowTitle(), QString("Bench A · Serial Workbench"));
+            detached->close();
+            QCOMPARE(window.tabs->tabText(pageIndex(&window, receive)), QString("Bench A"));
+            window.tabs->setCurrentIndex(pageIndex(&window, receive));
+            window.saveSettings();
+            QFile file(path);
+            QVERIFY(file.open(QIODevice::ReadOnly));
+            QCOMPARE(QJsonDocument::fromJson(file.readAll()).object()["appearance"].toObject()["tab_title"].toString(), QString("Bench A"));
+            window.close();
+        }
+        sw::Window restored(&engine, &mcp, path);
+        QCOMPARE(restored.tabs->tabText(0), QString("Bench A"));
+        restored.close();
+    }
+
+    void customWidgetTabTitleRestores()
+    {
+        QTemporaryDir directory;
+        const auto path = directory.filePath("settings.json");
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        {
+            sw::Window window(&engine, &mcp, path);
+            window.show();
+            auto wave = window.newInstrument("waveform");
+            QTest::mouseDClick(window.tabs, Qt::LeftButton, Qt::NoModifier,
+                window.tabs->tabRect(pageIndex(&window, wave)).center());
+            QTRY_VERIFY(window.tabs->findChild<QLineEdit *>("tabTitleEditor") != nullptr);
+            auto editor = window.tabs->findChild<QLineEdit *>("tabTitleEditor");
+            QVERIFY(editor);
+            QVERIFY(editor->hasFocus());
+            QTest::keyClicks(editor, "Motor RPM");
+            QCOMPARE(editor->text(), QString("Motor RPM"));
+            editor->clearFocus();
+            QCOMPARE(wave->pageTitle, QString("Motor RPM"));
+            QTRY_COMPARE(window.tabs->tabText(pageIndex(&window, wave)), QString("Motor RPM"));
+            window.saveSettings();
+            window.close();
+        }
+        sw::Window restored(&engine, &mcp, path);
+        auto renamed = std::find_if(restored.panes.begin(), restored.panes.end(), [](auto pane)
+        {
+            return pane->isInstrument() && pane->pageTitle == "Motor RPM";
+        });
+        QVERIFY(renamed != restored.panes.end());
+        QCOMPARE(restored.tabs->tabText(pageIndex(&restored, *renamed)), QString("Motor RPM"));
+        restored.close();
     }
 
     void serialReconfiguration()
@@ -882,6 +1188,15 @@ private slots:
         const int gap = window.plus->geometry().left() - window.tabs->geometry().right();
         QVERIFY(gap >= 0 && gap < 16);
         QVERIFY(window.tabs->rect().contains(window.tabs->tabRect(window.tabs->currentIndex()).center()));
+        auto toolbar = pane->monitorPage->findChild<QWidget *>("monitorToolbar");
+        QVERIFY(toolbar);
+        const int lastToolEdge = pane->exportButton->mapTo(toolbar, QPoint()).x() + pane->exportButton->width();
+        QVERIFY(lastToolEdge <= toolbar->width());
+        const auto captureDirectory = qEnvironmentVariable("SW_UI_CAPTURE_DIR");
+        if (!captureDirectory.isEmpty())
+        {
+            QVERIFY(window.grab().save(QDir(captureDirectory).filePath("workspace-narrow.png")));
+        }
         QVERIFY(pane->sendButton->mapTo(pane->monitorPage, QPoint()).x() + pane->sendButton->width() <= pane->monitorPage->width());
         QVERIFY(pane->sendButton->parentWidget()->rect().contains(pane->sendButton->geometry()));
         window.close();
@@ -935,6 +1250,15 @@ private slots:
         QTest::mouseClick(window.plus, Qt::LeftButton);
         auto menu = qobject_cast<QMenu *>(QApplication::activePopupWidget());
         QVERIFY(menu);
+        const auto captureDirectory = qEnvironmentVariable("SW_UI_CAPTURE_DIR");
+        if (!captureDirectory.isEmpty())
+        {
+            QCoreApplication::processEvents();
+            QVERIFY(menu->grab().save(QDir(captureDirectory).filePath("new-page-menu.png")));
+            menu->setActiveAction(menu->actions().first());
+            QCoreApplication::processEvents();
+            QVERIFY(menu->grab().save(QDir(captureDirectory).filePath("new-page-menu-hover.png")));
+        }
         QCOMPARE(window.tabs->count(), 1);
         auto waveAction = menu->findChild<QAction *>("new_waveform");
         QVERIFY(waveAction);
@@ -1225,11 +1549,230 @@ private slots:
         window.close();
     }
 
+    void parameterSidebarResizesAndRestores()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        const auto settingsPath = directory.filePath("settings.json");
+        int savedWidth = 0;
+        {
+            sw::Window window(&engine, &mcp, settingsPath);
+            window.show();
+            QTest::qWait(50);
+            auto scroll = window.findChild<QScrollArea *>("parameterScroll");
+            auto grip = window.parameterGrip;
+            QVERIFY(scroll && grip);
+            QVERIFY(grip->isVisible());
+            QCOMPARE(scroll->width(), 246);
+            const int workspaceWidth = window.stack->width();
+            const auto center = grip->rect().center();
+            const auto global = grip->mapToGlobal(center);
+            QTest::mousePress(grip, Qt::LeftButton, {}, center);
+            QMouseEvent move(QEvent::MouseMove, QPointF(center + QPoint(120, 0)),
+                QPointF(global + QPoint(120, 0)), Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+            QCoreApplication::sendEvent(grip, &move);
+            QTest::mouseRelease(grip, Qt::LeftButton, {}, grip->rect().center());
+            QTRY_COMPARE(scroll->width(), 366);
+            QCOMPARE(window.parameterWidth, 366);
+            QVERIFY(window.stack->width() < workspaceWidth);
+            QVERIFY(window.sidebar->width() <= scroll->viewport()->width());
+            QVERIFY(window.port->width() > 214);
+            window.parameterToggle->setChecked(false);
+            QVERIFY(!grip->isVisible());
+            window.parameterToggle->setChecked(true);
+            QVERIFY(grip->isVisible());
+            QCOMPARE(scroll->width(), 366);
+
+            window.resizeParameters(700);
+            window.resize(900, 900);
+            QTest::qWait(50);
+            QCOMPARE(window.parameterWidth, 700);
+            QVERIFY(scroll->width() < 700);
+            QVERIFY(window.stack->width() >= 320);
+            window.resize(480, 640);
+            QTest::qWait(50);
+            QCOMPARE(window.stack->width(), 426);
+            window.parameterToggle->setChecked(true);
+            QVERIFY(grip->isVisible());
+            QVERIFY(grip->mapTo(window.centralWidget(), grip->rect().bottomRight()).x() < window.centralWidget()->width());
+            window.resizeParameters(300);
+            QCOMPARE(scroll->width(), 300);
+            QCOMPARE(grip->mapTo(window.centralWidget(), QPoint()).x(), 54 + 300);
+            QTest::mouseDClick(grip, Qt::LeftButton);
+            QCOMPARE(window.parameterWidth, 246);
+            QCOMPARE(scroll->width(), 246);
+            window.resize(1400, 900);
+            QTest::qWait(50);
+            QVERIFY(grip->isVisible());
+            QTest::keyClick(grip, Qt::Key_Right, Qt::ShiftModifier);
+            QCOMPARE(window.parameterWidth, 286);
+            QCOMPARE(scroll->width(), 286);
+            window.resizeParameters(420);
+            savedWidth = window.parameterWidth;
+            const auto captureDirectory = qEnvironmentVariable("SW_UI_CAPTURE_DIR");
+            if (!captureDirectory.isEmpty())
+            {
+                QTest::qWait(50);
+                QVERIFY(window.grab().save(QDir(captureDirectory).filePath("sidebar-resized.png")));
+            }
+            window.close();
+        }
+        sw::Window restored(&engine, &mcp, settingsPath);
+        restored.show();
+        QTest::qWait(50);
+        QCOMPARE(restored.parameterWidth, savedWidth);
+        QCOMPARE(restored.findChild<QScrollArea *>("parameterScroll")->width(), savedWidth);
+        restored.close();
+    }
+
+    void settingsResizeAndRestore()
+    {
+        QTemporaryDir directory;
+        const auto path = directory.filePath("settings.json");
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        const QSize compactSize(520, 380);
+        {
+            sw::Window window(&engine, &mcp, path);
+            window.openSettings();
+            auto dialog = window.settingsDialog;
+            auto pages = dialog->findChild<sw::DetachableTabs *>("settingsPages");
+            auto mcpPages = dialog->findChild<sw::DetachableTabs *>("mcpPages");
+            auto clients = dialog->findChild<QScrollArea *>("clientsScroll");
+            auto themeChoice = dialog->findChild<QComboBox *>("themeChoice");
+            QVERIFY(pages && mcpPages && clients && themeChoice);
+
+            pages->setCurrentIndex(1);
+            mcpPages->setCurrentIndex(1);
+            dialog->resize(compactSize);
+            QTRY_COMPARE(dialog->size(), compactSize);
+            QTRY_VERIFY(clients->verticalScrollBar()->maximum() > 0);
+            QCOMPARE(clients->horizontalScrollBar()->maximum(), 0);
+            auto piButton = clients->widget()->findChildren<QPushButton *>().last();
+            clients->ensureWidgetVisible(piButton);
+            QTRY_VERIFY(clients->viewport()->rect().contains(piButton->mapTo(clients->viewport(), piButton->rect().center())));
+            const auto captureDirectory = qEnvironmentVariable("SW_UI_CAPTURE_DIR");
+            if (!captureDirectory.isEmpty())
+            {
+                QVERIFY(dialog->grab().save(QDir(captureDirectory).filePath("settings-compact.png")));
+            }
+
+            pages->setCurrentIndex(0);
+            QCoreApplication::processEvents();
+            const int compactFieldWidth = themeChoice->width();
+            dialog->resize(980, 760);
+            QTRY_VERIFY(themeChoice->width() > compactFieldWidth + 200);
+            pages->setCurrentIndex(1);
+            mcpPages->setCurrentIndex(2);
+            QCoreApplication::processEvents();
+            const int expandedTableHeight = window.auditTable->height();
+            dialog->resize(compactSize);
+            QTRY_VERIFY(window.auditTable->height() < expandedTableHeight - 200);
+            QCOMPARE(dialog->size(), compactSize);
+
+            pages->setCurrentIndex(2);
+            auto about = dialog->findChild<QScrollArea *>("aboutScroll");
+            auto version = dialog->findChild<QLabel *>("aboutVersion");
+            QVERIFY(about && version);
+            QVERIFY(version->text().contains(sw::Version));
+            QTRY_VERIFY(about->verticalScrollBar()->maximum() > 0);
+            QCOMPARE(about->horizontalScrollBar()->maximum(), 0);
+            if (!captureDirectory.isEmpty())
+            {
+                QVERIFY(dialog->grab().save(QDir(captureDirectory).filePath("about-compact.png")));
+            }
+            dialog->resize(980, 760);
+            QTRY_COMPARE(about->verticalScrollBar()->maximum(), 0);
+            QCOMPARE(about->horizontalScrollBar()->maximum(), 0);
+            if (!captureDirectory.isEmpty())
+            {
+                QTest::qWait(60);
+                const QRect viewportRect(about->viewport()->mapTo(dialog, QPoint()), about->viewport()->size());
+                QVERIFY(dialog->grab().copy(viewportRect).save(QDir(captureDirectory).filePath("about-page.png")));
+                QVERIFY(dialog->grab().save(QDir(captureDirectory).filePath("settings-about.png")));
+                window.applyTheme(true);
+                QCoreApplication::processEvents();
+                QVERIFY(dialog->grab().copy(viewportRect).save(QDir(captureDirectory).filePath("about-page-dark.png")));
+                window.applyTheme(false);
+            }
+            dialog->resize(compactSize);
+            QTRY_COMPARE(dialog->size(), compactSize);
+            dialog->accept();
+            QVERIFY(!dialog->isVisible());
+            window.close();
+        }
+        {
+            sw::Window restored(&engine, &mcp, path);
+            restored.openSettings();
+            QTRY_COMPARE(restored.settingsDialog->size(), compactSize);
+            restored.settingsDialog->reject();
+            restored.close();
+        }
+    }
+
+    void piAgentConfiguration()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const auto agentDirectory = directory.filePath("pi-agent");
+        QVERIFY(QDir().mkpath(agentDirectory));
+        const auto configPath = QDir(agentDirectory).filePath("mcp.json");
+        QFile existing(configPath);
+        QVERIFY(existing.open(QIODevice::WriteOnly));
+        existing.write("{\n  \"mcpServers\": {\n    \"other-server\": {\"url\": \"http://127.0.0.1:9000/mcp\"}\n  }\n}\n");
+        existing.close();
+
+        const bool hadPreviousDirectory = qEnvironmentVariableIsSet("PI_CODING_AGENT_DIR");
+        const QByteArray previousDirectory = qgetenv("PI_CODING_AGENT_DIR");
+        qputenv("PI_CODING_AGENT_DIR", agentDirectory.toUtf8());
+
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        QVERIFY(mcp.start(0));
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        QLabel result;
+        window.configureClient(4, &result);
+
+        if (hadPreviousDirectory)
+        {
+            qputenv("PI_CODING_AGENT_DIR", previousDirectory);
+        }
+        else
+        {
+            qunsetenv("PI_CODING_AGENT_DIR");
+        }
+
+        QFile updatedFile(configPath);
+        QVERIFY(updatedFile.open(QIODevice::ReadOnly));
+        const auto updated = QJsonDocument::fromJson(updatedFile.readAll()).object();
+        const auto servers = updated["mcpServers"].toObject();
+        QCOMPARE(servers["other-server"].toObject()["url"].toString(), QString("http://127.0.0.1:9000/mcp"));
+        QCOMPARE(servers["serial-workbench"].toObject()["url"].toString(), mcp.url());
+        QVERIFY(servers["serial-workbench"].toObject()["enabled"].toBool());
+        QVERIFY(result.text().contains(configPath));
+        QVERIFY(result.text().contains("服务检查通过"));
+        QVERIFY(result.text().contains("/reload"));
+
+        window.openSettings();
+        auto themeChoice = window.settingsDialog->findChild<QComboBox *>("themeChoice");
+        QVERIFY(themeChoice);
+        QCOMPARE(themeChoice->itemText(0), QString("浅色主题"));
+        QCOMPARE(themeChoice->itemText(1), QString("深色主题"));
+        for (const auto label : window.settingsDialog->findChildren<QLabel *>())
+        {
+            QVERIFY(!label->text().contains("像素掌机"));
+            QVERIFY(!label->text().contains("灰绿面板 / 琥珀按键 / 清晰文字"));
+        }
+
+        window.close();
+    }
+
     void mcpPermissions()
     {
         sw::Engine engine;
         sw::McpServer mcp(&engine);
-        QCOMPARE(mcp.tools().size(), 9);
+        QCOMPARE(mcp.tools().size(), 10);
         QVERIFY_EXCEPTION_THROWN(mcp.call("open_connection", {{"config", QJsonObject {{"kind", "serial"}, {"port", "loop://"}}}}), std::runtime_error);
         engine.allowControl = true;
         mcp.call("open_connection", {{"config", QJsonObject {{"kind", "serial"}, {"port", "loop://"}}}});

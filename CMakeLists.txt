@@ -1,7 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+
 cmake_minimum_required(VERSION 3.21)
 
 project(SerialWorkbench
-    VERSION 0.12.3
+    VERSION 0.14.0
     DESCRIPTION "Native serial and network workbench with shared MCP access"
     LANGUAGES CXX
 )
@@ -32,3 +34,5 @@ install(FILES resources/fonts/OFL.txt resources/fonts/README.md
     DESTINATION licenses/FusionPixel
 )
 install(DIRECTORY resources/fonts/LICENSES DESTINATION licenses/FusionPixel)
+
+install(FILES LICENSE DESTINATION .)

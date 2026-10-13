@@ -1,3 +1,5 @@
+REM SPDX-License-Identifier: Apache-2.0
+
 @echo off
 setlocal
 cd /d "%~dp0"

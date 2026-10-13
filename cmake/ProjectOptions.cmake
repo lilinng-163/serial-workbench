@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 add_library(workbench_options INTERFACE)
 target_compile_features(workbench_options INTERFACE cxx_std_17)
 

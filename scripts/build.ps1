@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 param(
     [string]$QtRoot = $env:QTDIR,
     [string]$CompilerBin = $env:MINGW_BIN,
@@ -48,6 +50,7 @@ try
         if ($LASTEXITCODE)
         {
             Get-Content -LiteralPath (Join-Path $buildPath 'native-tests.txt') -ErrorAction SilentlyContinue
+            Get-Content -LiteralPath (Join-Path $buildPath 'script-tests.txt') -ErrorAction SilentlyContinue
             throw 'Native tests failed'
         }
     }

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """STDIO adapter: proxies tools to the running desktop, never opens serial ports."""
 
 import sys

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 add_library(workbench_mcp STATIC
     mcp.cpp
     mcp.h

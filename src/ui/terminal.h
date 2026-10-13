@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 #include "controls.h"
 #include <QTextCodec>
@@ -67,6 +69,14 @@ public:
     bool enabledInput = false;
     bool caret = true;
     bool blockCursor = true;
+    bool copyShortcutEnabled = true;
+    bool pasteShortcutEnabled = true;
+    bool rightClickPasteEnabled = true;
+    QPoint selectionAnchor;
+    QPoint selectionCursor;
+    bool selecting = false;
+    bool selectionActive = false;
+    QString preeditText;
     QTimer blink;
     void feed(const QByteArray &data);
     void reset(const QString &encoding = "utf-8");
@@ -78,7 +88,16 @@ public:
     bool event(QEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void inputMethodEvent(QInputMethodEvent *event) override;
+    QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
+    void focusInEvent(QFocusEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
+    bool hasSelection() const;
+    QString selectedText() const;
+    void copySelection();
+    void pasteClipboard();
 signals:
     void transmit(const QByteArray &data);
     void zoomRequested(int steps);
@@ -86,5 +105,6 @@ signals:
 private:
     void csi(QChar command, const QString &parameters);
     void newline();
+    QPoint cellAt(const QPointF &position) const;
 };
 }
