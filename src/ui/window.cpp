@@ -1265,7 +1265,6 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     sshBody->setContentsMargins(0, 4, 0, 0);
     sshBody->setSpacing(8);
     sshBody->addWidget(label("主机别名或地址", "muted"));
-    auto sshTargetRow = horizontal();
     sshTarget = combo({}, {}, true);
     sshTarget->setObjectName("sshHost");
     sshTarget->setInsertPolicy(QComboBox::NoInsert);
@@ -1279,12 +1278,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     {
         sshTarget->lineEdit()->setCursorPosition(0);
     });
-    sshTargetRow->addWidget(sshTarget, 1);
-    auto sshRefresh = new IconButton("refresh", "重新读取 ~/.ssh/config");
-    sshRefresh->setFixedSize(34, 38);
-    connect(sshRefresh, &QAbstractButton::clicked, this, &Window::refreshSshProfiles);
-    sshTargetRow->addWidget(sshRefresh);
-    sshBody->addLayout(sshTargetRow);
+    sshBody->addWidget(sshTarget);
     sshBody->addWidget(label("用户名（可选）", "muted"));
     sshUser = new QLineEdit();
     sshUser->setPlaceholderText("User");
@@ -1304,6 +1298,15 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     }
     configStack->addWidget(sshPanel);
     refreshSshProfiles();
+    sshConfigTimer.setInterval(500);
+    connect(&sshConfigTimer, &QTimer::timeout, this, [this]
+    {
+        if (SshProfiles::fingerprint() != sshConfigFingerprint)
+        {
+            refreshSshProfiles();
+        }
+    });
+    sshConfigTimer.start();
     side->addWidget(configStack);
     side->addWidget(label("连接名称", "muted"));
     connectionName = new QLineEdit();
@@ -1861,13 +1864,17 @@ void Window::protocolChanged()
 void Window::refreshSshProfiles()
 {
     const QString current = sshTarget->currentText();
+    const bool currentWasProfile = sshTarget->findText(current, Qt::MatchExactly) >= 0;
+    const QStringList profiles = SshProfiles::aliases();
     const QSignalBlocker blocker(sshTarget);
     sshTarget->clear();
-    sshTarget->addItems(SshProfiles::aliases());
+    sshTarget->addItems(profiles);
     sshTarget->setCurrentIndex(-1);
-    sshTarget->setEditText(current);
+    const QString selected = currentWasProfile && !profiles.contains(current) ? QString() : current;
+    sshTarget->setEditText(selected);
     sshTarget->lineEdit()->setCursorPosition(0);
-    sshTarget->setToolTip(current.isEmpty() ? "选择或输入 SSH 主机" : current);
+    sshTarget->setToolTip(selected.isEmpty() ? "选择或输入 SSH 主机" : selected);
+    sshConfigFingerprint = SshProfiles::fingerprint();
 }
 
 bool Window::holdsSerialPort(const QString &name) const
@@ -2487,6 +2494,7 @@ void Window::closeEvent(QCloseEvent *event)
     closing = true;
     timer.stop();
     portTimer.stop();
+    sshConfigTimer.stop();
     if (primary)
     {
         if (!primary->closing)

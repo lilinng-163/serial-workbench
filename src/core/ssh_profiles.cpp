@@ -1,18 +1,19 @@
 #include "ssh_profiles.h"
 
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QSet>
-#include <QTextStream>
 
 namespace sw
 {
 namespace
 {
-void collectAliases(const QString &path, QStringList &result, QSet<QString> &visited, int depth)
+void collectConfig(const QString &path, QStringList *result, QSet<QString> &visited,
+    QCryptographicHash *fingerprint, int depth)
 {
     if (depth > 12)
     {
@@ -21,7 +22,16 @@ void collectAliases(const QString &path, QStringList &result, QSet<QString> &vis
 
     const QFileInfo information(path);
     const QString canonical = information.canonicalFilePath();
-    if (canonical.isEmpty() || visited.contains(canonical))
+    if (canonical.isEmpty())
+    {
+        if (fingerprint)
+        {
+            fingerprint->addData(QDir::cleanPath(information.absoluteFilePath()).toUtf8());
+            fingerprint->addData("missing");
+        }
+        return;
+    }
+    if (visited.contains(canonical))
     {
         return;
     }
@@ -30,13 +40,25 @@ void collectAliases(const QString &path, QStringList &result, QSet<QString> &vis
     QFile file(canonical);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
     {
+        if (fingerprint)
+        {
+            fingerprint->addData(canonical.toUtf8());
+            fingerprint->addData("unreadable");
+        }
         return;
     }
 
-    QTextStream stream(&file);
-    while (!stream.atEnd())
+    const QByteArray contents = file.readAll();
+    if (fingerprint)
     {
-        const QString line = stream.readLine().trimmed();
+        fingerprint->addData(canonical.toUtf8());
+        fingerprint->addData(contents);
+    }
+
+    const auto lines = QString::fromUtf8(contents).split('\n');
+    for (const QString &lineValue : lines)
+    {
+        const QString line = lineValue.trimmed();
         if (line.isEmpty() || line.startsWith('#'))
         {
             continue;
@@ -54,9 +76,9 @@ void collectAliases(const QString &path, QStringList &result, QSet<QString> &vis
             for (const QString &alias : values)
             {
                 if (!alias.isEmpty() && !alias.startsWith('!') && !alias.contains('*')
-                    && !alias.contains('?') && !alias.startsWith('-') && !result.contains(alias))
+                    && !alias.contains('?') && !alias.startsWith('-') && result && !result->contains(alias))
                 {
-                    result.append(alias);
+                    result->append(alias);
                 }
             }
             continue;
@@ -75,9 +97,17 @@ void collectAliases(const QString &path, QStringList &result, QSet<QString> &vis
 
             const QFileInfo included(pattern);
             const auto files = included.dir().entryInfoList({included.fileName()}, QDir::Files | QDir::Readable, QDir::Name);
+            if (fingerprint)
+            {
+                fingerprint->addData(pattern.toUtf8());
+                for (const QFileInfo &entry : files)
+                {
+                    fingerprint->addData(entry.fileName().toUtf8());
+                }
+            }
             for (const QFileInfo &entry : files)
             {
-                collectAliases(entry.absoluteFilePath(), result, visited, depth + 1);
+                collectConfig(entry.absoluteFilePath(), result, visited, fingerprint, depth + 1);
             }
         }
     }
@@ -89,7 +119,16 @@ QStringList SshProfiles::aliases(const QString &configPath)
     QStringList result;
     QSet<QString> visited;
     const QString path = configPath.isEmpty() ? QDir::home().filePath(".ssh/config") : configPath;
-    collectAliases(path, result, visited, 0);
+    collectConfig(path, &result, visited, nullptr, 0);
     return result;
+}
+
+QString SshProfiles::fingerprint(const QString &configPath)
+{
+    QSet<QString> visited;
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    const QString path = configPath.isEmpty() ? QDir::home().filePath(".ssh/config") : configPath;
+    collectConfig(path, nullptr, visited, &hash, 0);
+    return QString::fromLatin1(hash.result().toHex());
 }
 }

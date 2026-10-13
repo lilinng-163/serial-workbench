@@ -146,6 +146,8 @@ public:
     QLabel *mcpStatus;
     QTimer timer;
     QTimer portTimer;
+    QTimer sshConfigTimer;
+    QString sshConfigFingerprint;
     QJsonArray lastPorts;
     bool portsLoaded = false;
     std::function<QJsonArray()> portProvider = [] { return Engine::ports(); };
