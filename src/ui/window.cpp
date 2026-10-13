@@ -1270,6 +1270,15 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     sshTarget->setObjectName("sshHost");
     sshTarget->setInsertPolicy(QComboBox::NoInsert);
     sshTarget->lineEdit()->setPlaceholderText("选择配置或输入地址");
+    sshTarget->view()->setMinimumWidth(320);
+    connect(sshTarget->lineEdit(), &QLineEdit::textChanged, this, [this](const QString &text)
+    {
+        sshTarget->setToolTip(text.isEmpty() ? "选择或输入 SSH 主机" : text);
+    });
+    connect(sshTarget, qOverload<int>(&QComboBox::activated), this, [this]
+    {
+        sshTarget->lineEdit()->setCursorPosition(0);
+    });
     sshTargetRow->addWidget(sshTarget, 1);
     auto sshRefresh = new IconButton("refresh", "重新读取 ~/.ssh/config");
     sshRefresh->setFixedSize(34, 38);
@@ -1816,6 +1825,8 @@ void Window::loadForm(const Config &c)
     bindHost->setText(c.bindHost);
     bindPort->setValue(c.bindPort);
     sshTarget->setCurrentText(c.sshHost);
+    sshTarget->lineEdit()->setCursorPosition(0);
+    sshTarget->setToolTip(c.sshHost.isEmpty() ? "选择或输入 SSH 主机" : c.sshHost);
     sshUser->setText(c.sshUser);
     sshPort->setText(c.sshPort ? QString::number(c.sshPort) : QString());
     sshIdentity->setText(c.sshIdentity);
@@ -1855,6 +1866,8 @@ void Window::refreshSshProfiles()
     sshTarget->addItems(SshProfiles::aliases());
     sshTarget->setCurrentIndex(-1);
     sshTarget->setEditText(current);
+    sshTarget->lineEdit()->setCursorPosition(0);
+    sshTarget->setToolTip(current.isEmpty() ? "选择或输入 SSH 主机" : current);
 }
 
 bool Window::holdsSerialPort(const QString &name) const
