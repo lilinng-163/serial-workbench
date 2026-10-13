@@ -577,6 +577,23 @@ void TerminalView::resizeGrid()
     y = qBound(0, y, rows - 1);
 }
 
+bool TerminalView::event(QEvent *event)
+{
+    if (enabledInput && event->type() == QEvent::KeyPress)
+    {
+        auto key = static_cast<QKeyEvent *>(event);
+        const bool tab = key->key() == Qt::Key_Tab || key->key() == Qt::Key_Backtab;
+        const bool shortcut = key->modifiers() & (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier);
+        if (tab && !shortcut)
+        {
+            // QWidget otherwise consumes Tab for focus traversal before keyPressEvent.
+            keyPressEvent(key);
+            return true;
+        }
+    }
+    return QWidget::event(event);
+}
+
 void TerminalView::keyPressEvent(QKeyEvent *event)
 {
     if (event->key() == Qt::Key_Insert && event->modifiers() == Qt::NoModifier)
@@ -597,7 +614,12 @@ void TerminalView::keyPressEvent(QKeyEvent *event)
     const QMap<int, QByteArray> keys {{Qt::Key_Return, "\r"}, {Qt::Key_Enter, "\r"}, {Qt::Key_Tab, "\t"},
         {Qt::Key_Up, "\x1b[A"}, {Qt::Key_Down, "\x1b[B"}, {Qt::Key_Right, "\x1b[C"}, {Qt::Key_Left, "\x1b[D"},
         {Qt::Key_Home, "\x1b[H"}, {Qt::Key_End, "\x1b[F"}, {Qt::Key_Delete, "\x1b[3~"}, {Qt::Key_Backspace, "\x7f"}, {Qt::Key_Escape, "\x1b"}};
-    if ((event->modifiers() & Qt::ControlModifier) && event->key() == Qt::Key_V)
+    if (event->key() == Qt::Key_Backtab
+        || (event->key() == Qt::Key_Tab && (event->modifiers() & Qt::ShiftModifier)))
+    {
+        data = "\x1b[Z";
+    }
+    else if ((event->modifiers() & Qt::ControlModifier) && event->key() == Qt::Key_V)
     {
         data = QApplication::clipboard()->text().toUtf8();
     }

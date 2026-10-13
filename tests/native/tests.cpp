@@ -77,6 +77,7 @@ private slots:
         uiEngine.sshExecutable = engine.sshExecutable;
         sw::McpServer uiMcp(&uiEngine);
         sw::Window window(&uiEngine, &uiMcp, directory.filePath("settings.json"));
+        window.show();
         window.protocol->setCurrentIndex(4);
         QCOMPARE(window.configStack->currentIndex(), 2);
         window.sshTarget->setCurrentText("lab-server");
@@ -86,6 +87,26 @@ private slots:
         QTRY_COMPARE(window.active->channel->state, QString("connected"));
         QVERIFY(window.active->terminalMode);
         QCOMPARE(window.active->channel->config.sshIdentity, directory.filePath("test key"));
+        window.active->tick();
+        auto terminal = window.active->terminal;
+        terminal->setFocus();
+        QTRY_VERIFY(terminal->hasFocus());
+        QSignalSpy transmitted(terminal, &sw::TerminalView::transmit);
+        const auto receivedBeforeTab = window.active->channel->rx;
+        QTest::keyClick(terminal, Qt::Key_Tab);
+        QCOMPARE(transmitted.count(), 1);
+        QCOMPARE(transmitted.first().first().toByteArray(), QByteArray("\t"));
+        QVERIFY(terminal->hasFocus());
+        QTRY_COMPARE(window.active->channel->rx, receivedBeforeTab + 1);
+        QCOMPARE(window.active->channel->tx, 1);
+        QTest::keyClick(terminal, Qt::Key_Tab, Qt::ShiftModifier);
+        QCOMPARE(transmitted.count(), 2);
+        QCOMPARE(transmitted.last().first().toByteArray(), QByteArray("\x1b[Z"));
+        QVERIFY(terminal->hasFocus());
+        terminal->enabledInput = false;
+        QTest::keyClick(terminal, Qt::Key_Tab);
+        QCOMPARE(transmitted.count(), 2);
+        QVERIFY(!terminal->hasFocus());
         window.close();
     }
 

@@ -75,6 +75,7 @@ public:
     void resizeEvent(QResizeEvent *event) override;
     void changeEvent(QEvent *event) override;
     void resizeGrid();
+    bool event(QEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void inputMethodEvent(QInputMethodEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;

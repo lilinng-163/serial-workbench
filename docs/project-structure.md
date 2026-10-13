@@ -69,7 +69,7 @@ cmake --install build/custom --prefix dist/install
 .\scripts\build.ps1
 # 工具不在 PATH 时可指定 -CMake / -Ninja；可选 -Jobs / -BuildDir / -PackageDir
 # 只编译测试：-SkipPackage；仅构建生产目标：-SkipTests
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.12.0
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.12.1
 ```
 
 脚本可从任何工作目录调用，结束时恢复原工作目录和 PATH。替换分发包前会检查其中的程序是否仍运行。
