@@ -38,6 +38,11 @@ struct Config
 
     QJsonObject json() const;
     static Config fromJson(const QJsonObject &object);
+    static Config waveformDemo();
+    bool isWaveformDemo() const;
+    static Config structuredDemo();
+    bool isStructuredDemo() const;
+    bool isBuiltinDemo() const;
     void validate() const;
     QString key() const;
 };
@@ -110,6 +115,7 @@ public:
     QTimer retryTimer;
     bool manualClose = true;
     bool opening = false;
+    QPointer<QObject> transferOwner;
 
     QJsonObject describe() const;
     void open();
@@ -125,7 +131,13 @@ public:
     QJsonObject structured(qint64 after = 0, int limit = 100, const QJsonObject &cursors = {}) const;
     QJsonObject scriptResults(qint64 after = 0, int limit = 100, const QJsonObject &cursors = {}) const;
 
+signals:
+    void bytesReceived(const QByteArray &data);
+
 private:
+    qint64 demoSampleIndex = 0;
+    void generateWaveDemo();
+    void generateStructuredDemo();
     FrameScriptProcessor *scriptProcessor = nullptr;
     std::shared_ptr<const FrameScriptProgram> scriptProgram;
     void parseWave(Source &source, const QByteArray &data);
@@ -146,6 +158,8 @@ public:
     QString sshExecutable = "ssh";
 
     Channel *open(const Config &config);
+    Channel *waveformDemo();
+    Channel *structuredDemo();
     Channel *get(const QString &id) const;
     void remove(const QString &id);
     QJsonArray list() const;

@@ -66,7 +66,41 @@ bool McpServer::start(quint16 port)
         error = QString("MCP 端口 %1 无法监听：%2").arg(port).arg(errorString());
         return false;
     }
+    error.clear();
+    emit portChanged(serverPort());
     return true;
+}
+
+bool McpServer::changePort(quint16 port)
+{
+    if (isListening() && port == serverPort()) { error.clear(); return true; }
+    QTcpServer candidate;
+    if (!candidate.listen(QHostAddress::LocalHost, port))
+    {
+        error = QString("端口 %1 已占用或不可用：%2").arg(port).arg(candidate.errorString())
+            + (isListening() ? "；原服务仍在运行" : "；请选择其他端口");
+        return false;
+    }
+    const auto nextPort = candidate.serverPort();
+    const auto previousPort = serverPort();
+    const bool wasListening = isListening();
+    candidate.close();
+    close();
+    if (start(nextPort)) { return true; }
+    const auto failure = error;
+    if (wasListening && !start(previousPort))
+    {
+        error = failure + "；原端口恢复失败：" + error;
+        return false;
+    }
+    error = failure;
+    return false;
+}
+
+bool McpServer::startAvailable(quint16 preferredPort)
+{
+    if (start(preferredPort)) { return true; }
+    return start(0);
 }
 
 QString McpServer::url() const

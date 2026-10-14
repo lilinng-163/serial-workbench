@@ -16,9 +16,14 @@ public:
     QJsonArray audit;
     QMap<QString, QString> sessions;
     bool start(quint16 port);
+    bool changePort(quint16 port);
+    bool startAvailable(quint16 preferredPort);
     QString url() const;
     QJsonValue call(const QString &name, const QJsonObject &arguments);
     QJsonArray tools() const;
+
+signals:
+    void portChanged(quint16 port);
 
 private:
     void acceptRequest(QTcpSocket *socket, const QByteArray &request);

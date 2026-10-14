@@ -123,25 +123,81 @@ class Splitter : public QSplitter
 
 class WavePlot : public QWidget
 {
+    Q_OBJECT
   public:
     explicit WavePlot(QWidget *parent = nullptr);
     Theme theme;
     QMap<QString, QVector<QPointF>> series;
-    qreal zoom = 1;
-    qreal offset = 0;
-    QPointF lastMouse;
     void setSamples(const QJsonObject &data);
+    bool updateChannel(Channel *channel, int limit);
+    QRectF plotArea() const;
+    QPair<double, double> horizontalRange() const;
+    QPair<double, double> verticalRange() const;
+    bool xAxisVisible() const { return showX; }
+    bool yAxisVisible() const { return showY; }
+    void setXAxisVisible(bool visible);
+    void setYAxisVisible(bool visible);
+    bool followsLatest() const { return following; }
+    void setFollowLatest(bool enabled);
+    void resetView();
+    QJsonObject inspect(const QPointF &position) const;
+    quint64 dataRevision() const { return revision; }
+    int renderedPointCount() const { return renderedPoints; }
+    bool isCurveVisible(const QString &name) const;
+    void setCurveVisible(const QString &name, bool visible);
+    void invalidatePlot();
     void paintEvent(QPaintEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
+    void leaveEvent(QEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
+    void contextMenuEvent(QContextMenuEvent *event) override;
+
+  signals:
+    void followLatestChanged(bool enabled);
 
   private:
-    QRectF plotArea() const;
-    qreal sampleSpan() const;
-    void clampOffset();
+    QPair<double, double> sampleBounds() const;
+    QPair<double, double> valueRange() const;
+    QColor curveColor(const QString &name) const;
+    void dataChanged();
+    void updateLegend();
+    void rebuildImage();
+    void drawInspection(QPainter &painter);
+    QScrollArea *legendScroll;
+    QWidget *legendBody;
+    QHBoxLayout *legendLayout;
+    QMap<QString, QToolButton *> legendButtons;
+    QMap<QString, int> colorSlots;
+    QSet<QString> hiddenCurves;
+    QPointer<Channel> boundChannel;
+    int boundLimit = 0;
+    QMap<QString, qint64> sourceCursors;
+    QMap<QString, QStringList> sourceCurves;
+    quint64 revision = 0;
+    mutable bool rangeDirty = true;
+    mutable QPair<double, double> cachedRange;
+    QPixmap image;
+    bool imageDirty = true;
+    QFont imageFont;
+    QList<QColor> imageColors;
+    bool showX = true;
+    bool showY = true;
+    bool following = true;
+    double followSpan = 0;
+    bool manualVertical = false;
+    QPair<double, double> horizontalView;
+    QPair<double, double> verticalView;
+    QPointF dragStart;
+    QRectF dragArea;
+    QPair<double, double> dragHorizontal;
+    QPair<double, double> dragVertical;
+    int renderedPoints = 0;
+    QPointF hoverPosition;
+    bool hovering = false;
     bool dragging = false;
 };
 } // namespace sw

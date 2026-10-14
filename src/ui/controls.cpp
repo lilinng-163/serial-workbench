@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "controls.h"
+#include <QSvgRenderer>
 #include <cmath>
 #include <numeric>
 
@@ -202,6 +203,9 @@ QString Theme::stylesheet() const
     QString s = R"(
         QWidget { color: $text; font-family: "$font"; font-size: 14px; font-weight: normal; }
         QMainWindow, QDialog, QWidget#root { background: $bg; }
+        QFrame#agentCard { background: $panel; border: 1px solid $line; }
+        QLabel#agentTitle { font-size: 14px; font-weight: 600; }
+        QLabel#agentLogo { background: #ffffff; border: none; }
         QFrame#sidebar { background: $side; border-right: 2px solid $edge; }
         QFrame#rail { background: $rail; border-right: 2px solid $rail; }
         QWidget#workspace, QWidget#page { background: $panel; }
@@ -517,14 +521,18 @@ void drawIcon(QPainter &p, const QString &name, QRectF rect, const QColor &color
     {
         stroke({{2, 12}, {6, 12}, {9, 5}, {14, 20}, {18, 9}, {22, 9}});
     }
-    else if (name == "port")
+    else if (name == "port" || name == "lightning")
     {
-        p.drawRoundedRect(QRectF(6, 8, 12, 9), 1.5, 1.5);
-        stroke({{8.5, 3}, {8.5, 8}});
-        stroke({{15.5, 3}, {15.5, 8}});
-        stroke({{12, 17}, {12, 21}});
-        stroke({{10, 12}, {10, 13}});
-        stroke({{14, 12}, {14, 13}});
+        static QSvgRenderer lightning(QStringLiteral(":/brand/lightning.svg"));
+        lightning.render(&p, QRectF(0, 0, 24, 24));
+    }
+    else if (name == "file-transfer")
+    {
+        stroke({{5, 20}, {5, 3}, {14, 3}, {19, 8}, {19, 12}});
+        stroke({{14, 3}, {14, 8}, {19, 8}});
+        stroke({{9, 16}, {21, 16}, {18, 13}});
+        stroke({{21, 16}, {18, 19}});
+        stroke({{5, 20}, {11, 20}});
     }
     else if (name == "send")
     {
@@ -655,7 +663,8 @@ void IconButton::paintEvent(QPaintEvent *)
         qRound(foreground.blue() + (active.blue() - foreground.blue()) * colorAmount));
     const qreal scale = 1.0 + progress * 0.05;
     const qreal shift = isDown() ? 1.5 : -progress;
-    const qreal extent = qMin(22.0 * scale, qreal(qMin(width(), height()) - 5));
+    const qreal iconSize = glyph == "lightning" || glyph == "port" ? 28.0 : 22.0;
+    const qreal extent = qMin(iconSize * scale, qreal(qMin(width(), height()) - 5));
     drawIcon(p, glyph == "pause" && isChecked() ? "play" : glyph,
              QRectF((width() - extent) / 2, (height() - extent) / 2 + shift, extent, extent), color, rotation);
 }
@@ -783,6 +792,7 @@ void SearchBox::paintEvent(QPaintEvent *event)
 
 ConnectionBar::ConnectionBar(QWidget *parent) : TearTabBar(parent)
 {
+    middleClickCloses = true;
     setObjectName("connections");
     setDrawBase(false);
     setExpanding(false);
@@ -857,207 +867,4 @@ QSplitterHandle *Splitter::createHandle()
     return new Grip(orientation(), this);
 }
 
-WavePlot::WavePlot(QWidget *parent) : QWidget(parent)
-{
-    setMinimumSize(200, 150);
-    setMouseTracking(true);
-    setToolTip("滚轮缩放；放大后按住左键拖动；双击恢复全部采样");
-}
-
-QRectF WavePlot::plotArea() const
-{
-    return QRectF(rect()).adjusted(64, 34, -24, -48);
-}
-
-qreal WavePlot::sampleSpan() const
-{
-    qreal minimum = std::numeric_limits<qreal>::max();
-    qreal maximum = std::numeric_limits<qreal>::lowest();
-
-    for (const auto &points : series)
-    {
-        for (const auto &point : points)
-        {
-            minimum = std::min(minimum, point.x());
-            maximum = std::max(maximum, point.x());
-        }
-    }
-
-    return maximum < minimum ? 1.0 : std::max(1.0, maximum - minimum);
-}
-
-void WavePlot::clampOffset()
-{
-    const qreal range = sampleSpan();
-    offset = series.isEmpty() ? 0 : qBound(range / zoom - range, offset, 0.0);
-}
-
-void WavePlot::setSamples(const QJsonObject &data)
-{
-    series.clear();
-    const auto sources = data["sources"].toObject();
-    for (auto it = sources.begin(); it != sources.end(); ++it)
-    {
-        for (const auto &value : it.value().toObject()["samples"].toArray())
-        {
-            const auto sample = value.toObject();
-            const auto values = sample["values"].toObject();
-            for (auto variable = values.begin(); variable != values.end(); ++variable)
-            {
-                const QString name = it.key() == "default" ? variable.key() : it.key() + "/" + variable.key();
-                if (!series.contains(name) && series.size() >= 16)
-                {
-                    continue;
-                }
-                series[name].append(QPointF(sample["index"].toDouble(), variable.value().toDouble()));
-            }
-        }
-    }
-    clampOffset();
-    update();
-}
-
-void WavePlot::paintEvent(QPaintEvent *)
-{
-    QPainter p(this);
-    p.fillRect(rect(), theme.panel);
-    p.setRenderHint(QPainter::Antialiasing);
-    const QRectF area = plotArea();
-    p.setPen(QPen(theme.line, 1));
-    for (int i = 0; i <= 8; ++i)
-    {
-        const qreal x = area.left() + area.width() * i / 8;
-        const qreal y = area.top() + area.height() * i / 8;
-        p.drawLine(QPointF(x, area.top()), QPointF(x, area.bottom()));
-        p.drawLine(QPointF(area.left(), y), QPointF(area.right(), y));
-    }
-    if (series.isEmpty())
-    {
-        p.setPen(theme.muted);
-        p.drawText(area, Qt::AlignCenter | Qt::TextWordWrap, "等待 @wave 报文\n点击「数据格式」查看示例");
-        return;
-    }
-    double xmin = std::numeric_limits<double>::max();
-    double xmax = std::numeric_limits<double>::lowest();
-    double ymin = xmin;
-    double ymax = xmax;
-    for (const auto &points : series)
-    {
-        for (const auto &point : points)
-        {
-            xmin = std::min(xmin, point.x());
-            xmax = std::max(xmax, point.x());
-            ymin = std::min(ymin, point.y());
-            ymax = std::max(ymax, point.y());
-        }
-    }
-    const double span = std::max(1.0, xmax - xmin) / zoom;
-    xmax += offset;
-    xmin = xmax - span;
-    const double yspan = std::max(0.01, ymax - ymin);
-    ymax += yspan * 0.1;
-    ymin -= yspan * 0.1;
-    p.setPen(theme.muted);
-    for (int i = 0; i <= 8; ++i)
-    {
-        const qreal y = area.bottom() - area.height() * i / 8;
-        p.drawText(QRectF(0, y - 10, 54, 20), Qt::AlignRight | Qt::AlignVCenter,
-                   QString::number(ymin + (ymax - ymin) * i / 8, 'g', 4));
-        const qreal x = area.left() + area.width() * i / 8;
-        p.drawText(QRectF(x - 35, area.bottom() + 8, 70, 20), Qt::AlignCenter,
-                   QString::number(xmin + span * i / 8, 'f', 0));
-    }
-    p.drawText(QRectF(area.left(), height() - 23, area.width(), 20), Qt::AlignCenter, "采样序号");
-    const QList<QColor> colors{theme.accent,      theme.green, QColor("#6c92a0"),
-                               QColor("#b0839a"), theme.red,   QColor("#9e9a52")};
-    int index = 0;
-    int legendX = 76;
-    for (auto it = series.begin(); it != series.end(); ++it)
-    {
-        const QColor color = colors[index++ % colors.size()];
-        p.setPen(QPen(color, 2));
-        p.drawLine(legendX, 17, legendX + 18, 17);
-        p.setPen(theme.text);
-        p.drawText(legendX + 24, 22, it.key());
-        legendX += 38 + fontMetrics().horizontalAdvance(it.key());
-        p.save();
-        p.setClipRect(area);
-        QPainterPath path;
-        bool first = true;
-        for (const auto &point : it.value())
-        {
-            const QPointF mapped(area.left() + (point.x() - xmin) / span * area.width(),
-                                 area.bottom() - (point.y() - ymin) / (ymax - ymin) * area.height());
-            first ? path.moveTo(mapped) : path.lineTo(mapped);
-            first = false;
-        }
-        p.setPen(QPen(color, 1.8));
-        p.drawPath(path);
-        p.restore();
-    }
-}
-
-void WavePlot::wheelEvent(QWheelEvent *event)
-{
-    zoom = qBound(1.0, zoom * (event->angleDelta().y() > 0 ? 1.2 : 1 / 1.2), 100.0);
-    clampOffset();
-    update();
-    event->accept();
-}
-
-void WavePlot::mousePressEvent(QMouseEvent *event)
-{
-    if (event->button() == Qt::LeftButton && !series.isEmpty()
-        && plotArea().contains(event->position()))
-    {
-        dragging = true;
-        lastMouse = event->position();
-        setCursor(Qt::ClosedHandCursor);
-        event->accept();
-        return;
-    }
-
-    QWidget::mousePressEvent(event);
-}
-
-void WavePlot::mouseMoveEvent(QMouseEvent *event)
-{
-    if (dragging && (event->buttons() & Qt::LeftButton))
-    {
-        const qreal pixels = event->position().x() - lastMouse.x();
-        const qreal width = qMax(1.0, plotArea().width());
-
-        // 将屏幕位移换算为当前可见的采样范围，保持曲线与鼠标同步。
-        offset -= pixels * sampleSpan() / zoom / width;
-        lastMouse = event->position();
-        clampOffset();
-        update();
-        event->accept();
-        return;
-    }
-
-    QWidget::mouseMoveEvent(event);
-}
-
-void WavePlot::mouseReleaseEvent(QMouseEvent *event)
-{
-    if (dragging && event->button() == Qt::LeftButton)
-    {
-        dragging = false;
-        unsetCursor();
-        event->accept();
-        return;
-    }
-
-    QWidget::mouseReleaseEvent(event);
-}
-
-void WavePlot::mouseDoubleClickEvent(QMouseEvent *)
-{
-    zoom = 1;
-    offset = 0;
-    dragging = false;
-    unsetCursor();
-    update();
-}
 } // namespace sw

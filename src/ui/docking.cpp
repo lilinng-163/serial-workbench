@@ -58,6 +58,12 @@ QObject *TearTabBar::identity(int index) const
 
 void TearTabBar::mousePressEvent(QMouseEvent *event)
 {
+    if (middleClickCloses && event->button() == Qt::MiddleButton)
+    {
+        middlePressedPage = identity(tabAt(event->position().toPoint()));
+        event->accept();
+        return;
+    }
     if (event->button() == Qt::LeftButton)
     {
         pressPosition = event->position().toPoint();
@@ -97,6 +103,15 @@ void TearTabBar::mouseMoveEvent(QMouseEvent *event)
 
 void TearTabBar::mouseReleaseEvent(QMouseEvent *event)
 {
+    if (middleClickCloses && event->button() == Qt::MiddleButton)
+    {
+        const int index = tabAt(event->position().toPoint());
+        const bool close = middlePressedPage && identity(index) == middlePressedPage;
+        middlePressedPage.clear();
+        event->accept();
+        if (close) { emit tabCloseRequested(index); }
+        return;
+    }
     pressedPage.clear();
     QTabBar::mouseReleaseEvent(event);
 }

@@ -63,6 +63,39 @@ Config Config::fromJson(const QJsonObject &o)
     return c;
 }
 
+Config Config::waveformDemo()
+{
+    Config config;
+    config.kind = "demo";
+    config.name = "Demo · 演示波形";
+    config.host = "waveform-demo";
+    return config;
+}
+
+bool Config::isWaveformDemo() const
+{
+    return kind == "demo" && host == "waveform-demo";
+}
+
+Config Config::structuredDemo()
+{
+    Config config;
+    config.kind = "demo";
+    config.name = "Demo · JSON/XML";
+    config.host = "structured-demo";
+    return config;
+}
+
+bool Config::isStructuredDemo() const
+{
+    return kind == "demo" && host == "structured-demo";
+}
+
+bool Config::isBuiltinDemo() const
+{
+    return isWaveformDemo() || isStructuredDemo();
+}
+
 QString Config::key() const
 {
     return kind == "serial" ? "serial:" + port.toLower().remove("\\\\.\\")
@@ -165,7 +198,7 @@ Channel *Engine::get(const QString &id) const
 Channel *Engine::open(const Config &config)
 {
     config.validate();
-    if (config.kind == "serial")
+    if (config.kind == "serial" || config.isBuiltinDemo())
     {
         for (auto channel : channels)
         {
@@ -173,7 +206,7 @@ Channel *Engine::open(const Config &config)
             {
                 if (channel->state == "connected")
                 {
-                    channel->applySerial(config);
+                    if (config.kind == "serial") { channel->applySerial(config); }
                     return channel;
                 }
                 channel->close();
@@ -192,6 +225,16 @@ Channel *Engine::open(const Config &config)
     channel->open();
     emit channelsChanged();
     return channel;
+}
+
+Channel *Engine::waveformDemo()
+{
+    return open(Config::waveformDemo());
+}
+
+Channel *Engine::structuredDemo()
+{
+    return open(Config::structuredDemo());
 }
 
 void Engine::remove(const QString &id)
@@ -285,9 +328,12 @@ Channel::Channel(Engine *owner, const Config &configuration) : QObject(owner), e
     name = config.name.isEmpty() ? (config.kind == "serial" ? config.port
         : config.kind == "ssh" ? config.sshHost
         : config.kind + " · " + QString::number(config.kind == "tcp-client" ? config.networkPort : config.bindPort)) : config.name;
-    demoTimer.setInterval(40);
+    demoTimer.setTimerType(Qt::PreciseTimer);
+    demoTimer.setInterval(config.isWaveformDemo() ? 20 : config.isStructuredDemo() ? 1000 : 40);
     connect(&demoTimer, &QTimer::timeout, this, [this]
     {
+        if (config.isWaveformDemo()) { generateWaveDemo(); return; }
+        if (config.isStructuredDemo()) { generateStructuredDemo(); return; }
         const double t = QDateTime::currentMSecsSinceEpoch() / 1000.0;
         receive(QString("@wave temperature=%1,voltage=%2,current=%3\r\n").arg(25 + 3 * std::sin(t), 0, 'f', 3).arg(3.3 + 0.2 * std::cos(t * 0.7), 0, 'f', 3).arg(0.4 + 0.1 * std::sin(t * 1.8), 0, 'f', 3).toUtf8());
     });
@@ -300,6 +346,50 @@ Channel::Channel(Engine *owner, const Config &configuration) : QObject(owner), e
             open();
         }
     });
+}
+
+void Channel::generateWaveDemo()
+{
+    constexpr double pi = 3.14159265358979323846;
+    const double seconds = demoSampleIndex++ * 0.02;
+    const double phase = seconds * pi;
+    const double sine = std::sin(phase);
+    const double triangle = 2 / pi * std::asin(std::sin(phase * 0.7));
+    const double square = std::sin(phase * 1.3) >= 0 ? 0.8 : -0.8;
+    const double cycle = seconds * 0.35;
+    const double sawtooth = 2 * (cycle - std::floor(cycle)) - 1;
+    receive(QString("@wave sine=%1,triangle=%2,square=%3,sawtooth=%4\r\n")
+        .arg(sine, 0, 'f', 6)
+        .arg(triangle, 0, 'f', 6)
+        .arg(square, 0, 'f', 6)
+        .arg(sawtooth, 0, 'f', 6)
+        .toUtf8());
+}
+
+void Channel::generateStructuredDemo()
+{
+    const qint64 sequence = ++demoSampleIndex;
+    const double temperature = std::round((25 + 2 * std::sin(sequence * 0.2)) * 100) / 100;
+    const double voltage = std::round((3.3 + 0.05 * std::cos(sequence * 0.3)) * 1000) / 1000;
+    const bool alarm = sequence % 10 == 0;
+    const QJsonObject json {
+        {"seq", sequence},
+        {"device", "demo-sensor"},
+        {"state", "running"},
+        {"telemetry", QJsonObject {{"temperature", temperature}, {"voltage", voltage}}},
+        {"flags", QJsonObject {{"online", true}, {"alarm", alarm}}}
+    };
+    const QString xml = QString("<telemetry seq=\"%1\" state=\"running\">\n"
+        "  <device>demo-sensor</device>\n"
+        "  <temperature unit=\"C\">%2</temperature>\n"
+        "  <voltage unit=\"V\">%3</voltage>\n"
+        "  <alarm>%4</alarm>\n"
+        "</telemetry>\r\n")
+        .arg(sequence)
+        .arg(temperature, 0, 'f', 2)
+        .arg(voltage, 0, 'f', 3)
+        .arg(alarm ? "true" : "false");
+    receive(QJsonDocument(json).toJson(QJsonDocument::Compact) + "\r\n" + xml.toUtf8());
 }
 
 Channel::~Channel()
@@ -395,6 +485,7 @@ void Channel::deviceMissing()
 
 void Channel::applySerial(const Config &next)
 {
+    if (transferOwner) { fail("文件传输期间不能修改串口参数"); }
     next.validate();
     if (config.port == "loop://")
     {
@@ -639,8 +730,17 @@ void Channel::open()
         }
         else
         {
+            if (config.isStructuredDemo()) { configureParser("auto"); }
             demoTimer.start();
             status("connected");
+            if (config.isStructuredDemo() && sources.isEmpty())
+            {
+                for (int index = 0; index < 3; ++index) { generateStructuredDemo(); }
+            }
+            if (config.isWaveformDemo() && sources.isEmpty())
+            {
+                for (int index = 0; index < 500; ++index) { generateWaveDemo(); }
+            }
         }
     }
     catch (const std::exception &exception)
@@ -665,7 +765,8 @@ QJsonObject Channel::describe() const
         {"rx_bytes", rx}, {"tx_bytes", tx}, {"peers", QJsonArray::fromStringList(peers.keys())},
         {"local_address", localAddress}, {"serial_generation", generation}, {"reconnect_attempts", attempts},
         {"parser_mode", parserMode}, {"applied_baudrate", appliedBaud},
-        {"script_enabled", scriptEnabled}, {"script_error", scriptError}, {"script_frames", scriptFrames}};
+        {"script_enabled", scriptEnabled}, {"script_error", scriptError}, {"script_frames", scriptFrames},
+        {"file_transfer_active", bool(transferOwner)}};
 }
 
 void Channel::receive(const QByteArray &data, const QString &peer)
@@ -675,7 +776,14 @@ void Channel::receive(const QByteArray &data, const QString &peer)
         return;
     }
     rx += data.size();
-    auto event = engine->journal.append(id, "rx", data, peer);
+    const bool transferring = bool(transferOwner);
+    auto event = engine->journal.append(id, "rx", data, peer, transferring ? "file-transfer" : QString());
+    emit bytesReceived(data);
+    if (transferring)
+    {
+        emit engine->eventAdded();
+        return;
+    }
     const QString key = peer.isEmpty() ? "default" : peer;
     if (!sources.contains(key))
     {
@@ -697,6 +805,7 @@ void Channel::receive(const QByteArray &data, const QString &peer)
 
 QJsonObject Channel::send(const QByteArray &data, const QString &peer, const QString &origin)
 {
+    if (transferOwner && origin != "file-transfer") { fail("串口正在传输文件，请在传输完成后发送"); }
     if (state != "connected" && state != "listening")
     {
         fail("连接未就绪，不能发送");

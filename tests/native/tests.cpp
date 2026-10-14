@@ -2,6 +2,7 @@
 
 #include "window.h"
 #include "ssh_profiles.h"
+#include "agent_config.h"
 #include <QtTest>
 #include <algorithm>
 #ifdef Q_OS_WIN
@@ -42,8 +43,15 @@ private slots:
         sw::WavePlot plot;
         plot.resize(plotWidth + 88, 360);
         plot.series["signal"] = {{0, 0}, {range, 1}};
-        plot.zoom = scale;
-
+        const auto wheel = [&plot](const QPointF &position, int delta, Qt::KeyboardModifiers modifiers)
+        {
+            QWheelEvent event(position, plot.mapToGlobal(position.toPoint()), QPoint(), QPoint(0, delta),
+                              Qt::NoButton, modifiers, Qt::NoScrollPhase, false);
+            QApplication::sendEvent(&plot, &event);
+        };
+        for (int step = 0; step < int(scale); ++step) { wheel(plot.plotArea().center(), 120, Qt::ShiftModifier); }
+        const auto initial = plot.horizontalRange();
+        const qreal span = initial.second - initial.first;
         const auto mouse = [&plot](QEvent::Type type, const QPointF &position,
                                   Qt::MouseButton button, Qt::MouseButtons buttons)
         {
@@ -58,51 +66,619 @@ private slots:
             mouse(QEvent::MouseMove, end, Qt::NoButton, button);
             mouse(QEvent::MouseButtonRelease, end, button, Qt::NoButton);
         };
-        const QPointF start(100, 100);
-
+        const QPointF start = plot.plotArea().center();
+        const qreal width = plot.plotArea().width();
         drag(start, start + QPointF(10.25, 0));
-        const qreal displacement = -plot.offset / (range / scale) * plotWidth;
+        const qreal displacement = (initial.first - plot.horizontalRange().first) / span * width;
         QVERIFY2(qAbs(displacement - 10.25) < 0.000001,
                  "The curve must move the same number of screen pixels as the mouse.");
         QCOMPARE(plot.cursor().shape(), Qt::ArrowCursor);
+        QVERIFY(!plot.followsLatest());
 
-        const qreal once = plot.offset;
-        plot.offset = 0;
-        mouse(QEvent::MouseButtonPress, start, Qt::LeftButton, Qt::LeftButton);
-        for (int step = 1; step <= 5; ++step)
-        {
-            mouse(QEvent::MouseMove, start + QPointF(step * 2.05, 0), Qt::NoButton, Qt::LeftButton);
-        }
-        mouse(QEvent::MouseButtonRelease, start + QPointF(10.25, 0), Qt::LeftButton, Qt::NoButton);
-        QVERIFY(qAbs(plot.offset - once) < 0.000001);
-
+        const auto once = plot.horizontalRange();
         mouse(QEvent::MouseMove, start + QPointF(40, 0), Qt::NoButton, Qt::NoButton);
         drag(QPointF(20, 100), QPointF(30, 100));
         drag(start, start + QPointF(10, 0), Qt::RightButton);
-        QVERIFY(qAbs(plot.offset - once) < 0.000001);
+        QCOMPARE(plot.horizontalRange(), once);
 
-        drag(start, start + QPointF(plotWidth * scale, 0));
-        QVERIFY(qAbs(plot.offset - (range / scale - range)) < 0.000001);
-        drag(start, start - QPointF(plotWidth * scale, 0));
-        QCOMPARE(plot.offset, 0.0);
-
-        drag(start, start + QPointF(plotWidth * scale, 0));
-        for (int step = 0; step < 30; ++step)
-        {
-            QWheelEvent wheel(start, plot.mapToGlobal(start.toPoint()), QPoint(), QPoint(0, -120),
-                              Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
-            QApplication::sendEvent(&plot, &wheel);
-        }
-        QCOMPARE(plot.zoom, 1.0);
-        QCOMPARE(plot.offset, 0.0);
-        drag(start, start + QPointF(10, 0));
-        QCOMPARE(plot.offset, 0.0);
-
-        plot.zoom = scale;
-        plot.offset = -range / 2;
         mouse(QEvent::MouseButtonDblClick, start, Qt::LeftButton, Qt::LeftButton);
-        QCOMPARE(plot.zoom, 1.0);
-        QCOMPARE(plot.offset, 0.0);
+        QCOMPARE(plot.horizontalRange(), qMakePair(0.0, double(range)));
+        QVERIFY(plot.followsLatest());
+        // Full-history mode must also allow a drag; it used to be clamped to zero.
+        drag(start, start + QPointF(10, 0));
+        QVERIFY(plot.horizontalRange().first < 0);
+        QVERIFY(!plot.followsLatest());
+    }
+
+    void waveformAxesZoomAndLivePan()
+    {
+        sw::Engine engine;
+        sw::Config config;
+        config.port = "loop://";
+        auto channel = engine.open(config);
+        for (int index = 0; index < 100; ++index)
+        {
+            channel->receive(QString("@wave temperature=%1\n").arg(20 + index * 0.1).toUtf8());
+        }
+        sw::WavePlot plot;
+        plot.setFont(sw::Theme::defaultDataFont());
+        plot.resize(1000, 600);
+        plot.updateChannel(channel, 100);
+        plot.show();
+        const auto wheel = [&plot](QPointF position, Qt::KeyboardModifiers modifiers)
+        {
+            QWheelEvent event(position, plot.mapToGlobal(position.toPoint()), QPoint(), QPoint(0, 120),
+                              Qt::NoButton, modifiers, Qt::NoScrollPhase, false);
+            QApplication::sendEvent(&plot, &event);
+        };
+        const auto xBefore = plot.horizontalRange();
+        const auto yBefore = plot.verticalRange();
+        const auto area = plot.plotArea();
+        const QPointF pointer(area.left() + area.width() * 0.25, area.top() + area.height() * 0.3);
+        const double anchor = xBefore.first + (xBefore.second - xBefore.first) * 0.25;
+        wheel(pointer, Qt::ShiftModifier);
+        const auto xZoom = plot.horizontalRange();
+        QVERIFY(xZoom.second - xZoom.first < xBefore.second - xBefore.first);
+        QCOMPARE(plot.verticalRange(), yBefore);
+        QVERIFY(qAbs(xZoom.first + (xZoom.second - xZoom.first) * 0.25 - anchor) < 1e-9);
+        QVERIFY(!plot.followsLatest());
+        wheel(plot.plotArea().center(), Qt::ControlModifier);
+        QCOMPARE(plot.horizontalRange(), xZoom);
+        QVERIFY(plot.verticalRange().second - plot.verticalRange().first < yBefore.second - yBefore.first);
+        const auto yZoom = plot.verticalRange();
+        const auto capture = qEnvironmentVariable("SW_WAVE_CAPTURE_DIR");
+        if (!capture.isEmpty())
+        {
+            QMouseEvent move(QEvent::MouseMove, plot.plotArea().center(),
+                plot.mapToGlobal(plot.plotArea().center().toPoint()), Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+            QApplication::sendEvent(&plot, &move);
+            QVERIFY(plot.grab().save(capture + "/wave-navigation.png"));
+
+            // 视觉检查使用多个相近量级的信号，方便比较网格密度与线条。
+            QJsonArray samples;
+            for (int index = 0; index < 300; ++index)
+            {
+                const double phase = index * 0.045;
+                const QJsonObject values {
+                    {"sine", std::sin(phase)},
+                    {"slow", 0.5 * std::cos(phase * 0.4)},
+                    {"steps", std::floor(std::sin(phase * 0.7) * 6) / 6},
+                    {"ramp", (index % 37) / 18.0 - 1}
+                };
+                samples.append(QJsonObject {{"index", index + 1}, {"values", values}});
+            }
+            const QJsonObject source {{"samples", samples}};
+            const QJsonObject sources {{"default", source}};
+            sw::WavePlot preview;
+            preview.setFont(sw::Theme::defaultDataFont());
+            preview.resize(1100, 560);
+            preview.setSamples({{"sources", sources}});
+            preview.show();
+            QVERIFY(preview.grab().save(capture + "/wave-grid-light.png"));
+            preview.theme = sw::Theme::make(true);
+            preview.invalidatePlot();
+            QVERIFY(preview.grab().save(capture + "/wave-grid-dark.png"));
+            preview.resize(500, 360);
+            QVERIFY(preview.grab().save(capture + "/wave-grid-narrow.png"));
+        }
+        channel->receive("@wave temperature=99\n");
+        plot.updateChannel(channel, 100);
+        QCOMPARE(plot.horizontalRange(), xZoom);
+        QCOMPARE(plot.verticalRange(), yZoom);
+        const auto panArea = plot.plotArea();
+        const QPointF panStart = panArea.center();
+        const auto mouse = [&plot](QEvent::Type type, QPointF position, Qt::MouseButton button, Qt::MouseButtons buttons)
+        {
+            QMouseEvent event(type, position, plot.mapToGlobal(position.toPoint()), button, buttons, Qt::NoModifier);
+            QApplication::sendEvent(&plot, &event);
+        };
+        mouse(QEvent::MouseButtonPress, panStart, Qt::LeftButton, Qt::LeftButton);
+        channel->receive("@wave temperature=100\n");
+        plot.updateChannel(channel, 100);
+        mouse(QEvent::MouseMove, panStart + QPointF(25, 20), Qt::NoButton, Qt::LeftButton);
+        mouse(QEvent::MouseButtonRelease, panStart + QPointF(25, 20), Qt::LeftButton, Qt::NoButton);
+        const auto pannedX = plot.horizontalRange();
+        const auto pannedY = plot.verticalRange();
+        QVERIFY(qAbs(pannedX.first - (xZoom.first - (xZoom.second - xZoom.first) * 25 / panArea.width())) < 1e-9);
+        QVERIFY(qAbs(pannedY.first - (yZoom.first + (yZoom.second - yZoom.first) * 20 / panArea.height())) < 1e-9);
+        plot.resize(500, 400);
+        QCOMPARE(plot.horizontalRange(), pannedX);
+        QCOMPARE(plot.verticalRange(), pannedY);
+        plot.resetView();
+        QVERIFY(plot.followsLatest());
+        QCOMPARE(plot.horizontalRange().second, 102.0);
+        const auto fullX = plot.horizontalRange();
+        wheel(plot.plotArea().center(), Qt::NoModifier);
+        QVERIFY(plot.horizontalRange().second - plot.horizontalRange().first < fullX.second - fullX.first);
+        QVERIFY(plot.verticalRange().second < 110);
+
+        sw::Instrument instrument("waveform");
+        QVERIFY(instrument.points->suffix().isEmpty());
+        QVERIFY(instrument.waveFollow->isChecked());
+        instrument.tick(channel);
+        instrument.plot->setFollowLatest(false);
+        QVERIFY(!instrument.waveFollow->isChecked());
+        instrument.waveFollow->setChecked(true);
+        QVERIFY(instrument.plot->followsLatest());
+    }
+
+    void waveformFollowPreservesView_data()
+    {
+        QTest::addColumn<bool>("manualY");
+        QTest::newRow("auto-y") << false;
+        QTest::newRow("manual-y") << true;
+    }
+
+    void waveformFollowPreservesView()
+    {
+        QFETCH(bool, manualY);
+        sw::Engine engine;
+        auto channel = engine.waveformDemo();
+        channel->demoTimer.stop();
+        for (int index = 500; index < 6000; ++index)
+        {
+            channel->receive(QString("@wave sine=%1,square=%2,triangle=%3,sawtooth=%4\n")
+                .arg(std::sin(index * 0.0628), 0, 'f', 6)
+                .arg(index % 100 < 50 ? 0.8 : -0.8)
+                .arg(std::asin(std::sin(index * 0.044)) * 2 / 3.141592653589793, 0, 'f', 6)
+                .arg((index % 143) / 71.0 - 1, 0, 'f', 6).toUtf8());
+        }
+        sw::Instrument instrument("waveform");
+        instrument.points->setValue(5000);
+        instrument.resize(1150, 660);
+        instrument.show();
+        instrument.tick(channel);
+        auto plot = instrument.plot;
+        plot->setFont(sw::Theme::defaultDataFont());
+        const auto wheel = [plot](Qt::KeyboardModifiers modifiers)
+        {
+            const auto position = plot->plotArea().center();
+            QWheelEvent event(position, plot->mapToGlobal(position.toPoint()), QPoint(), QPoint(0, 120),
+                              Qt::NoButton, modifiers, Qt::NoScrollPhase, false);
+            QApplication::sendEvent(plot, &event);
+        };
+        for (int index = 0; index < 11; ++index) { wheel(Qt::ShiftModifier); }
+        if (manualY) { wheel(Qt::ControlModifier); }
+        QVERIFY(!instrument.waveFollow->isChecked());
+        const auto beforeX = plot->horizontalRange();
+        const auto beforeY = plot->verticalRange();
+        const double span = beforeX.second - beforeX.first;
+        QVERIFY(span < 1200);
+        QVERIFY(beforeX.second < 6000);
+        const auto capture = qEnvironmentVariable("SW_FOLLOW_CAPTURE_DIR");
+        const QString suffix = manualY ? "manual-y" : "auto-y";
+        if (!capture.isEmpty())
+        {
+            QTest::qWait(30);
+            QVERIFY(plot->grab().save(capture + "/before-" + suffix + ".png"));
+        }
+
+        instrument.waveFollow->setChecked(true);
+        QVERIFY(plot->followsLatest());
+        auto following = plot->horizontalRange();
+        QVERIFY(qAbs(following.second - following.first - span) < 1e-9);
+        QCOMPARE(following.second, 6000.0);
+        QCOMPARE(plot->verticalRange(), beforeY);
+        if (!capture.isEmpty())
+        {
+            QTest::qWait(30);
+            QVERIFY(plot->grab().save(capture + "/after-" + suffix + ".png"));
+        }
+
+        // 新数据及历史淘汰不能改变已选的横轴跨度或纵轴范围。
+        for (int index = 0; index < 5001; ++index) { channel->receive("@wave sine=1000\n"); }
+        instrument.tick(channel);
+        following = plot->horizontalRange();
+        QCOMPARE(following.second, 11001.0);
+        QVERIFY(qAbs(following.second - following.first - span) < 1e-9);
+        QCOMPARE(plot->verticalRange(), beforeY);
+        instrument.waveFollow->setChecked(false);
+        channel->receive("@wave sine=2000\n");
+        instrument.tick(channel);
+        QCOMPARE(plot->horizontalRange(), following);
+        instrument.waveFollow->setChecked(true);
+        following = plot->horizontalRange();
+        QCOMPARE(following.second, 11002.0);
+        QVERIFY(qAbs(following.second - following.first - span) < 1e-9);
+        QCOMPARE(plot->verticalRange(), beforeY);
+        plot->resize(750, 430);
+        QCOMPARE(plot->horizontalRange(), following);
+
+        instrument.waveFollow->setChecked(false);
+        QPushButton *fit = nullptr;
+        for (auto button : instrument.findChildren<QPushButton *>())
+        {
+            if (button->text() == "自动缩放") { fit = button; break; }
+        }
+        QVERIFY(fit);
+        fit->click();
+        QVERIFY(instrument.waveFollow->isChecked());
+        following = plot->horizontalRange();
+        QCOMPARE(following.second - following.first, 4999.0);
+        QVERIFY(plot->verticalRange() != beforeY);
+    }
+
+    void structuredDemoSelection()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        window.show();
+        auto wave = engine.waveformDemo();
+        auto page = window.newInstrument("structured");
+        auto picker = page->instrument->source;
+        const auto key = sw::Config::structuredDemo().key();
+        QVERIFY(picker->findData(sw::Config::waveformDemo().key()) < 0);
+        const int index = picker->findData(key);
+        QVERIFY(index > 0);
+        picker->setCurrentIndex(index);
+        QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, index));
+        auto channel = page->channel.data();
+        QVERIFY(channel);
+        QVERIFY(channel->config.isStructuredDemo());
+        QVERIFY(channel != wave);
+        QCOMPARE(engine.channels.size(), 2);
+        QCOMPARE(engine.structuredDemo(), channel);
+        QCOMPARE(engine.open(sw::Config::structuredDemo()), channel);
+        QCOMPARE(channel->demoTimer.interval(), 1000);
+        const auto source = channel->sources.value("default");
+        QVERIFY(source);
+        QCOMPARE(source->count, 0);
+        QVERIFY(source->samples.empty());
+        QVERIFY(source->parsedCount >= 6);
+        bool json = false;
+        bool xml = false;
+        for (const auto &record : source->records)
+        {
+            if (record["format"] == "json")
+            {
+                json = true;
+                QVERIFY(record["value"].toObject().contains("telemetry"));
+            }
+            if (record["format"] == "xml")
+            {
+                xml = true;
+                QVERIFY(record["text"].toString().contains("<temperature unit=\"C\">"));
+            }
+        }
+        QVERIFY(json && xml);
+        QCOMPARE(wave->sources["default"]->parsedCount, 0);
+        QVERIFY(wave->sources["default"]->count >= 500);
+        const qint64 before = source->parsedCount;
+        QTRY_VERIFY(source->parsedCount > before);
+        QTRY_VERIFY(page->instrument->table->topLevelItemCount() >= 6);
+        QVERIFY_EXCEPTION_THROWN(channel->send("test"), std::runtime_error);
+        const auto capture = qEnvironmentVariable("SW_DEMO_CAPTURE_DIR");
+        if (!capture.isEmpty()) { QVERIFY(window.grab().save(capture + "/structured-demo.png")); }
+        auto fromWave = window.newInstrument("structured", wave);
+        QCOMPARE(fromWave->channel, channel);
+        auto backToWave = window.newInstrument("waveform", channel);
+        QCOMPARE(backToWave->channel, wave);
+        QVERIFY(backToWave->instrument->source->findData(key) < 0);
+        QCOMPARE(engine.channels.size(), 2);
+        window.close();
+    }
+
+    void structuredDemoRestoreAndMigration()
+    {
+        QTemporaryDir directory;
+        const QString path = directory.filePath("settings.json");
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        const QJsonObject oldPage {{"kind", "structured"}, {"source_key", sw::Config::waveformDemo().key()}};
+        file.write(QJsonDocument(QJsonObject {{"widget_pages", QJsonArray {oldPage}}}).toJson());
+        file.close();
+        for (int pass = 0; pass < 2; ++pass)
+        {
+            sw::Engine engine;
+            sw::McpServer mcp(&engine);
+            sw::Window window(&engine, &mcp, path);
+            QCOMPARE(engine.channels.size(), 1);
+            auto channel = engine.channels.first();
+            QVERIFY(channel->config.isStructuredDemo());
+            QCOMPARE(channel->state, QString("connected"));
+            bool found = false;
+            for (auto page : window.panes)
+            {
+                if (page->instrument && page->instrument->kind == "structured")
+                {
+                    QCOMPARE(page->channel, channel);
+                    QCOMPARE(page->sourceKey, sw::Config::structuredDemo().key());
+                    QVERIFY(page->instrument->source->findData(sw::Config::waveformDemo().key()) < 0);
+                    found = true;
+                }
+            }
+            QVERIFY(found);
+            QVERIFY(channel->sources["default"]->samples.empty());
+            QVERIFY(channel->sources["default"]->parsedCount >= 6);
+            window.close();
+        }
+    }
+
+    void waveformDemoSelection()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        window.show();
+        auto page = window.newInstrument("waveform");
+        auto picker = page->instrument->source;
+        const QString demoKey = sw::Config::waveformDemo().key();
+        const int demoIndex = picker->findData(demoKey);
+        QVERIFY(demoIndex > 0);
+        QVERIFY(engine.channels.isEmpty());
+        const int tabs = window.tabs->count();
+        picker->setCurrentIndex(demoIndex);
+        QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, demoIndex));
+        auto channel = page->channel.data();
+        QVERIFY(channel);
+        QVERIFY(channel->config.isWaveformDemo());
+        QCOMPARE(channel->state, QString("connected"));
+        QCOMPARE(engine.channels.size(), 1);
+        QCOMPARE(window.tabs->count(), tabs);
+        QCOMPARE(engine.waveformDemo(), channel);
+        QCOMPARE(engine.open(sw::Config::waveformDemo()), channel);
+        QVERIFY(!channel->serial && !channel->client && !channel->udp && !channel->ssh);
+        const auto source = channel->sources.value("default");
+        QVERIFY(source);
+        QVERIFY(source->count >= 500);
+        QCOMPARE(channel->demoTimer.interval(), 20);
+        const auto values = source->samples.back()["values"].toObject();
+        QCOMPARE(values.size(), 4);
+        for (const auto &name : QStringList {"sine", "triangle", "square", "sawtooth"}) { QVERIFY(values.contains(name)); }
+        const qint64 before = source->count;
+        QTRY_VERIFY(source->count > before);
+        QTRY_COMPARE(page->instrument->plot->series.size(), 4);
+        QVERIFY_EXCEPTION_THROWN(channel->send("test"), std::runtime_error);
+        const auto events = engine.journal.read(0, 200, channel->id);
+        QCOMPARE(engine.journal.read(0, 200, channel->id), events);
+        QVERIFY(!channel->waveform(10)["sources"].toObject().isEmpty());
+        const auto capture = qEnvironmentVariable("SW_DEMO_CAPTURE_DIR");
+        if (!capture.isEmpty())
+        {
+            QTest::qWait(100);
+            QVERIFY(window.grab().save(capture + "/wave-demo.png"));
+        }
+        sw::Config config;
+        config.port = "loop://";
+        auto real = engine.open(config);
+        const int realIndex = picker->findData(config.key());
+        QVERIFY(realIndex > 0);
+        picker->setCurrentIndex(realIndex);
+        QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, realIndex));
+        QCOMPARE(page->channel, real);
+        real->receive("@wave device_value=42\n");
+        QTRY_VERIFY(page->instrument->plot->series.contains("device_value"));
+        QVERIFY(!page->instrument->plot->series.contains("sine"));
+        const int again = picker->findData(demoKey);
+        picker->setCurrentIndex(again);
+        QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, again));
+        QCOMPARE(page->channel, channel);
+        QCOMPARE(engine.channels.size(), 2);
+        QCOMPARE(real->state, QString("connected"));
+        window.close();
+    }
+
+    void waveformDemoRestore()
+    {
+        QTemporaryDir directory;
+        const QString path = directory.filePath("settings.json");
+        const QString demoKey = sw::Config::waveformDemo().key();
+        {
+            sw::Engine engine;
+            sw::McpServer mcp(&engine);
+            sw::Window window(&engine, &mcp, path);
+            auto page = window.newInstrument("waveform");
+            auto picker = page->instrument->source;
+            const int index = picker->findData(demoKey);
+            picker->setCurrentIndex(index);
+            QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, index));
+            QVERIFY(page->channel);
+            window.close();
+        }
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, path);
+        QCOMPARE(engine.channels.size(), 1);
+        auto channel = engine.channels.first();
+        QVERIFY(channel->config.isWaveformDemo());
+        QCOMPARE(channel->state, QString("connected"));
+        bool found = false;
+        for (auto page : window.panes)
+        {
+            if (page->instrument && page->sourceKey == demoKey)
+            {
+                QCOMPARE(page->channel, channel);
+                found = true;
+            }
+        }
+        QVERIFY(found);
+        auto second = window.newInstrument("waveform");
+        auto picker = second->instrument->source;
+        const int index = picker->findData(demoKey);
+        picker->setCurrentIndex(index);
+        QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, index));
+        QCOMPARE(second->channel, channel);
+        QCOMPARE(engine.channels.size(), 1);
+        channel->close();
+        QCOMPARE(channel->state, QString("closed"));
+        QVERIFY(!channel->demoTimer.isActive());
+        const int restart = picker->findData(demoKey);
+        picker->setCurrentIndex(restart);
+        QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, restart));
+        QCOMPARE(channel->state, QString("connected"));
+        QCOMPARE(engine.channels.size(), 1);
+        window.close();
+    }
+
+    void waveformIncrementalHistory()
+    {
+        sw::Engine engine;
+        sw::Config config;
+        config.port = "loop://";
+        auto channel = engine.open(config);
+        sw::WavePlot plot;
+        channel->receive("@wave a=1,b=2\n");
+        QVERIFY(plot.updateChannel(channel, 3));
+        const auto revision = plot.dataRevision();
+        QVERIFY(!plot.updateChannel(channel, 3));
+        channel->receive("ordinary log\n{\"a\":100}\n");
+        QVERIFY(!plot.updateChannel(channel, 3));
+        QCOMPARE(plot.dataRevision(), revision);
+        channel->receive("@wave a=2,b=4\n@wave a=3,b=6\n@wave a=4,b=8\n");
+        QVERIFY(plot.updateChannel(channel, 3));
+        QCOMPARE(plot.series["a"].size(), 3);
+        QCOMPARE(plot.series["a"].first(), QPointF(2, 2));
+        QCOMPARE(plot.series["b"].last(), QPointF(4, 8));
+        QVERIFY(plot.updateChannel(channel, 2));
+        QCOMPARE(plot.series["a"].size(), 2);
+        QCOMPARE(plot.series["a"].first().x(), 3.0);
+        channel->sources["default"] = std::make_shared<sw::Source>();
+        channel->receive("@wave a=99\n");
+        QVERIFY(plot.updateChannel(channel, 2));
+        QCOMPARE(plot.series.size(), 1);
+        QCOMPARE(plot.series["a"].first(), QPointF(1, 99));
+        channel->receive("@wave remote=7\n", "peer");
+        QVERIFY(plot.updateChannel(channel, 2));
+        QVERIFY(plot.series.contains("peer/remote"));
+        channel->sources.remove("peer");
+        QVERIFY(plot.updateChannel(channel, 2));
+        QVERIFY(!plot.series.contains("peer/remote"));
+        QVERIFY(plot.updateChannel(nullptr, 2));
+        QVERIFY(plot.series.isEmpty());
+        QStringList fields;
+        for (int index = 0; index < 16; ++index) { fields.append(QString("old%1=1").arg(index)); }
+        channel->receive(("@wave " + fields.join(',') + "\n").toUtf8());
+        plot.updateChannel(channel, 1);
+        QCOMPARE(plot.series.size(), 16);
+        channel->receive("@wave new_channel=9\n");
+        plot.updateChannel(channel, 1);
+        QCOMPARE(plot.series.size(), 1);
+        QCOMPARE(plot.series["new_channel"].last().y(), 9.0);
+    }
+
+    void waveformExactInspectionAndVisibility()
+    {
+        sw::Engine engine;
+        sw::Config config;
+        config.port = "loop://";
+        auto channel = engine.open(config);
+        channel->receive("@wave temperature=0,count=4294967293\n"
+            "@wave temperature=1.2345678901234567,count=4294967294\n"
+            "@wave temperature=2,count=4294967295\n");
+        sw::WavePlot plot;
+        plot.setFont(sw::Theme::defaultDataFont());
+        plot.resize(1000, 520);
+        plot.updateChannel(channel, 1000);
+        plot.setCurveVisible("count", false);
+        plot.show();
+        QTest::qWait(40);
+        const auto position = plot.plotArea().center();
+        const auto hit = plot.inspect(position);
+        QCOMPARE(hit["channel"].toString(), "temperature");
+        QCOMPARE(hit["sample"].toInt(), 2);
+        QCOMPARE(hit["value"].toDouble(), 1.2345678901234567);
+        QVERIFY(plot.inspect(QPointF(2, 2)).isEmpty());
+        auto buttons = plot.findChildren<QToolButton *>("waveChannel");
+        QCOMPARE(buttons.size(), 2);
+        bool exactLatest = false;
+        for (auto button : buttons)
+        {
+            if (button->property("channelName") == "count")
+            {
+                exactLatest = button->text().contains("4294967295");
+                QVERIFY(!button->isChecked());
+            }
+        }
+        QVERIFY(exactLatest);
+        QMouseEvent move(QEvent::MouseMove, position, plot.mapToGlobal(position.toPoint()),
+                         Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(&plot, &move);
+        auto copy = plot.findChild<QAction *>("copyWaveReadout");
+        QVERIFY(copy);
+        copy->trigger();
+        const auto copied = QJsonDocument::fromJson(QApplication::clipboard()->text().toUtf8()).object();
+        QCOMPARE(copied, hit);
+        const auto capture = qEnvironmentVariable("SW_WAVE_CAPTURE_DIR");
+        if (!capture.isEmpty())
+        {
+            QVERIFY(plot.grab().save(capture + "/wave-readout-light.png"));
+            plot.theme = sw::Theme::make(true);
+            plot.invalidatePlot();
+            QVERIFY(plot.grab().save(capture + "/wave-readout-dark.png"));
+        }
+        plot.setCurveVisible("temperature", false);
+        QVERIFY(plot.inspect(position).isEmpty());
+        plot.setCurveVisible("temperature", true);
+        QVERIFY(!plot.inspect(position).isEmpty());
+    }
+
+    void waveformDenseDataPreservesSamples()
+    {
+        sw::Engine engine;
+        sw::Config config;
+        config.port = "loop://";
+        auto channel = engine.open(config);
+        for (int index = 0; index < 5000; ++index)
+        {
+            channel->receive(index == 2499 ? "@wave value=123.456\n" : "@wave value=0\n");
+        }
+        sw::WavePlot plot;
+        plot.resize(400, 300);
+        plot.updateChannel(channel, 5000);
+        QVERIFY(!plot.grab().isNull());
+        QCOMPARE(plot.series["value"].size(), 5000);
+        QVERIFY(plot.renderedPointCount() < 1000);
+        QCOMPARE(plot.series["value"][2499].y(), 123.456);
+        const auto area = plot.plotArea();
+        const QPointF peak(area.left() + 2499.0 / 4999 * area.width(), area.top());
+        QCOMPARE(plot.inspect(peak)["value"].toDouble(), 123.456);
+        QCOMPARE(channel->sources["default"]->samples.size(), size_t(5000));
+    }
+
+    void waveformLargeConstantReadout()
+    {
+        sw::Engine engine;
+        sw::Config config;
+        config.port = "loop://";
+        auto channel = engine.open(config);
+        channel->receive("@wave large=1e300\n@wave large=1e300\n");
+        sw::WavePlot plot;
+        plot.resize(800, 400);
+        plot.updateChannel(channel, 100);
+        plot.show();
+        QVERIFY(!plot.grab().isNull());
+        const auto readout = plot.inspect(plot.plotArea().center());
+        QCOMPARE(readout["channel"].toString(), "large");
+        QCOMPARE(readout["value"].toDouble(), 1e300);
+    }
+
+    void waveformFrameClockAndFreeze()
+    {
+        sw::Engine engine;
+        sw::Config config;
+        config.port = "loop://";
+        auto channel = engine.open(config);
+        sw::Instrument instrument("waveform");
+        instrument.resize(800, 600);
+        instrument.show();
+        instrument.tick(channel);
+        QCOMPARE(instrument.frameTimer.interval(), 16);
+        QCOMPARE(instrument.frameTimer.timerType(), Qt::PreciseTimer);
+        QVERIFY(instrument.frameTimer.isActive());
+        channel->receive("@wave value=1\n");
+        QTRY_COMPARE(instrument.plot->series["value"].size(), 1);
+        instrument.freeze->setChecked(true);
+        QVERIFY(!instrument.frameTimer.isActive());
+        channel->receive("@wave value=2\n");
+        QTest::qWait(40);
+        QCOMPARE(instrument.plot->series["value"].size(), 1);
+        instrument.freeze->setChecked(false);
+        QTRY_COMPARE(instrument.plot->series["value"].size(), 2);
+        instrument.hide();
+        QVERIFY(!instrument.frameTimer.isActive());
     }
 
     void sshProfilesAndSession()
@@ -1974,7 +2550,18 @@ private slots:
         QVERIFY(mcp.start(0));
         sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
         QLabel result;
-        window.configureClient(4, &result);
+        sw::AgentEnvironment testEnvironment;
+        testEnvironment.home = directory.path();
+        testEnvironment.appData = directory.path();
+        testEnvironment.localAppData = directory.path();
+        testEnvironment.searchPaths = {directory.path()};
+        testEnvironment.variables["PI_CODING_AGENT_DIR"] = agentDirectory;
+        QFile fakeAgent(directory.filePath("pi.exe"));
+        QVERIFY(fakeAgent.open(QIODevice::WriteOnly));
+        fakeAgent.write("test installation marker");
+        fakeAgent.close();
+        const auto piAgent = sw::AgentConfig::discover(testEnvironment)[4];
+        result.setText(sw::AgentConfig::configure(piAgent, mcp.url(), directory.filePath("unused-bridge.exe")));
 
         if (hadPreviousDirectory)
         {
@@ -1993,7 +2580,7 @@ private slots:
         QCOMPARE(servers["serial-workbench"].toObject()["url"].toString(), mcp.url());
         QVERIFY(servers["serial-workbench"].toObject()["enabled"].toBool());
         QVERIFY(result.text().contains(configPath));
-        QVERIFY(result.text().contains("服务检查通过"));
+        QVERIFY(result.text().contains("文件校验通过"));
         QVERIFY(result.text().contains("/reload"));
 
         window.openSettings();

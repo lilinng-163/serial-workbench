@@ -3,6 +3,9 @@
 #include "window.h"
 #include "ssh_profiles.h"
 #include "parameter_grip.h"
+#include "agent_config.h"
+#include "agent_panel.h"
+#include "file_transfer_dialog.h"
 #include <QTextCodec>
 #include <numeric>
 #ifdef Q_OS_WIN
@@ -253,20 +256,48 @@ Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), 
         points = new QSpinBox();
         points->setRange(100, 5000);
         points->setValue(1000);
-        points->setSuffix(" 点");
+        points->setToolTip("保留的采样上限；滚轮调整可见范围");
         points->setFixedWidth(112);
         auto fit = button("自动缩放");
         auto help = button("数据格式");
+        waveFollow = new QCheckBox("跟随最新");
+        waveFollow->setChecked(true);
+        waveFollow->setToolTip("保留当前横轴跨度和纵轴范围，平移到最新采样；自动缩放可恢复完整范围");
+        tools->addWidget(waveFollow);
         tools->addWidget(points);
         tools->addWidget(fit);
         tools->addWidget(help);
         plot = new WavePlot();
+        waveXAxis = new QCheckBox("X 轴");
+        waveYAxis = new QCheckBox("Y 轴");
+        waveXAxis->setObjectName("waveXAxis");
+        waveYAxis->setObjectName("waveYAxis");
+        waveXAxis->setChecked(true);
+        waveYAxis->setChecked(true);
+        waveXAxis->setToolTip("显示横轴刻度与采样序号；隐藏后仍可缩放和拖动");
+        waveYAxis->setToolTip("显示纵轴数值刻度；隐藏后仍可缩放和拖动");
+        sourceRow->addWidget(waveXAxis);
+        sourceRow->addWidget(waveYAxis);
+        connect(waveXAxis, &QCheckBox::toggled, plot, &WavePlot::setXAxisVisible);
+        connect(waveYAxis, &QCheckBox::toggled, plot, &WavePlot::setYAxisVisible);
         body->addWidget(plot, 1);
+        connect(waveFollow, &QCheckBox::toggled, plot, &WavePlot::setFollowLatest);
+        connect(plot, &WavePlot::followLatestChanged, waveFollow, &QCheckBox::setChecked);
+        frameTimer.setTimerType(Qt::PreciseTimer);
+        frameTimer.setInterval(16);
+        connect(&frameTimer, &QTimer::timeout, this, [this]
+        {
+            if (isVisible() && !window()->isMinimized()) { tick(waveChannel); }
+        });
+        connect(freeze, &QCheckBox::toggled, this, [this](bool frozen)
+        {
+            if (frozen) { frameTimer.stop(); }
+            else if (isVisible()) { frameTimer.start(); tick(waveChannel); }
+        });
+        connect(points, &QSpinBox::valueChanged, this, [this] { tick(waveChannel); });
         connect(fit, &QPushButton::clicked, this, [this]
         {
-            plot->zoom = 1;
-            plot->offset = 0;
-            plot->update();
+            plot->resetView();
         });
         connect(help, &QPushButton::clicked, this, [this]
         {
@@ -332,12 +363,26 @@ Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), 
     body->addWidget(info);
 }
 
+void Instrument::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    if (plot && !freeze->isChecked()) { frameTimer.start(); }
+}
+
+void Instrument::hideEvent(QHideEvent *event)
+{
+    frameTimer.stop();
+    QWidget::hideEvent(event);
+}
+
 QJsonObject Instrument::settings() const
 {
     QJsonObject result {{"kind", kind}, {"frozen", freeze->isChecked()}};
     if (points)
     {
         result["points"] = points->value();
+        result["x_axis"] = waveXAxis->isChecked();
+        result["y_axis"] = waveYAxis->isChecked();
     }
     if (parser)
     {
@@ -348,21 +393,20 @@ QJsonObject Instrument::settings() const
 
 void Instrument::tick(Channel *channel)
 {
+    if (plot) { waveChannel = channel; }
     if (!channel || freeze->isChecked())
     {
         return;
     }
     if (plot)
     {
-        const auto data = channel->waveform(points->value());
-        plot->setSamples(data);
+        plot->updateChannel(channel, points->value());
         qint64 count = 0;
         int rejected = 0;
-        const auto sources = data["sources"].toObject();
-        for (const auto &value : sources)
+        for (const auto &source : channel->sources)
         {
-            count += value.toObject()["total_samples"].toInteger();
-            rejected += value.toObject()["rejected_lines"].toInt();
+            count += source->count;
+            rejected += source->rejected;
         }
         info->setText(QString("%1 个采样    %2 条曲线    格式错误 %3 帧").arg(count).arg(plot->series.size()).arg(rejected));
     }
@@ -454,7 +498,20 @@ Pane::Pane(Window *owner, const QString &instrumentKind) : QWidget(owner), windo
         body->addWidget(instrument, 1);
         connect(instrument->source, &QComboBox::activated, this, [this](int index)
         {
+            const QString previous = sourceKey;
             sourceKey = instrument->source->itemData(index).toString();
+            try
+            {
+                if (sourceKey == Config::waveformDemo().key()) { window->engine->waveformDemo(); }
+                else if (sourceKey == Config::structuredDemo().key()) { window->engine->structuredDemo(); }
+            }
+            catch (const std::exception &failure)
+            {
+                sourceKey = previous;
+                refreshSource();
+                window->error(QString::fromUtf8(failure.what()));
+                return;
+            }
             refreshSource();
             if (window->active == this) { window->syncParameterPane(true); }
             window->updateStatus();
@@ -538,6 +595,20 @@ Pane::Pane(Window *owner, const QString &instrumentKind) : QWidget(owner), windo
     exportButton->setEnabled(false);
     connect(exportButton, &QAbstractButton::clicked, this, &Pane::exportLog);
     tools->addWidget(exportButton);
+    transferButton = new IconButton("file-transfer", "串口文件传输：原始字节 / XMODEM-CRC");
+    transferButton->setObjectName("serialFileTransfer");
+    transferButton->setEnabled(false);
+    tools->addWidget(transferButton);
+    connect(transferButton, &QAbstractButton::clicked, this, [this]
+    {
+        if (!channel || !channel->serial || channel->transferOwner) { return; }
+        repeat->setChecked(false);
+        auto dialog = new FileTransferDialog(channel, window);
+        dialog->setAttribute(Qt::WA_DeleteOnClose);
+        dialog->setWindowModality(Qt::WindowModal);
+        connect(dialog, &FileTransferDialog::starting, this, [this] { repeat->setChecked(false); tick(); });
+        dialog->show();
+    });
     monitor->addWidget(toolbar);
     splitter = new Splitter(Qt::Vertical);
     display = new QStackedWidget();
@@ -741,6 +812,7 @@ void Pane::setChannel(Channel *value)
         instrument->info->setText(value ? "等待设备数据" : "等待数据来源连接");
     }
     channel = value;
+    if (instrument && instrument->plot) { instrument->waveChannel = value; }
     if (value)
     {
         draft = value->config;
@@ -789,24 +861,47 @@ void Pane::refreshSource()
     auto source = instrument->source;
     const QSignalBlocker blocker(source);
     source->clear();
-    source->addItem("选择已有连接", QString());
+    source->addItem("选择数据来源", QString());
+    const bool structured = instrument->kind == "structured";
+    const auto demo = structured ? Config::structuredDemo() : Config::waveformDemo();
+    int demoIndex = -1;
+    if (instrument->plot || structured)
+    {
+        source->addItem(demo.name, demo.key());
+        demoIndex = source->count() - 1;
+        source->setItemData(demoIndex, structured ? "独立生成 JSON 对象和 XML 报文，无需连接设备"
+            : "本地生成正弦波、三角波、方波和锯齿波，无需连接设备", Qt::ToolTipRole);
+        if (sourceKey == demo.key()) { source->setCurrentIndex(demoIndex); }
+    }
     Channel *selected = nullptr;
     for (auto candidate : window->engine->channels)
     {
-        source->addItem(candidate->name + " · " + stateText(candidate->state), candidate->config.key());
+        if ((structured && candidate->config.kind == "demo" && !candidate->config.isStructuredDemo())
+            || (!structured && candidate->config.isStructuredDemo())) { continue; }
+        int index = demoIndex;
+        const QString title = candidate->name + " · " + stateText(candidate->state);
+        if (index >= 0 && candidate->config.key() == demo.key()) { source->setItemText(index, title); }
+        else
+        {
+            source->addItem(title, candidate->config.key());
+            index = source->count() - 1;
+        }
         if (candidate->config.key() == sourceKey)
         {
             selected = candidate;
-            source->setCurrentIndex(source->count() - 1);
+            source->setCurrentIndex(index);
         }
     }
-    if (!sourceKey.isEmpty() && !selected)
+    if (!sourceKey.isEmpty() && !selected && !(demoIndex >= 0 && sourceKey == demo.key()))
     {
         const auto name = sourceKey.startsWith("serial:") ? sourceKey.mid(7).toUpper() : sourceKey;
         source->addItem(name + " · 未建立连接", sourceKey);
         source->setCurrentIndex(source->count() - 1);
     }
-    source->setToolTip(sourceKey.isEmpty() ? "从收发页面建立连接后，在这里选择数据来源" : sourceKey);
+    source->setToolTip(sourceKey == demo.key() ? (structured ? "独立 JSON/XML 演示 · 每秒更新 · 不占用串口"
+        : "本地演示波形 · 50 Hz · 不占用串口")
+        : sourceKey.isEmpty() ? (instrument->plot || structured ? "选择 Demo 预览，或选择已建立的设备连接"
+            : "从收发页面建立连接后，在这里选择数据来源") : sourceKey);
     if (channel != selected) { setChannel(selected); }
 }
 
@@ -833,6 +928,7 @@ void Pane::applyAppearance()
         if (instrument->plot)
         {
             instrument->plot->theme = window->theme;
+            instrument->plot->setFont(window->dataFont);
             instrument->plot->update();
         }
         if (instrument->detail)
@@ -879,11 +975,14 @@ void Pane::tick()
         scriptRequested = channel->scriptEnabled;
         scriptCode = channel->scriptCode;
     }
-    sendButton->setEnabled(ready && channel->config.kind != "demo");
-    repeat->setEnabled(ready && channel->config.kind != "demo");
-    terminal->enabledInput = ready && terminalMode;
+    const bool available = ready && !channel->transferOwner;
+    sendButton->setEnabled(available && channel->config.kind != "demo");
+    repeat->setEnabled(available && channel->config.kind != "demo");
+    terminal->enabledInput = available && terminalMode;
+    transferButton->setVisible((channel ? channel->config.kind : draft.kind) == "serial");
+    transferButton->setEnabled(available && channel->serial);
     exportButton->setEnabled(channel);
-    if (!ready)
+    if (!available)
     {
         repeat->setChecked(false);
     }
@@ -930,7 +1029,7 @@ void Pane::tick()
             {
                 terminal->reset(encoding->currentText());
             }
-            if (event["direction"] == "rx")
+            if (event["direction"] == "rx" && event["message"] != "file-transfer")
             {
                 terminal->feed(QByteArray::fromHex(event["hex"].toString().toLatin1()));
             }
@@ -1187,9 +1286,25 @@ void Pane::restore(const QJsonObject &settings)
     if (instrument)
     {
         instrument->freeze->setChecked(settings["frozen"].toBool());
-        if (instrument->points) { instrument->points->setValue(settings["points"].toInt(1000)); }
+        if (instrument->points)
+        {
+            instrument->points->setValue(settings["points"].toInt(1000));
+            instrument->waveXAxis->setChecked(settings["x_axis"].toBool(true));
+            instrument->waveYAxis->setChecked(settings["y_axis"].toBool(true));
+        }
         if (instrument->parser) { instrument->parser->setCurrentIndex(qBound(0, settings["parser"].toInt(), 2)); }
         sourceKey = settings["source_key"].toString();
+        if (instrument->kind == "structured" && sourceKey.startsWith("demo:")
+            && sourceKey != Config::structuredDemo().key())
+        {
+            sourceKey = Config::structuredDemo().key();
+        }
+        try
+        {
+            if (sourceKey == Config::waveformDemo().key()) { window->engine->waveformDemo(); }
+            else if (sourceKey == Config::structuredDemo().key()) { window->engine->structuredDemo(); }
+        }
+        catch (const std::exception &failure) { window->error(QString::fromUtf8(failure.what())); }
         if (!settings["title"].toString().isEmpty())
         {
             pageTitle = settings["title"].toString();
@@ -1269,7 +1384,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
         portProvider = primary->portProvider;
     }
     setWindowTitle("Serial Workbench · Native " + Version);
-    setWindowIcon(icon("port", Theme::make(false).accent, 32));
+    setWindowIcon(QIcon(":/brand/lightning.svg"));
     setFont(Theme::interfaceFont());
     setMinimumSize(480, 320);
     resize(1400, 900);
@@ -1316,7 +1431,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     rail->setFixedWidth(54);
     auto railBody = new QVBoxLayout(rail);
     railBody->setContentsMargins(9, 16, 9, 12);
-    auto workbench = new IconButton("port", "显示 / 隐藏连接参数");
+    auto workbench = new IconButton("lightning", "显示 / 隐藏连接参数");
     parameterToggle = workbench;
     workbench->setCheckable(true);
     workbench->setChecked(true);
@@ -1354,7 +1469,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     brandBody->setSpacing(10);
     auto brandTop = horizontal();
     auto emblem = new QLabel();
-    emblem->setPixmap(icon("port", QColor("#edaa50"), 32).pixmap(32, 32));
+    emblem->setPixmap(icon("lightning", QColor("#edaa50"), 32).pixmap(32, 32));
     emblem->setFixedSize(32, 32);
     brandTop->addWidget(emblem);
     brandTop->addStretch();
@@ -1588,6 +1703,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
         });
     });
     connect(tabs, &QTabBar::currentChanged, this, &Window::activate);
+    connect(tabs, &QTabBar::tabCloseRequested, this, &Window::closeTab);
     connect(tabs, &QTabBar::tabMoved, this, [this] { activate(tabs->currentIndex()); });
     connect(tabs, &TearTabBar::tearRequested, this, [this](int index, const QPoint &position)
     {
@@ -1819,6 +1935,19 @@ Pane *Window::newInstrument(const QString &kind, Channel *source, bool activateP
     {
         return nullptr;
     }
+    if (source && source->config.kind == "demo")
+    {
+        try
+        {
+            if (kind == "structured" && !source->config.isStructuredDemo()) { source = engine->structuredDemo(); }
+            else if (kind != "structured" && source->config.isStructuredDemo()) { source = engine->waveformDemo(); }
+        }
+        catch (const std::exception &failure)
+        {
+            error(QString::fromUtf8(failure.what()));
+            return nullptr;
+        }
+    }
     auto previous = active;
     auto page = new Pane(this, kind);
     const QString baseTitle = kind == "waveform" ? "数值波形" : kind == "values" ? "实时数值" : "JSON / XML";
@@ -1851,7 +1980,7 @@ QMenu *Window::newPageMenu()
 {
     auto menu = new QMenu(this);
     menu->setObjectName("newPageMenu");
-    auto receive = menu->addAction(icon("port", theme.text), "新建收发页面", this, [this] { newConnection(); });
+    auto receive = menu->addAction(icon("lightning", theme.text), "新建收发页面", this, [this] { newConnection(); });
     receive->setObjectName("newReceivePage");
     menu->addSeparator();
     auto widgets = menu->addMenu(icon("widgets", theme.text), "新建控件页面");
@@ -2348,6 +2477,7 @@ void Window::syncConnections()
     }
     for (auto channel : engine->channels)
     {
+        if (channel->config.isBuiltinDemo()) { continue; }
         Pane *pane = nullptr;
         for (auto item : panes)
         {
@@ -2814,7 +2944,7 @@ void Window::saveSettings()
     {
         file.write(QJsonDocument(QJsonObject {{"connection", connection}, {"appearance", appearance}, {"views", viewSettings},
             {"widget_pages", widgetPages}, {"templates", templates}, {"allow_ai_control", engine->allowControl},
-            {"settings_geometry", saved["settings_geometry"]}}).toJson(QJsonDocument::Indented));
+            {"settings_geometry", saved["settings_geometry"]}, {"mcp_port", mcp->isListening() ? int(mcp->serverPort()) : saved["mcp_port"].toInt(8765)}}).toJson(QJsonDocument::Indented));
         if (!file.commit())
         {
             error(file.errorString());
@@ -3084,7 +3214,24 @@ void Window::openSettings()
     auto mcpPage = new QWidget();
     auto mcpBody = new QVBoxLayout(mcpPage);
     mcpBody->setContentsMargins(16, 16, 16, 8);
+    auto portRow = horizontal();
+    portRow->addWidget(label("监听端口"));
+    auto mcpPort = new QSpinBox();
+    mcpPort->setObjectName("mcpPort");
+    mcpPort->setRange(1, 65535);
+    mcpPort->setValue(mcp->isListening() ? mcp->serverPort() : saved["mcp_port"].toInt(8765));
+    mcpPort->setFixedWidth(120);
+    portRow->addWidget(mcpPort);
+    auto applyPort = button("应用端口");
+    applyPort->setObjectName("applyMcpPort");
+    auto availablePort = button("自动选空闲");
+    availablePort->setObjectName("availableMcpPort");
+    portRow->addWidget(applyPort);
+    portRow->addWidget(availablePort);
+    portRow->addStretch();
+    mcpBody->addLayout(portRow);
     auto address = new QLineEdit(mcp->url());
+    address->setObjectName("mcpAddress");
     address->setReadOnly(true);
     auto addressRow = horizontal();
     addressRow->addWidget(address, 1);
@@ -3092,6 +3239,14 @@ void Window::openSettings()
     addressRow->addWidget(copy);
     connect(copy, &QPushButton::clicked, this, [this] { QApplication::clipboard()->setText(mcp->url()); });
     mcpBody->addLayout(addressRow);
+    auto portResult = label("修改端口后，点击「一键更新已安装 Agent」同步接入地址。", "muted");
+    portResult->setObjectName("mcpPortResult");
+    portResult->setWordWrap(true);
+    portResult->hide();
+    applyPort->setToolTip("应用并保存端口，然后使用一键更新同步 Agent 地址");
+    availablePort->setToolTip("立即切换到系统分配的空闲端口，再使用一键更新同步 Agent 地址");
+    portResult->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    mcpBody->addWidget(portResult);
     auto permission = new QCheckBox("允许 AI 发送报文和控制连接");
     permission->setChecked(engine->allowControl);
     connect(permission, &QCheckBox::toggled, this, [this](bool checked)
@@ -3102,7 +3257,7 @@ void Window::openSettings()
     mcpBody->addWidget(permission);
     mcpSummary = label("界面与 AI 共享同一连接，各自读取，不会消耗对方的数据。", "muted");
     mcpSummary->setWordWrap(true);
-    mcpBody->addWidget(mcpSummary);
+
     auto mcpTabs = new DetachableTabs();
     mcpTabs->setObjectName("mcpPages");
     mcpConnections = new QTreeWidget();
@@ -3111,33 +3266,38 @@ void Window::openSettings()
     mcpConnections->setColumnWidth(0, 160);
     mcpConnections->setColumnWidth(1, 110);
     mcpConnections->setColumnWidth(2, 140);
-    mcpTabs->addTab(mcpConnections, "连接总览");
-    auto clients = new QWidget();
-    auto clientBody = new QVBoxLayout(clients);
-    clientBody->setContentsMargins(12, 12, 12, 12);
-    const QStringList names {"Codex", "Claude Code", "OpenCode CLI", "Claude Desktop", "Pi Agent"};
-    for (int i = 0; i < names.size(); ++i)
+    auto connectionPage = new QWidget();
+    auto connectionBody = new QVBoxLayout(connectionPage);
+    connectionBody->setContentsMargins(0, 8, 0, 0);
+    connectionBody->addWidget(mcpSummary);
+    connectionBody->addWidget(mcpConnections, 1);
+    mcpTabs->addTab(connectionPage, "连接总览");
+    auto clients = new AgentPanel(mcp);
+    connect(mcp, &McpServer::portChanged, settingsDialog, [this, address, mcpPort, clients](quint16 port)
     {
-        auto row = horizontal();
-        row->addWidget(label(names[i], "brand"));
-        row->addStretch();
-        auto configure = button("配置并检查", "outline");
-        configure->setAutoDefault(false);
-        configure->setDefault(false);
-        row->addWidget(configure);
-        clientBody->addLayout(row);
-        auto result = label("保留其他配置，修改前创建备份", "muted");
-        result->setWordWrap(true);
-        result->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-        clientBody->addWidget(result);
-        connect(configure, &QPushButton::clicked, this, [this, i, result] { configureClient(i, result); });
-    }
-    auto preview = new QPlainTextEdit();
-    preview->setReadOnly(true);
-    preview->setMinimumHeight(140);
-    preview->setPlainText(QString("HTTP MCP: %1\n\nSTDIO: %2/SerialWorkbenchMCP.exe --url %1\n\n修改后请在客户端重新加载 MCP 配置。").arg(mcp->url(), QCoreApplication::applicationDirPath()));
-    clientBody->addWidget(preview, 1);
-    mcpTabs->addTab(scrollPage(clients, "clientsScroll"), "客户端接入");
+        address->setText(mcp->url());
+        mcpPort->setValue(port);
+        clients->refresh();
+    });
+    mcpTabs->addTab(scrollPage(clients, "clientsScroll"), "Agent 接入");
+    mcpTabs->setCurrentIndex(1);
+    const auto switchPort = [this, mcpPort, address, portResult, clients](quint16 requested)
+    {
+        portResult->show();
+        if (!mcp->changePort(requested))
+        {
+            portResult->setText(mcp->error);
+            return;
+        }
+        mcpPort->setValue(mcp->serverPort());
+        address->setText(mcp->url());
+        portResult->setText("端口已生效并保存。点击「一键更新已安装 Agent」同步配置；串口连接与数据继续保留。");
+        clients->refresh();
+        saveSettings();
+        updateStatus();
+    };
+    connect(applyPort, &QPushButton::clicked, this, [switchPort, mcpPort] { switchPort(static_cast<quint16>(mcpPort->value())); });
+    connect(availablePort, &QPushButton::clicked, this, [switchPort] { switchPort(0); });
     auditTable = new QTreeWidget();
     auditTable->setRootIsDecorated(false);
     auditTable->setHeaderLabels({"时间", "客户端", "工具", "结果", "耗时 ms", "错误"});
@@ -3205,232 +3365,15 @@ void Window::openSettings()
     settingsDialog->show();
 }
 
-// Token-based JSONC edits preserve comments and all unrelated client entries.
-struct JsonToken
-{
-    int start;
-    int end;
-    QString text;
-};
-
-static QList<JsonToken> jsonTokens(const QString &text)
-{
-    static const QRegularExpression expression(R"(\s+|//[^\r\n]*|/\*[\s\S]*?\*/|"(?:\\.|[^"\\])*"|[^\s])");
-    QList<JsonToken> tokens;
-    auto matches = expression.globalMatch(text);
-    while (matches.hasNext())
-    {
-        const auto match = matches.next();
-        const auto value = match.captured();
-        if (!value.trimmed().isEmpty() && !value.startsWith("//") && !value.startsWith("/*"))
-        {
-            tokens.append({static_cast<int>(match.capturedStart()), static_cast<int>(match.capturedEnd()), value});
-        }
-    }
-    return tokens;
-}
-
-static QPair<QMap<QString, QPair<int, int>>, int> jsonMembers(const QString &text, int start)
-{
-    const auto tokens = jsonTokens(text.mid(start));
-    if (tokens.isEmpty() || tokens.first().text != "{")
-    {
-        fail("配置节点需要 JSON 对象");
-    }
-    QMap<QString, QPair<int, int>> members;
-    int i = 1;
-    while (i < tokens.size())
-    {
-        if (tokens[i].text == "}")
-        {
-            return {members, tokens[i].start + start};
-        }
-        if (tokens[i].text == ",")
-        {
-            ++i;
-            continue;
-        }
-        const auto nameDocument = QJsonDocument::fromJson(("[" + tokens[i].text + "]").toUtf8());
-        if (!nameDocument.isArray() || !nameDocument.array()[0].isString() || i + 2 >= tokens.size() || tokens[i + 1].text != ":")
-        {
-            fail("JSON 配置语法无效");
-        }
-        const QString name = nameDocument.array()[0].toString();
-        i += 2;
-        const int begin = tokens[i].start + start;
-        int end = begin;
-        int depth = 0;
-        while (i < tokens.size())
-        {
-            const QString token = tokens[i].text;
-            if ((token == "," || token == "}") && depth == 0)
-            {
-                break;
-            }
-            if (token == "{" || token == "[")
-            {
-                ++depth;
-            }
-            else if (token == "}" || token == "]")
-            {
-                --depth;
-            }
-            end = tokens[i].end + start;
-            ++i;
-        }
-        members[name] = {begin, end};
-    }
-    fail("JSON 配置对象未闭合");
-}
-
-static QString mergeJson(QString text, const QString &section, const QJsonObject &entry)
-{
-    const auto tokens = jsonTokens(text);
-    QString cleaned;
-    for (int i = 0; i < tokens.size(); ++i)
-    {
-        if (!(tokens[i].text == "," && i + 1 < tokens.size() && (tokens[i + 1].text == "}" || tokens[i + 1].text == "]")))
-        {
-            cleaned += tokens[i].text;
-        }
-    }
-    if (!QJsonDocument::fromJson(cleaned.toUtf8()).isObject())
-    {
-        fail("现有 JSON/JSONC 配置无效，未修改文件");
-    }
-    const auto root = jsonMembers(text, 0);
-    const QString encoded = QString::fromUtf8(QJsonDocument(entry).toJson(QJsonDocument::Compact));
-    if (!root.first.contains(section))
-    {
-        const auto preceding = jsonTokens(text.left(root.second));
-        const bool comma = !root.first.isEmpty() && !preceding.isEmpty() && preceding.last().text != ",";
-        text.insert(root.second, QString(comma ? "," : "") + QString("\n  \"%1\": {\"serial-workbench\": %2}\n").arg(section, encoded));
-        return text;
-    }
-    const auto object = jsonMembers(text, root.first[section].first);
-    if (object.first.contains("serial-workbench"))
-    {
-        const auto range = object.first["serial-workbench"];
-        text.replace(range.first, range.second - range.first, encoded);
-    }
-    else
-    {
-        bool comma = !object.first.isEmpty();
-        const auto preceding = jsonTokens(text.left(object.second));
-        if (!preceding.isEmpty() && preceding.last().text == ",")
-        {
-            comma = false;
-        }
-        text.insert(object.second, QString(comma ? "," : "") + "\n    \"serial-workbench\": " + encoded + "\n  ");
-    }
-    return text;
-}
-
 void Window::configureClient(int index, QLabel *result)
 {
     try
     {
-        if (!mcp->isListening())
-        {
-            fail("MCP 未启动，请先解决端口占用");
-        }
-        const QString home = QDir::homePath();
-        QString path;
-        if (index == 0)
-        {
-            path = QDir(qEnvironmentVariable("CODEX_HOME", home + "/.codex")).filePath("config.toml");
-        }
-        else if (index == 1)
-        {
-            path = home + "/.claude.json";
-        }
-        else if (index == 2)
-        {
-            const auto base = qEnvironmentVariable("XDG_CONFIG_HOME", home + "/.config") + "/opencode";
-            path = base + (QFileInfo::exists(base + "/opencode.jsonc") ? "/opencode.jsonc" : "/opencode.json");
-        }
-        else if (index == 4)
-        {
-            const auto configDirectory = qEnvironmentVariable("PI_CODING_AGENT_DIR", home + "/.pi/agent");
-            path = QDir(configDirectory).filePath("mcp.json");
-        }
-        else
-        {
-            path = qEnvironmentVariable("APPDATA") + "/Claude/claude_desktop_config.json";
-        }
-        QFile file(path);
-        QString text = index == 0 ? QString() : "{}";
-        if (file.exists())
-        {
-            if (!file.open(QIODevice::ReadOnly))
-            {
-                fail(file.errorString());
-            }
-            text = QString::fromUtf8(file.readAll());
-            file.close();
-        }
-        if (index == 0)
-        {
-            // Replace only this application's table; preserve every other section.
-            const QString entry = "[mcp_servers.\"serial-workbench\"]\nurl = \"" + mcp->url() + "\"\n";
-            const QRegularExpression section(R"((?m)^\[mcp_servers\.(?:"serial-workbench"|'serial-workbench'|serial-workbench)\][^\n]*\n[\s\S]*?(?=^\[|\z))");
-            const auto match = section.match(text);
-            if (match.hasMatch())
-            {
-                text.replace(match.capturedStart(), match.capturedLength(), entry + "\n");
-            }
-            else
-            {
-                text += "\n" + entry;
-            }
-        }
-        else
-        {
-            QJsonObject entry;
-            if (index == 3)
-            {
-                const QString bridge = QCoreApplication::applicationDirPath() + "/SerialWorkbenchMCP.exe";
-                if (!QFileInfo::exists(bridge))
-                {
-                    fail("STDIO 桥接程序不存在");
-                }
-                entry = {{"command", bridge}, {"args", QJsonArray {"--url", mcp->url()}}};
-            }
-            else if (index == 2)
-            {
-                entry = {{"type", "remote"}, {"url", mcp->url()}, {"enabled", true}};
-            }
-            else if (index == 4)
-            {
-                entry = {{"url", mcp->url()}, {"enabled", true}};
-            }
-            else
-            {
-                entry = {{"type", "http"}, {"url", mcp->url()}};
-            }
-            text = mergeJson(text, index == 2 ? "mcp" : "mcpServers", entry);
-        }
-        QDir().mkpath(QFileInfo(path).absolutePath());
-        if (file.exists() && !QFile::copy(path, path + "." + QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss-zzz") + ".bak"))
-        {
-            fail("配置备份失败，未修改原文件");
-        }
-        QSaveFile output(path);
-        if (!output.open(QIODevice::WriteOnly) || output.write(text.toUtf8()) < 0 || !output.commit())
-        {
-            fail("无法写入客户端配置");
-        }
-        // Native transport is already live; verify discovery and status on the same service.
-        const auto status = mcp->call("get_status", {}).toObject();
-        QSet<QString> advertised;
-        for (const auto &tool : mcp->tools()) { advertised.insert(tool.toObject()["name"].toString()); }
-        if (!advertised.contains("get_status") || !advertised.contains("read_events")
-            || !advertised.contains("read_script_results") || status["session_id"] != engine->journal.session)
-        {
-            fail("MCP 检查失败");
-        }
-        const QString reloadHint = index == 4 ? "请在 Pi 中执行 /reload。" : "请重载客户端配置。";
-        result->setText("配置已保存，服务检查通过。" + reloadHint + "\n" + path);
+        if (!mcp->isListening()) { fail("MCP 未启动，请先选择可用端口"); }
+        const auto clients = AgentConfig::discover();
+        if (index < 0 || index >= clients.size()) { fail("未知客户端"); }
+        result->setText(AgentConfig::configure(clients[index], mcp->url(),
+            QCoreApplication::applicationDirPath() + "/SerialWorkbenchMCP.exe"));
     }
     catch (const std::exception &exception)
     {

@@ -8,6 +8,8 @@ add_library(workbench_core STATIC
     frame_script.cpp
     frame_script.h
     script_worker.cpp
+    serial_transfer.cpp
+    serial_transfer.h
 )
 workbench_configure_target(workbench_core)
 target_include_directories(workbench_core PUBLIC

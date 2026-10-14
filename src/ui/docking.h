@@ -12,6 +12,8 @@ class TearTabBar : public QTabBar
     explicit TearTabBar(QWidget *parent = nullptr);
     QPoint pressPosition;
     QPointer<QObject> pressedPage;
+    bool middleClickCloses = false;
+    QPointer<QObject> middlePressedPage;
     QObject *identity(int index) const;
     void initStyleOption(QStyleOptionTab *option, int index) const override;
     void mousePressEvent(QMouseEvent *event) override;

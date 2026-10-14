@@ -17,6 +17,9 @@ public:
     QPointer<Window> helpWindow;
     QCheckBox *freeze = nullptr;
     QSpinBox *points = nullptr;
+    QCheckBox *waveFollow = nullptr;
+    QCheckBox *waveXAxis = nullptr;
+    QCheckBox *waveYAxis = nullptr;
     WavePlot *plot = nullptr;
     QTreeWidget *table = nullptr;
     QPlainTextEdit *detail = nullptr;
@@ -25,8 +28,12 @@ public:
     QLabel *info = nullptr;
     QLineEdit *filter = nullptr;
     QJsonObject cursors;
+    QPointer<Channel> waveChannel;
+    QTimer frameTimer;
     void tick(Channel *channel);
     QJsonObject settings() const;
+    void showEvent(QShowEvent *event) override;
+    void hideEvent(QHideEvent *event) override;
 };
 
 class Pane : public QWidget
@@ -79,6 +86,7 @@ public:
     IconButton *pause = nullptr;
     IconButton *follow = nullptr;
     IconButton *exportButton = nullptr;
+    IconButton *transferButton = nullptr;
     QLineEdit *filter = nullptr;
     bool terminalMode = false;
     QString scriptCode = FrameScriptProgram::example();

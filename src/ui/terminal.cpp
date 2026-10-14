@@ -127,11 +127,8 @@ void LogView::paintEvent(QPaintEvent *event)
     }
     const int center = viewport()->width() / 2;
     const int top = qMax(20, viewport()->height() / 2 - 90);
-    const QRect badge(center - 32, top, 64, 64);
-    painter.fillRect(badge, theme.sidebar);
-    painter.setPen(theme.edge);
-    painter.drawRect(badge);
-    drawIcon(painter, "port", badge.adjusted(8, 8, -8, -8), theme.green);
+    const QRect iconRect(center - 36, top - 4, 72, 72);
+    drawIcon(painter, "lightning", iconRect, theme.green);
 
     QFont title = Theme::interfaceFont();
     title.setPixelSize(22);

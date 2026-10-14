@@ -4,7 +4,8 @@ param(
     [string]$PackageDir = 'dist/SerialWorkbenchNative',
     [string]$OutputDir = 'dist/releases',
     [Parameter(Mandatory = $true)][string]$QtSourceRoot,
-    [string]$MakeNSIS = 'makensis'
+    [string]$MakeNSIS = 'makensis',
+    [switch]$InstallerOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -69,6 +70,9 @@ foreach ($module in 'qtbase', 'qt5compat', 'qtsvg')
 $instructions = @"
 Serial Workbench $version (Windows x64)
 
+安装包 setup.exe：可选择安装目录，并注册 Windows 卸载入口。
+安装版个人设置保存在 %LOCALAPPDATA%\SerialWorkbench\settings.json。
+
 单文件 EXE：双击后自动展开运行库并启动。运行库缓存在
 %LOCALAPPDATA%\SerialWorkbench\runtime\，配置保存在
 %LOCALAPPDATA%\SerialWorkbench\settings.json。后续启动复用缓存。
@@ -89,6 +93,24 @@ Qt 来源：https://code.qt.io/ （qtbase、qt5compat、qtsvg）
 $privateFiles = Get-ChildItem -LiteralPath $payload -Recurse -File -Filter 'settings*.json'
 if ($privateFiles) { throw 'Personal settings must not be included in a release.' }
 
+# Exact uninstall list protects user-created files in a custom directory.
+$removeManifest = Join-Path $stageRoot 'remove-files.nsh'
+$relativeFiles = Get-ChildItem -LiteralPath $payload -Recurse -File | ForEach-Object {
+    $_.FullName.Substring($payload.Length + 1)
+}
+$relativeDirectories = Get-ChildItem -LiteralPath $payload -Recurse -Directory | ForEach-Object {
+    $_.FullName.Substring($payload.Length + 1)
+} | Sort-Object Length -Descending
+function ConvertTo-NSISLiteral([string]$text)
+{
+    return $text.Replace('$', '$$').Replace('"', '$\"')
+}
+$removeLines = @('; Generated exact uninstall file list.')
+$removeLines += $relativeFiles | ForEach-Object { 'Delete "$INSTDIR\' + (ConvertTo-NSISLiteral $_) + '"' }
+$removeLines += 'Delete "$INSTDIR\SHA256SUMS.txt"'
+$removeLines += $relativeDirectories | ForEach-Object { 'RMDir "$INSTDIR\' + (ConvertTo-NSISLiteral $_) + '"' }
+[IO.File]::WriteAllLines($removeManifest, $removeLines, [Text.UTF8Encoding]::new($false))
+
 $manifest = Get-ChildItem -LiteralPath $payload -Recurse -File | Sort-Object FullName | ForEach-Object {
     $relative = $_.FullName.Substring($payload.Length + 1).Replace('\', '/')
     (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + $relative
@@ -100,12 +122,24 @@ $baseName = "SerialWorkbench-$version-windows-x64"
 $executable = Join-Path $outputPath ($baseName + '.exe')
 $archive = Join-Path $outputPath ($baseName + '-portable.zip')
 
-& $compiler /V2 "/DVERSION=$version" "/DPAYLOAD_ID=$payloadId" "/DPAYLOAD_DIR=$payload" `
-    "/DOUTPUT_EXE=$executable" (Join-Path $PSScriptRoot 'release-launcher.nsi')
-if ($LASTEXITCODE) { throw 'Single-file launcher compilation failed.' }
+$installer = Join-Path $outputPath ($baseName + '-setup.exe')
+$brandDirectory = Join-Path $repoRoot 'resources/brand'
+$sizeKB = [int][Math]::Ceiling(((Get-ChildItem -LiteralPath $payload -Recurse -File | Measure-Object -Property Length -Sum).Sum / 1024))
+& $compiler /V2 /INPUTCHARSET UTF8 "/DVERSION=$version" "/DPAYLOAD_DIR=$payload" "/DOUTPUT_EXE=$installer" `
+    "/DBRAND_DIR=$brandDirectory" "/DREMOVE_MANIFEST=$removeManifest" "/DSIZE_KB=$sizeKB" `
+    (Join-Path $PSScriptRoot 'windows-installer.nsi')
+if ($LASTEXITCODE) { throw 'Windows installer compilation failed.' }
+$deliverables = @($installer)
+if (-not $InstallerOnly)
+{
+    & $compiler /V2 /INPUTCHARSET UTF8 "/DVERSION=$version" "/DPAYLOAD_ID=$payloadId" "/DPAYLOAD_DIR=$payload" `
+        "/DOUTPUT_EXE=$executable" (Join-Path $PSScriptRoot 'release-launcher.nsi')
+    if ($LASTEXITCODE) { throw 'Single-file launcher compilation failed.' }
+    Compress-Archive -LiteralPath $payload -DestinationPath $archive -CompressionLevel Optimal -Force
+    $deliverables += $executable, $archive
+}
 
-Compress-Archive -LiteralPath $payload -DestinationPath $archive -CompressionLevel Optimal -Force
-$checksums = foreach ($file in $executable, $archive)
+$checksums = foreach ($file in $deliverables)
 {
     (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + [IO.Path]::GetFileName($file)
 }
@@ -115,7 +149,9 @@ $checksums = foreach ($file in $executable, $archive)
     Version = $version
     StageDirectory = $stageRoot
     PayloadDirectory = $payload
-    Executable = $executable
-    PortableZip = $archive
+    Installer = $installer
+    UninstallManifest = $removeManifest
+    Executable = if ($InstallerOnly) { $null } else { $executable }
+    PortableZip = if ($InstallerOnly) { $null } else { $archive }
     Checksums = Join-Path $outputPath 'SHA256SUMS.txt'
 }

@@ -1,0 +1,28 @@
+// SPDX-License-Identifier: Apache-2.0
+#include <windows.h>
+
+IDI_APP_ICON ICON "@PROJECT_SOURCE_DIR@/resources/brand/lightning.ico"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+ PRODUCTVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "FileDescription", "Serial Workbench\0"
+            VALUE "FileVersion", "@PROJECT_VERSION@\0"
+            VALUE "ProductName", "Serial Workbench\0"
+            VALUE "ProductVersion", "@PROJECT_VERSION@\0"
+            VALUE "OriginalFilename", "SerialWorkbench.exe\0"
+            VALUE "LegalCopyright", "Apache-2.0\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END

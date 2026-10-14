@@ -4,13 +4,14 @@
 
 一个面向嵌入式开发的 Windows 串口、网络与 SSH 调试助手。人在界面查看数据，Codex、Claude、OpenCode、Pi Agent 等 AI 通过 MCP 同时读取同一份数据，无需再次打开串口。
 
-当前版本：0.15.0，Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
+当前版本：0.15.9。Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
 
 ## 功能概览
 
 - **连接调试**：串口、TCP 客户端/服务端、UDP 与 SSH，多连接分别保留参数和视图。
 - **收发与终端**：文本/HEX、ANSI 终端、搜索、自动换行、定时发送及日志导出。
 - **数据控件**：独立标签中的数值波形、实时数值和 JSON/XML，可共享同一个连接。
+- **串口文件传输**：原始字节与 XMODEM-CRC，支持发送、接收、进度、速率、剩余时间和取消。
 - **自定义协议**：C 风格脚本处理串口原始字节，自行分帧与校验，结果独立展示在收发页。
 - **AI 协作**：MCP HTTP 与 STDIO 共享当前会话，界面和多个 AI 客户端各自读取历史；写操作由权限开关控制。
 
@@ -19,11 +20,21 @@
 采用灰绿面板、深绿侧栏和琥珀色强调。标题使用 Segoe UI，菜单、参数和说明使用微软雅黑 UI，收发数据采用等宽字体。工具栏统一使用矢量线条图标，鼠标悬停显示功能提示；图标悬停时轻微抬起，按下时下沉，设置齿轮在鼠标移入和移出时各转一整圈。输入框、按钮和菜单通过细边线与局部底边表现状态。设置中可选择浅色或深色主题，单独调整数据字体、字号或恢复推荐字体。
 旧版默认点阵数据字体自动迁移，其他自选字体保留。
 
+串口连接后，点击收发工具栏的文件传输图标，选择方向、协议和文件即可操作。设备端需要对应的接收或发送程序，详见 [串口文件传输](docs/serial-file-transfer.md)。测试 Demo 单独构建，不进入正式安装包。
+
 ## 启动
 
-无需编译时，打开 [GitHub Releases](https://github.com/lilinng-163/serial-workbench/releases/latest)，下载 `SerialWorkbench-0.15.0-windows-x64.exe`，双击即可运行。单文件版内置 Qt 运行库，首次启动自动展开到 `%LOCALAPPDATA%\SerialWorkbench\runtime\`，后续启动复用缓存；配置保存在 `%LOCALAPPDATA%\SerialWorkbench\settings.json`。
+安装版文件名为 `SerialWorkbench-<版本>-windows-x64-setup.exe`。双击进入安装向导，可选择安装目录及桌面快捷方式。安装包带透明背景的浅绿色双折闪电图标，包含完整运行库和 MCP 桥，无需安装 Python 或 Qt。安装后通过桌面/开始菜单启动，也可直接运行安装目录中的 `SerialWorkbench.exe`。
 
-也可下载 `SerialWorkbench-0.15.0-windows-x64-portable.zip`，完整解压后双击其中的 `SerialWorkbench.exe`。便携版把配置保存在解压目录，适合携带和直接配置 `SerialWorkbenchMCP.exe`。桌面程序均不需要安装 Python 或 Qt。Release 同时提供 `SHA256SUMS.txt` 校验文件。
+同一 Windows 用户再次安装新版时，会自动读取旧安装目录并覆盖升级，安装向导默认使用原路径。
+
+安装版配置保存在 `%LOCALAPPDATA%\SerialWorkbench\settings.json`，升级不会覆盖。卸载可使用 Windows「已安装的应用」、开始菜单的卸载项，或安装目录中的 `Uninstall.exe`。默认保留个人设置，也可在卸载界面勾选删除。卸载仅移除安装包自己的文件，保留自行放入安装目录的其他文件。程序或 MCP 桥运行时会提示先关闭再安装/卸载。
+
+安装后打开「设置 → AI / MCP → Agent 接入」重新配置 Agent，STDIO 桥路径会指向所选安装目录。详见 [安装与卸载](docs/windows-installer.md)。
+
+无需编译时，打开 [GitHub Releases](https://github.com/lilinng-163/serial-workbench/releases/latest)，下载 `SerialWorkbench-0.15.9-windows-x64-setup.exe`，双击安装。安装包包含完整 Qt / MinGW 运行库和原生 MCP 桥，可选择安装目录，提供卸载入口。Release 同时提供 `SHA256SUMS.txt` 校验文件。
+
+[直接下载安装包](https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.9/SerialWorkbench-0.15.9-windows-x64-setup.exe)。旧版单文件启动器及便携 ZIP 可从对应的历史 Release 获取。
 
 双击根目录 `start.bat` 或 `scripts/start.bat` 启动原生版；也可直接运行 `dist/SerialWorkbenchNative/SerialWorkbench.exe`。
 
@@ -41,7 +52,7 @@
 
 顶部标签旁的「＋」先选择「新建收发页面」或「新建控件页面」。收发页面左侧填写串口或网络参数，右侧直接显示接收区和发送栏，不再套一层「收发」标签。多个串口和网络连接可同时运行；每个草稿保留自己的参数和发送文本。连接标签显示名称与状态方块：绿色表示连接或监听，黄色表示连接或恢复中，灰色表示断开，红色表示出错；悬停查看详情。
 
-标签可拖动排序，拖出标签栏会成为独立窗口，也可右键选择「移至独立窗口」。收发页面、控件页面以及设置中的标签均支持分离。拖动独立窗口的系统标题栏使用 Windows 11 吸附与分屏；悬停最大化按钮或按 Win + Z 选择系统布局。窄窗口会自动收起连接参数，点击左上角端口图标可展开。
+鼠标中键点击收发或控件标签可关闭该页；关闭连接页会断开连接，关闭控件页保留数据源。标签可拖动排序，拖出标签栏会成为独立窗口，也可右键选择「移至独立窗口」。收发页面、控件页面以及设置中的标签均支持分离。拖动独立窗口的系统标题栏使用 Windows 11 吸附与分屏；悬停最大化按钮或按 Win + Z 选择系统布局。窄窗口会自动收起连接参数，点击左上角闪电图标可展开。
 
 拖出的连接仍由同一个程序和 MCP 服务管理，不重复打开设备；连接 ID、发送草稿、控件状态和历史保持。独立工作台窗口右上角的返回图标、关闭独立窗口或将其系统标题栏拖回主标签栏，都可重新停靠；设置页面的独立窗口也可通过下方「返回标签栏」返回。关闭主工作台才结束全部连接；连接标签上的关闭按钮仍会停止并移除该连接。右键还可断开、重连、重命名连接名称、清屏和导出日志。切换或移动标签会停止该标签的循环发送。
 
@@ -126,7 +137,23 @@ printf("@wave count=%d,temperature=%.2f,voltage=%.3f\r\n",
 
 支持串口、TCP 和 UDP。接收分块自动拼接，不同网络发送方独立处理；每帧最多 8192 字节，每个来源保留最近 5000 个采样，界面最多显示 16 条曲线。横轴为采样序号，纵轴为设备发送的数值，MCP 同时返回主机接收时间。支持冻结、滚轮缩放、拖动平移、曲线图例和自动缩放。
 
-放大后可在绘图区按住左键拖动，曲线按鼠标的屏幕位移平移，灵敏度随窗口宽度和可见采样范围换算。平移限制在保留的采样范围内；完整显示全部采样时不平移。双击绘图区或点击「自动缩放」恢复全部采样。
+波形页「数据来源 → Demo · 演示波形」可直接预览，无需连接设备或使用命令行。内置正弦波、三角波、方波和锯齿波，启动时预填 500 个采样，再以 50 Hz 持续生成。支持冻结、缩放、平移、隐藏通道和精确读数；切回设备连接即可查看真实数据。多个控件共享一份 Demo，Demo 不占用实体端口，不额外创建收发标签，且为只读数据源。选择会随控件页面保存。
+
+本地 0.15.5 的波形页使用独立的 16 ms 刷新定时器，只同步新增采样；数据没有变化时复用绘制缓存。曲线使用快速抗锯齿细线绘制；密集曲线按屏幕列保留最小值和最大值，保留短脉冲，原始采样和 MCP 读数不变。实际帧率取决于设备发送频率、窗口尺寸和机器负载。
+
+顶部通道图例显示各通道的最新数值，点击可隐藏或显示曲线，纵轴随可见通道重新缩放。计数器数值很大时，可以先隐藏它，再观察温度、电压等小范围曲线。图例横向滚动，完整数值不使用省略号。
+
+移动鼠标出现十字线和读数卡，显示最近的原始采样通道、采样序号与数值；读数保留 double 可往返还原的有效数字。绘图区按 Ctrl+C 或右键「复制当前读数」可复制 JSON，右键还可复制全部通道最新值。需要稳定检查时先勾选「冻结显示」。
+
+![内置 Demo 波形](docs/wave-demo-local.png)
+
+![波形精确读数](docs/wave-readout-local.png)
+
+固件每 500 ms 发送一次只会产生每秒 2 个新采样。希望曲线更连续时，可单独把 `@wave` 报文周期调整为 10～20 ms，普通日志、JSON/XML 维持较慢周期；需确保总发送量不超过串口实际吞吐。渲染不会凭空补出设备未发送的采样。[本地性能验证](docs/waveform-performance-local.md)记录了测试场景、耗时和复现方法。
+
+滚轮围绕鼠标位置缩放双轴；Shift + 滚轮只调整横轴，Ctrl + 滚轮只调整纵轴，也可直接在对应坐标轴上滚动。刻度间距随可见范围及窗口宽度调整；采用较密的主、次虚线网格，半格细分只显示网格线，数字标在主刻度，窄窗口自动减少标签密度。按住左键可上下左右平移，即使完整显示全部采样也能拖动。
+
+拖动或横轴缩放后，「跟随最新」自动取消，后续数据继续接收但不会推走正在查看的范围。重新勾选只把当前窗口平移到最新采样，保留调好的横轴跨度与纵轴范围；后续采样继续以同一比例滚动。双击绘图区或点击「自动缩放」才会恢复双轴完整范围和跟随状态。采样上限框只显示数字，其上限与屏幕缩放分别控制历史保留量和可见范围。
 
 本工具显示设备按协议发送的数值，不测量 UART 物理电平。
 
@@ -136,7 +163,11 @@ printf("@wave count=%d,temperature=%.2f,voltage=%.3f\r\n",
 
 「连接总览」页显示各连接的协议、状态、连接 ID 和收发计数；连接详情中的 `peers` 提供 TCP 对端。AI 的 `get_status` 返回同一份总览；`read_events` 不指定 `channel_id` 可读取全部连接，指定后读取单个连接。界面当前选中的标签不会限制 AI 访问其他连接。
 
-「客户端接入」页为 Codex、Claude Code、OpenCode CLI、Claude Desktop 和 Pi Agent 分别提供「配置并检查」。按钮将本服务合并到当前 Windows 账户的客户端配置，保留其他设置，修改前生成带时间戳的 `.bak` 备份。OpenCode JSONC 的注释与其他服务器保留。随后检查本地服务、工具数量和 `get_status`；客户端需重启或重新加载配置。打包集成测试另行验证真实 HTTP / STDIO 传输。此检查不启动 AI 对话，也不会打开串口。
+「Agent 接入」页按两列展示 Codex、Claude Code、Claude Desktop、OpenCode CLI、Pi、Hermes、OpenClaw、Grok Build、Gemini CLI。检测 Windows PATH、常见安装目录与注册的桌面应用；仅已检测到安装的客户端可以配置和检查。残留的配置文件不视为安装。WSL、远程机器和容器中的 Agent 不在 Windows 本机扫描范围内。
+
+监听端口可以手动修改，也可以点击「自动选空闲」。新端口不可用时保留原监听；应用成功后立即保存，并更新显示的地址。默认启动时读取保存的端口，遇到占用自动选取空闲端口；显式 `--mcp-port` 保持指定端口。切换端口保留串口连接、历史和 MCP 会话数据，Agent 需重新连接新地址。
+
+点击「一键更新已安装 Agent」把新地址同步到全部已检测到的客户端。每个客户端独立报告结果；一个失败不会阻止其他客户端更新。也可以单独「配置」或只读「检查」。写入前备份 `.bak`，保留其他 MCP 服务与注释，校验 JSON/JSONC、常见 JSON5、TOML 和 YAML；遇到不支持的特殊写法拒绝修改并提示。检查包含实际 HTTP 初始化握手和配置地址检查，不代表已完成 Agent 对话。更新后重载 Agent 配置；Pi 使用 `/reload`。Claude Desktop 使用同目录的 `SerialWorkbenchMCP.exe` 桥接，其他客户端通过 HTTP 接入。详见 [Agent 配置与官方参考](docs/agent-integration.md)。
 
 「调用日志」显示客户端名称、工具、成功/失败、耗时及错误。名称来自 MCP 客户端会话，日志保留最近 1000 次调用，发送内容仅在后台摘要中记录长度。
 
@@ -247,6 +278,10 @@ claude mcp add --transport http serial-workbench http://127.0.0.1:8765/mcp
 
 ## JSON / XML 提取
 
+页内「数据来源 → Demo · JSON/XML」提供独立的结构化演示：每秒生成一组 JSON 对象与 XML 报文，包含温度、电压、设备状态和布尔标志，选择后立即显示示例。此页不列出波形 Demo；波形页也不列出 JSON/XML Demo。实体连接仍可同时发送多种报文，由各控件独立解析。
+
+![独立 JSON/XML Demo](docs/structured-demo-local.png)
+
 通过「＋ → 新建控件页面 → JSON / XML」添加解析页，在页内格式选项中选择「JSON / XML」「仅 JSON」或「仅 XML」，程序开始从后续接收流中提取完整对象。支持日志前后混有普通文本、JSON 嵌套对象/数组、多行与跨接收块、XML 嵌套元素/属性/CDATA；ANSI 颜色码不影响解析。JSON 顶层需要是对象或数组。
 
 「JSON / XML」页列出提取记录，选择一条查看格式化内容；格式选择和文本过滤共同筛选显示。原始收发区、HEX、导出日志及 MCP `read_events` 始终保留原数据，解析不会消耗它们。不同网络对端分别拼接，不会把两个来源合成一条消息。
@@ -281,7 +316,7 @@ $env:MINGW_BIN = 'D:/lib/Qt/Tools/mingw1310_64/bin'
 # 打包后的 HTTP / STDIO 集成测试，需要 Python MCP SDK
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r tests/integration/requirements.txt
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.0
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.9
 ```
 
 测试覆盖独立读取与分页、真实 TCP/UDP socket、软件串口回环及重配置、UTF-8/GBK 分片解析、ANSI 颜色与终端、连接标签和布局、设置恢复、MCP HTTP/STDIO、权限、非阻塞等待和错误参数。实际 COM 硬件、USB 设备的实际线速及各 AI 客户端的完整对话需要在对应环境验证。
@@ -292,14 +327,14 @@ python -m venv .venv
 
 ```powershell
 .\scripts\package-release.ps1 -QtSourceRoot 'D:/lib/Qt/6.11.1/Src' -MakeNSIS makensis
-.\.venv\Scripts\python.exe tests/integration/smoke_release.py --expected-version 0.15.0
+.\.venv\Scripts\python.exe tests/integration/smoke_release.py --expected-version 0.15.9
 ```
 
-产物位于 `dist/releases/`，包含单文件 EXE、便携 ZIP 和 SHA-256 校验文件。打包仅复制程序、运行库、插件与许可证，排除本机 `settings.json` 及其备份。发布包测试在不含 Qt SDK 的 PATH 下验证便携版、单文件首次与缓存启动、Unicode 路径、参数传递及 HTTP/STDIO 共享会话。
+产物位于 `dist/releases/`，包含安装包、单文件 EXE、便携 ZIP 和 SHA-256 校验文件。`-InstallerOnly` 可仅生成安装包。打包仅复制程序、运行库、插件与许可证，排除本机 `settings.json` 及其备份。发布包测试在不含 Qt SDK 的 PATH 下验证便携版、单文件首次与缓存启动、Unicode 路径、参数传递及 HTTP/STDIO 共享会话。
 
 工程按职责组织：`src/app/` 为桌面入口，`src/core/` 为连接与数据处理，`src/mcp/` 为共享 MCP 服务，`src/ui/` 为界面与控件，`src/bridge/` 为 STDIO 桥。资源在 `resources/`，构建脚本在 `scripts/`，测试在 `tests/`，CMake 公共规则在 `cmake/`。构建产物仅放入 `build/`，分发产物放入 `dist/`。详细目录、CMake 目标和手动构建方式见 [工程结构](docs/project-structure.md)。
 
-程序目录的 `settings.json` 保存表单、模板、外观、各连接视图及 AI 权限，启动时不自动打开设备。
+便携版的程序目录 `settings.json`、安装版的用户配置文件保存表单、模板、外观、各连接视图及 AI 权限，启动时不自动打开设备。
 
 主题与字体规则、参考设计见 [像素主题说明](docs/pixel-theme.md)。独立窗口及 Windows 11 布局实现验证见 [0.8.0 验证记录](docs/workspace-0.8-validation.md)。
 
@@ -310,3 +345,5 @@ python -m venv .venv
 项目自有源码采用 [Apache License 2.0](LICENSE)，标识为 `SPDX-License-Identifier: Apache-2.0`。
 
 第三方依赖及资源遵循各自许可证：Qt 按所使用版本及模块的许可分发；随程序保留的点阵字体许可位于 [resources/fonts](resources/fonts/README.md)。便携包包含项目许可证和字体许可文件，分发时请保留这些文件。
+
+波形工具栏的「X 轴」「Y 轴」分别控制刻度与标签，隐藏后绘图区自动扩大；网格、曲线、悬停数值和缩放拖动保持可用。每个波形页独立保存这两个开关。

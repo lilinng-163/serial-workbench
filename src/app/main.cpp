@@ -11,11 +11,20 @@ int main(int argc, char *argv[])
     app.setApplicationVersion(sw::Version);
     app.setStyle("Fusion");
     app.setFont(sw::Theme::interfaceFont());
+    app.setWindowIcon(QIcon(":/brand/lightning.svg"));
+    auto defaultSettings = QCoreApplication::applicationDirPath() + "/settings.json";
+    QFile installation(QCoreApplication::applicationDirPath() + "/installation.json");
+    if (installation.open(QIODevice::ReadOnly)
+        && QJsonDocument::fromJson(installation.readAll()).object()["distribution"] == "installed")
+    {
+        defaultSettings = qEnvironmentVariable("LOCALAPPDATA", QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation))
+            + "/SerialWorkbench/settings.json";
+    }
     QCommandLineParser parser;
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addOption({"mcp-port", "Local MCP port", "port", "8765"});
-    parser.addOption({"settings", "Settings file", "path", QCoreApplication::applicationDirPath() + "/settings.json"});
+    parser.addOption({"settings", "Settings file", "path", defaultSettings});
     parser.addOption({"demo", "Show generated example data"});
     parser.addOption({"view", "Preview waveform, values, structured, settings, dark, search, terminal, ssh, detached, floating-wave, narrow or protocol", "name"});
     parser.addOption({"screenshot", "Save window preview", "path"});
@@ -23,12 +32,23 @@ int main(int argc, char *argv[])
     parser.addOption({"quit-after", "Close after milliseconds", "ms"});
     parser.process(app);
     bool validPort = false;
-    const auto port = parser.value("mcp-port").toUInt(&validPort);
+    auto port = parser.value("mcp-port").toUInt(&validPort);
+    if (!parser.isSet("mcp-port"))
+    {
+        QFile settings(parser.value("settings"));
+        if (settings.open(QIODevice::ReadOnly))
+        {
+            const auto value = QJsonDocument::fromJson(settings.readAll()).object()["mcp_port"].toInt(8765);
+            if (value > 0 && value <= 65535) { port = static_cast<uint>(value); }
+        }
+    }
     if (!validPort || port > 65535)
     {
         return 2;
     }
-    const QString instanceName = "SerialWorkbenchNative-" + qEnvironmentVariable("USERNAME") + "-" + QString::number(port);
+    const auto instanceKey = parser.isSet("mcp-port") ? QString::number(port)
+        : QString::fromLatin1(QCryptographicHash::hash(QFileInfo(parser.value("settings")).absoluteFilePath().toUtf8(), QCryptographicHash::Sha256).toHex().left(16));
+    const QString instanceName = "SerialWorkbenchNative-" + qEnvironmentVariable("USERNAME") + "-" + instanceKey;
     QLocalSocket existing;
     existing.connectToServer(instanceName);
     if (existing.waitForConnected(100))
@@ -41,8 +61,10 @@ int main(int argc, char *argv[])
     instance.listen(instanceName);
     sw::Engine engine;
     sw::McpServer mcp(&engine);
-    mcp.start(static_cast<quint16>(port));
+    if (parser.isSet("mcp-port")) { mcp.start(static_cast<quint16>(port)); }
+    else { mcp.startAvailable(static_cast<quint16>(port)); }
     sw::Window window(&engine, &mcp, parser.value("settings"));
+    if (!parser.isSet("mcp-port") && mcp.isListening()) { window.saveSettings(); }
     QPointer<QWidget> previewTarget = &window;
     QObject::connect(&instance, &QLocalServer::newConnection, &window, [&]
     {
@@ -88,7 +110,12 @@ int main(int argc, char *argv[])
             }
         }
         const auto view = parser.value("view");
-        if (view == "settings")
+        if (view == "agents")
+        {
+            window.openSettings();
+            window.settingsDialog->findChild<sw::DetachableTabs *>("settingsPages")->setCurrentIndex(1);
+        }
+        else if (view == "settings")
         {
             window.openSettings();
         }
