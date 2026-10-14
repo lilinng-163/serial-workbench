@@ -3,6 +3,7 @@
 #pragma once
 #include "terminal.h"
 #include "mcp.h"
+#include "update_service.h"
 
 namespace sw
 {
@@ -183,6 +184,9 @@ public:
     QLabel *scriptHint;
     QLabel *status;
     QLabel *mcpStatus;
+    QPushButton *updateButton = nullptr;
+    QProgressBar *updateProgress = nullptr;
+    UpdateService *updater = nullptr;
     QTimer timer;
     QTimer portTimer;
     QTimer sshConfigTimer;

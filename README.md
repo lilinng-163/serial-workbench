@@ -4,7 +4,7 @@
 
 一个面向嵌入式开发的 Windows 串口、网络与 SSH 调试助手。人在界面查看数据，Codex、Claude、OpenCode、Pi Agent 等 AI 通过 MCP 同时读取同一份数据，无需再次打开串口。
 
-当前版本：0.15.10。Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
+当前版本：0.15.11。Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
 
 ## 功能概览
 
@@ -32,9 +32,11 @@
 
 安装后打开「设置 → AI / MCP → Agent 接入」重新配置 Agent，STDIO 桥路径会指向所选安装目录。详见 [安装与卸载](docs/windows-installer.md)。
 
-无需编译时，打开 [GitHub Releases](https://github.com/lilinng-163/serial-workbench/releases/latest)，下载 `SerialWorkbench-0.15.10-windows-x64-setup.exe`，双击安装。安装包包含完整 Qt / MinGW 运行库和原生 MCP 桥，可选择安装目录，提供卸载入口。Release 同时提供 `SHA256SUMS.txt` 校验文件。
+工作台启动后会检查 GitHub 上的最新正式版，并定期复查。发现新版本时，窗口右下角会出现版本提醒；点击后可下载并校验安装包，随后自动打开安装向导。工作台会在安装向导启动后退出，安装向导会沿用原安装目录。检查失败或离线时不影响串口、网络和 MCP 功能。
 
-[直接下载安装包](https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.10/SerialWorkbench-0.15.10-windows-x64-setup.exe)。旧版单文件启动器及便携 ZIP 可从对应的历史 Release 获取。
+无需编译时，打开 [GitHub Releases](https://github.com/lilinng-163/serial-workbench/releases/latest)，下载 `SerialWorkbench-0.15.11-windows-x64-setup.exe`，双击安装。安装包包含完整 Qt / MinGW 运行库和原生 MCP 桥，可选择安装目录，提供卸载入口。Release 同时提供 `SHA256SUMS.txt` 校验文件。
+
+[直接下载安装包](https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.11/SerialWorkbench-0.15.11-windows-x64-setup.exe)。旧版单文件启动器及便携 ZIP 可从对应的历史 Release 获取。
 
 双击根目录 `start.bat` 或 `scripts/start.bat` 启动原生版；也可直接运行 `dist/SerialWorkbenchNative/SerialWorkbench.exe`。
 
@@ -316,7 +318,7 @@ $env:MINGW_BIN = 'D:/lib/Qt/Tools/mingw1310_64/bin'
 # 打包后的 HTTP / STDIO 集成测试，需要 Python MCP SDK
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r tests/integration/requirements.txt
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.10
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.11
 ```
 
 测试覆盖独立读取与分页、真实 TCP/UDP socket、软件串口回环及重配置、UTF-8/GBK 分片解析、ANSI 颜色与终端、连接标签和布局、设置恢复、MCP HTTP/STDIO、权限、非阻塞等待和错误参数。实际 COM 硬件、USB 设备的实际线速及各 AI 客户端的完整对话需要在对应环境验证。
@@ -327,7 +329,7 @@ python -m venv .venv
 
 ```powershell
 .\scripts\package-release.ps1 -QtSourceRoot 'D:/lib/Qt/6.11.1/Src' -MakeNSIS makensis
-.\.venv\Scripts\python.exe tests/integration/smoke_release.py --expected-version 0.15.10
+.\.venv\Scripts\python.exe tests/integration/smoke_release.py --expected-version 0.15.11
 ```
 
 产物位于 `dist/releases/`，包含安装包、单文件 EXE、便携 ZIP 和 SHA-256 校验文件。`-InstallerOnly` 可仅生成安装包。打包仅复制程序、运行库、插件与许可证，排除本机 `settings.json` 及其备份。发布包测试在不含 Qt SDK 的 PATH 下验证便携版、单文件首次与缓存启动、Unicode 路径、参数传递及 HTTP/STDIO 共享会话。

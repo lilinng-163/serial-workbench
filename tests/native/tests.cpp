@@ -4,6 +4,8 @@
 #include "ssh_profiles.h"
 #include "agent_config.h"
 #include <QtTest>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <algorithm>
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -22,6 +24,68 @@ class NativeTests : public QObject
 {
     Q_OBJECT
 private slots:
+    void updateReleaseOnlyAcceptsVerifiedNewInstaller()
+    {
+        const QString version = "0.15.11";
+        const QString fileName = "SerialWorkbench-0.15.11-windows-x64-setup.exe";
+        const QString url = "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.11/" + fileName;
+        QJsonObject asset {
+            {"name", fileName},
+            {"state", "uploaded"},
+            {"browser_download_url", url},
+            {"digest", "sha256:" + QString(64, 'a')},
+            {"size", 2048}
+        };
+        QJsonObject release {
+            {"tag_name", "v0.15.11"},
+            {"draft", false},
+            {"prerelease", false},
+            {"assets", QJsonArray {asset}}
+        };
+        const auto parse = [&release]
+        {
+            return sw::UpdateService::parseRelease(QJsonDocument(release).toJson(), "0.15.10");
+        };
+
+        auto result = parse();
+        QVERIFY(result.has_value());
+        QCOMPARE(result->version, version);
+        QCOMPARE(result->sha256, QByteArray(64, 'a'));
+        QCOMPARE(result->size, qint64(2048));
+        QVERIFY(!sw::UpdateService::parseRelease(QJsonDocument(release).toJson(), version));
+
+        release["prerelease"] = true;
+        QVERIFY(!parse());
+        release["prerelease"] = false;
+        asset["digest"] = "";
+        release["assets"] = QJsonArray {asset};
+        QVERIFY(!parse());
+        asset["digest"] = "sha256:" + QString(64, 'a');
+        asset["browser_download_url"] = "https://example.com/installer.exe";
+        release["assets"] = QJsonArray {asset};
+        QVERIFY(!parse());
+        asset["browser_download_url"] = url;
+        asset["size"] = 0;
+        release["assets"] = QJsonArray {asset};
+        QVERIFY(!parse());
+    }
+
+    void updateReminderStaysHiddenUntilNewVersion()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        window.show();
+        QVERIFY(!window.updateButton->isVisible());
+        QVERIFY(!window.updateProgress->isVisible());
+
+        emit window.updater->updateAvailable("0.15.11");
+        QVERIFY(window.updateButton->isVisible());
+        QVERIFY(window.updateButton->text().contains("0.15.11"));
+        QVERIFY(!window.updateProgress->isVisible());
+    }
+
     void waveformDragMatchesScreen_data()
     {
         QTest::addColumn<int>("plotWidth");

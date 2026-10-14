@@ -257,6 +257,11 @@ QString Theme::stylesheet() const
         QPushButton#outline { color: $text; border: 1px solid $line; border-bottom: 2px solid $edge; background: $panel; }
         QPushButton#outline[keyboardFocus="true"]:focus { border-color: $accent; color: $accent; }
         QPushButton#outline:hover { color: $accent; border-bottom-color: $accent; }
+        QPushButton#updateButton { color: $accent; border: none; padding: 1px 5px; min-height: 18px; font-weight: 600; }
+        QPushButton#updateButton:hover { color: $text; }
+        QPushButton#updateButton:pressed { color: $muted; padding-top: 2px; padding-bottom: 0; }
+        QProgressBar#updateProgress { border: 1px solid $edge; background: $panel; padding: 0; }
+        QProgressBar#updateProgress::chunk { background: $accent; }
         QPushButton:disabled, QToolButton:disabled { color: $muted; }
         QPlainTextEdit, QTextEdit { border: 1px solid $edge; border-radius: 0; background: $panel; padding: 8px; selection-background-color: $accent; selection-color: $onaccent; }
         QPlainTextEdit:focus { border-color: $accent; }

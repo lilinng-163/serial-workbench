@@ -5,6 +5,8 @@
 add_library(workbench_ui OBJECT
     window.cpp
     window.h
+    update_service.cpp
+    update_service.h
     file_transfer_dialog.cpp
     file_transfer_dialog.h
     agent_config.cpp

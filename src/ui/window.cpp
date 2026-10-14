@@ -6,6 +6,9 @@
 #include "agent_config.h"
 #include "agent_panel.h"
 #include "file_transfer_dialog.h"
+#include <QFileInfo>
+#include <QProcess>
+#include <QProgressBar>
 #include <QTextCodec>
 #include <numeric>
 #ifdef Q_OS_WIN
@@ -1737,6 +1740,63 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     statusBar()->setSizeGripEnabled(false);
     statusBar()->addWidget(status, 1);
     statusBar()->addPermanentWidget(mcpStatus);
+    if (!primary)
+    {
+        updater = new UpdateService(this);
+        updateButton = button("", "updateButton");
+        updateButton->setToolTip("下载并安装最新版本");
+        updateProgress = new QProgressBar();
+        updateProgress->setObjectName("updateProgress");
+        updateProgress->setFixedWidth(90);
+        updateProgress->setFixedHeight(8);
+        updateProgress->setTextVisible(false);
+        statusBar()->addPermanentWidget(updateProgress);
+        statusBar()->addPermanentWidget(updateButton);
+        updateProgress->hide();
+        updateButton->hide();
+
+        connect(updater, &UpdateService::updateAvailable, this, [this](const QString &version)
+        {
+            updateButton->setText(QString("发现新版本 v%1  ↓").arg(version));
+            updateButton->setToolTip(QString("下载并安装 Serial Workbench v%1").arg(version));
+            updateButton->show();
+        });
+        connect(updateButton, &QAbstractButton::clicked, this, [this]
+        {
+            updateButton->setEnabled(false);
+            updateProgress->setRange(0, 100);
+            updateProgress->setValue(0);
+            updateProgress->show();
+            updater->download();
+        });
+        connect(updater, &UpdateService::downloadProgress, this, [this](qint64 received, qint64 total)
+        {
+            if (total > 0)
+            {
+                updateProgress->setValue(int(received * 100 / total));
+                updateProgress->setToolTip(QString("已下载 %1 / %2 MB")
+                    .arg(received / 1024.0 / 1024.0, 0, 'f', 1)
+                    .arg(total / 1024.0 / 1024.0, 0, 'f', 1));
+            }
+        });
+        connect(updater, &UpdateService::downloadFailed, this, [this](const QString &message)
+        {
+            updateProgress->hide();
+            updateButton->setEnabled(true);
+            statusBar()->showMessage(message, 10000);
+        });
+        connect(updater, &UpdateService::downloadReady, this, [this](const QString &installerPath)
+        {
+            if (!QProcess::startDetached(installerPath, {}, QFileInfo(installerPath).absolutePath()))
+            {
+                updateProgress->hide();
+                updateButton->setEnabled(true);
+                statusBar()->showMessage("无法启动更新安装程序", 10000);
+                return;
+            }
+            QApplication::closeAllWindows();
+        });
+    }
     statusBar()->setContentsMargins(12, 2, 12, 2);
     connect(protocol, &QComboBox::currentIndexChanged, this, &Window::protocolChanged);
     connect(baud, &QComboBox::activated, this, [this] { applyBaud(); });
@@ -1825,6 +1885,15 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     connect(&portTimer, &QTimer::timeout, this, &Window::refreshPorts);
     portTimer.start();
     port->setFocus();
+    if (updater && QGuiApplication::platformName() != "offscreen"
+        && !QCoreApplication::arguments().contains("--screenshot"))
+    {
+        QTimer::singleShot(2000, updater, &UpdateService::check);
+        auto updateTimer = new QTimer(updater);
+        updateTimer->setInterval(6 * 60 * 60 * 1000);
+        connect(updateTimer, &QTimer::timeout, updater, &UpdateService::check);
+        updateTimer->start();
+    }
 }
 
 Window *Window::rootWindow()
