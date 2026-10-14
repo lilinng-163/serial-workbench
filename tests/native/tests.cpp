@@ -6,6 +6,9 @@
 #include <QtTest>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include <algorithm>
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -68,6 +71,61 @@ private slots:
         asset["size"] = 0;
         release["assets"] = QJsonArray {asset};
         QVERIFY(!parse());
+    }
+
+    void updateMirrorOnlyAcceptsVerifiedNewInstaller()
+    {
+        const QString version = "0.15.13";
+        const QString fileName = "SerialWorkbench-0.15.13-windows-x64-setup.exe";
+        const QString url = "https://162.14.72.194/updates/" + fileName;
+        QJsonObject manifest {
+            {"version", version},
+            {"filename", fileName},
+            {"url", url},
+            {"sha256", QString(64, 'b')},
+            {"size", 2048}
+        };
+        const auto parse = [&manifest]
+        {
+            return sw::UpdateService::parseMirrorManifest(QJsonDocument(manifest).toJson(), "0.15.12");
+        };
+
+        auto result = parse();
+        QVERIFY(result.has_value());
+        QCOMPARE(result->version, version);
+        QCOMPARE(result->url, QUrl(url));
+        QCOMPARE(result->sha256, QByteArray(64, 'b'));
+        QVERIFY(!sw::UpdateService::parseMirrorManifest(QJsonDocument(manifest).toJson(), version));
+
+        manifest["url"] = "http://162.14.72.194/updates/" + fileName;
+        QVERIFY(!parse());
+        manifest["url"] = "https://example.com/updates/" + fileName;
+        QVERIFY(!parse());
+        manifest["url"] = "https://162.14.72.194:444/updates/" + fileName;
+        QVERIFY(!parse());
+        manifest["url"] = url;
+        manifest["sha256"] = "invalid";
+        QVERIFY(!parse());
+        manifest["sha256"] = QString(64, 'b');
+        manifest["filename"] = "other.exe";
+        QVERIFY(!parse());
+    }
+
+    void updateMirrorLiveTlsProbe()
+    {
+        if (!qEnvironmentVariableIsSet("SERIAL_WORKBENCH_NETWORK_PROBE"))
+        {
+            QSKIP("Live HTTPS probe is opt-in");
+        }
+
+        QNetworkAccessManager network;
+        auto *reply = network.get(QNetworkRequest(QUrl("https://162.14.72.194/updates/latest.json")));
+        QSignalSpy finished(reply, &QNetworkReply::finished);
+        QVERIFY(finished.wait(15000));
+        QCOMPARE(reply->error(), QNetworkReply::NoError);
+        QCOMPARE(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+        QVERIFY(sw::UpdateService::parseMirrorManifest(reply->readAll(), "0.0.0"));
+        reply->deleteLater();
     }
 
     void updateReminderStaysHiddenUntilNewVersion()

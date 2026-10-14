@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+[Unit]
+Description=Renew lilinng HTTPS IP certificate
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/srv/lilinng-web/renew-certificate.sh

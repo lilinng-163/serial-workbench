@@ -31,6 +31,7 @@ public:
     explicit UpdateService(QObject *parent = nullptr);
 
     static std::optional<UpdateRelease> parseRelease(const QByteArray &json, const QString &currentVersion);
+    static std::optional<UpdateRelease> parseMirrorManifest(const QByteArray &json, const QString &currentVersion);
 
     void check();
     void download();
@@ -50,6 +51,7 @@ private:
     QCryptographicHash installerHash {QCryptographicHash::Sha256};
     qint64 receivedBytes = 0;
 
+    void startCheck(bool mirror);
     void receiveChunk(QNetworkReply *reply);
     void finishDownload(QNetworkReply *reply);
 };
