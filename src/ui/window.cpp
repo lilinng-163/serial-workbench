@@ -534,7 +534,7 @@ Pane::Pane(Window *owner, const QString &instrumentKind) : QWidget(owner), windo
     auto tools = horizontal(toolbar);
     tools->setContentsMargins(14, 8, 12, 6);
     tools->setSpacing(3);
-    modeButton = new IconButton("log", "切换到交互终端");
+    modeButton = new IconButton("terminal", "切换到交互终端");
     modeButton->setObjectName("terminalMode");
     modeButton->setCheckable(true);
     tools->addWidget(modeButton);
@@ -1077,7 +1077,7 @@ void Pane::setTerminal(bool enabled)
     }
     modeButton->setToolTip(enabled ? "返回收发日志" : "切换到交互终端");
     modeButton->setAccessibleName(modeButton->toolTip());
-    modeButton->glyph = enabled ? "terminal" : "log";
+    modeButton->glyph = enabled ? "log" : "terminal";
     modeButton->update();
     filter->setVisible(!enabled);
     follow->setVisible(!enabled);

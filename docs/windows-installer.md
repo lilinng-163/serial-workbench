@@ -17,7 +17,7 @@ Windows「已安装的应用」、开始菜单和安装目录均提供卸载入�
 先执行 `scripts/build.ps1`，再执行：
 
 ```powershell
-./scripts/package-release.ps1 -OutputDir dist/local/0.15.9 `
+./scripts/package-release.ps1 -OutputDir dist/local/0.15.10 `
     -QtSourceRoot D:/lib/Qt/6.11.1/Src `
     -MakeNSIS E:/MinGW/w64devkit/bin/makensis.exe -InstallerOnly
 ```
@@ -34,8 +34,8 @@ NSIS Modern UI 提供目录、组件、安装和卸载页面，中文字体与�
 ./.venv/Scripts/python.exe tests/integration/smoke_installer.py `
     --payload build/release-<版本>-<阶段ID>/SerialWorkbench `
     --remove-manifest build/release-<版本>-<阶段ID>/remove-files.nsh `
-    --installer dist/local/0.15.9/SerialWorkbench-0.15.9-windows-x64-setup.exe `
-    --expected-version 0.15.9 --makensis E:/MinGW/w64devkit/bin/makensis.exe
+    --installer dist/local/0.15.10/SerialWorkbench-0.15.10-windows-x64-setup.exe `
+    --expected-version 0.15.10 --makensis E:/MinGW/w64devkit/bin/makensis.exe
 ```
 
 参考：[NSIS Modern UI 文档](https://nsis.sourceforge.io/Docs/Modern%20UI%202/Readme.html)。
