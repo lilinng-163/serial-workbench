@@ -277,7 +277,7 @@ private slots:
         channel->configureScript(channel->scriptCode, false);
         QTest::qWait(50);
         QCOMPARE(channel->scriptFrames, 0);
-        channel->receive("1,2\n");
+        channel->receive("@wave first=1,second=2\n");
         QCOMPARE(channel->sources["default"]->samples.back()["values"].toObject().size(), 2);
     }
 
@@ -405,7 +405,7 @@ private slots:
         channel->configureScript(sw::FrameScriptProgram::example(), true);
         channel->configureParser("json");
         const QByteArray stream = Frame + "I (1) app_main: tick\r\n"
-            + QByteArray("temperature=80,voltage=12\r\n") + QString("{\"温度\":99}\r\n").toUtf8() + Frame;
+            + QByteArray("@wave temperature=80,voltage=12\r\n") + QString("{\"温度\":99}\r\n").toUtf8() + Frame;
         if (fragmented)
         {
             for (const char byte : stream) { channel->receive(QByteArray(1, byte)); }
@@ -413,9 +413,8 @@ private slots:
         else { channel->receive(stream); }
         QTRY_COMPARE(channel->scriptFrames, 2);
         const auto samples = channel->waveform()["sources"].toObject()["default"].toObject()["samples"].toArray();
-        QCOMPARE(samples.size(), 2);
+        QCOMPARE(samples.size(), 1);
         QCOMPARE(samples[0].toObject()["values"].toObject()["temperature"].toInt(), 80);
-        QCOMPARE(samples[1].toObject()["values"].toObject()["温度"].toInt(), 99);
         QCOMPARE(records(channel).size(), 2);
         QCOMPARE(records(channel)[0].toObject()["value"].toObject()["温度"].toInt(), 25);
         const auto json = channel->structured()["sources"].toObject()["default"].toObject()["records"].toArray();
@@ -428,10 +427,10 @@ private slots:
         QCOMPARE(second["records"].toArray().size(), 1);
         QVERIFY(!second["has_more"].toBool());
         QVERIFY_EXCEPTION_THROWN(channel->scriptResults(0, 1, {{"default", -1}}), std::runtime_error);
-        channel->receive("temperature=8");
+        channel->receive("@wave temperature=8");
         channel->configureScript(channel->scriptCode, false);
         channel->receive("0,voltage=12\r\n");
-        QCOMPARE(channel->waveform()["sources"].toObject()["default"].toObject()["total_samples"].toInt(), 3);
+        QCOMPARE(channel->waveform()["sources"].toObject()["default"].toObject()["total_samples"].toInt(), 2);
         QCOMPARE(records(channel).size(), 2);
     }
 
@@ -443,7 +442,7 @@ private slots:
         auto channel = engine.open(config);
         channel->configureScript(sw::FrameScriptProgram::example(), true);
         channel->configureParser("json");
-        channel->receive("{\"wave\":7}\n");
+        channel->receive("{\"wave\":7}\n@wave wave=7\n");
         channel->receive(Frame.repeated(510));
         QTRY_COMPARE(channel->scriptFrames, 510);
         const auto batch = channel->scriptResults(0, 500)["sources"].toObject()["default"].toObject();
@@ -467,7 +466,7 @@ private slots:
         auto pane = window.active;
         auto channel = pane->channel;
         pane->applyScript(sw::FrameScriptProgram::example(), true);
-        channel->receive(Frame + "plot=42\r\n");
+        channel->receive(Frame + "@wave plot=42\r\n");
         QTRY_COMPARE(channel->scriptFrames, 1);
         pane->tick();
         QVERIFY(pane->scriptPanel->isVisible());

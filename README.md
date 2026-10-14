@@ -4,7 +4,7 @@
 
 一个面向嵌入式开发的 Windows 串口、网络与 SSH 调试助手。人在界面查看数据，Codex、Claude、OpenCode、Pi Agent 等 AI 通过 MCP 同时读取同一份数据，无需再次打开串口。
 
-当前版本：0.14.1，Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
+当前版本：0.15.0，Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
 
 ## 功能概览
 
@@ -21,9 +21,9 @@
 
 ## 启动
 
-无需编译时，打开 [GitHub Releases](https://github.com/lilinng-163/serial-workbench/releases/latest)，下载 `SerialWorkbench-0.14.1-windows-x64.exe`，双击即可运行。单文件版内置 Qt 运行库，首次启动自动展开到 `%LOCALAPPDATA%\SerialWorkbench\runtime\`，后续启动复用缓存；配置保存在 `%LOCALAPPDATA%\SerialWorkbench\settings.json`。
+无需编译时，打开 [GitHub Releases](https://github.com/lilinng-163/serial-workbench/releases/latest)，下载 `SerialWorkbench-0.15.0-windows-x64.exe`，双击即可运行。单文件版内置 Qt 运行库，首次启动自动展开到 `%LOCALAPPDATA%\SerialWorkbench\runtime\`，后续启动复用缓存；配置保存在 `%LOCALAPPDATA%\SerialWorkbench\settings.json`。
 
-也可下载 `SerialWorkbench-0.14.1-windows-x64-portable.zip`，完整解压后双击其中的 `SerialWorkbench.exe`。便携版把配置保存在解压目录，适合携带和直接配置 `SerialWorkbenchMCP.exe`。桌面程序均不需要安装 Python 或 Qt。Release 同时提供 `SHA256SUMS.txt` 校验文件。
+也可下载 `SerialWorkbench-0.15.0-windows-x64-portable.zip`，完整解压后双击其中的 `SerialWorkbench.exe`。便携版把配置保存在解压目录，适合携带和直接配置 `SerialWorkbenchMCP.exe`。桌面程序均不需要安装 Python 或 Qt。Release 同时提供 `SHA256SUMS.txt` 校验文件。
 
 双击根目录 `start.bat` 或 `scripts/start.bat` 启动原生版；也可直接运行 `dist/SerialWorkbenchNative/SerialWorkbench.exe`。
 
@@ -109,20 +109,26 @@ SSH 使用 Windows 自带的 `ssh.exe`，沿用 `~/.ssh/config` 的 `HostName`�
 
 ## 波形
 
-数值数据按 CR、LF 或 CRLF 分行，支持以下格式，每行最多 16 个数值：
+波形与实时数值仅识别 **wave/1 专用协议**。每个采样独占一行，以小写 `@wave ` 开头，以 CR、LF 或 CRLF 结束：
 
 ```text
-1.2,3.4,5.6
-temperature=25.6,voltage=3.3
-{"temperature":25.6,"voltage":3.3}
-[1.2,3.4,5.6]
+@wave count=120,temperature=25.50,voltage=3.300
 ```
 
-支持串口、TCP 和 UDP。流式数据跨接收块时自动拼接；网络不同发送方分别解析。每个发送方保留最近 5000 个采样，界面最多显示 16 条曲线。横轴是采样序号，纵轴是报文中的数值；MCP 同时返回主机接收时间。支持冻结、滚轮缩放、拖动平移、曲线图例和自动缩放。
+字段名就是通道名，顺序变化不影响归属。每帧支持 1～16 个命名通道，整数、负数、浮点数和科学计数法可混合；例如 `@wave count=123,temperature=-12.5,current=1.25e-3`。名称可用字母、汉字、数字和下划线，不能以数字开头，最长 64 个字符，同帧不得重名。
+
+```c
+printf("@wave count=%d,temperature=%.2f,voltage=%.3f\r\n",
+       count, (double)temperature, (double)voltage);
+```
+
+没有前缀的数字、CSV、JSON、普通日志和脚本输出不会进入波形或实时数值。带前缀但字段格式错误的报文整帧丢弃，不生成部分通道采样；普通日志不计入格式错误。详细语法、精度、分包处理及旧格式迁移见 [波形专用协议](docs/wave-protocol.md)。
+
+支持串口、TCP 和 UDP。接收分块自动拼接，不同网络发送方独立处理；每帧最多 8192 字节，每个来源保留最近 5000 个采样，界面最多显示 16 条曲线。横轴为采样序号，纵轴为设备发送的数值，MCP 同时返回主机接收时间。支持冻结、滚轮缩放、拖动平移、曲线图例和自动缩放。
 
 放大后可在绘图区按住左键拖动，曲线按鼠标的屏幕位移平移，灵敏度随窗口宽度和可见采样范围换算。平移限制在保留的采样范围内；完整显示全部采样时不平移。双击绘图区或点击「自动缩放」恢复全部采样。
 
-非数值日志会被忽略并计数。原始二进制数据仍可显示、导出和被 MCP 读取，但不自动转换成波形；设备需输出上面的逐行数值格式。本工具不是直接测量 UART 电平时序的逻辑分析仪。
+本工具显示设备按协议发送的数值，不测量 UART 物理电平。
 
 ## AI 接入
 
@@ -222,7 +228,7 @@ claude mcp add --transport http serial-workbench http://127.0.0.1:8765/mcp
 | `list_serial_ports` | 本机串口列表，不打开端口 |
 | `list_connections` | 连接 ID、参数、状态、字节计数、TCP 对端 |
 | `read_events` | 按游标独立读取收发和状态记录，支持最长 10 秒等待 |
-| `read_waveform` | 读取保留的数值采样及其时间戳 |
+| `read_waveform` | 仅读取 wave/1 专用报文形成的数值采样及时间戳 |
 | `read_structured` | 读取启用解析后的 JSON/XML 记录，各来源有独立游标 |
 | `read_script_results` | 独立读取收发页的自定义帧脚本结果，与波形及 JSON/XML 游标分开 |
 | `send_data` | 发送文本或 HEX，需允许 AI 控制 |
@@ -253,7 +259,7 @@ claude mcp add --transport http serial-workbench http://127.0.0.1:8765/mcp
 
 串口会话的左侧连接参数区提供「脚本解析」和代码编辑图标。编写固定入口 `void main(const uint8_t data[], int length)`，启用开关后处理新收到的原始字节。TCP、UDP、SSH 和演示会话不提供脚本入口。脚本提供跨接收批次的缓存、大小端整数与浮点读取、SUM8 / XOR8 / Modbus CRC16 校验；`emit("字段名", 数值)` 的结果显示在收发页的「脚本解析」小分区，可拖动调整高度、收起、复制与清空显示。原始收发日志保持完整，AI 通过 MCP `read_script_results` 主动读取脚本输出；读取无需开启 AI 写权限。
 
-波形和实时数值继续独立识别设备按指定格式发送的 CSV、数值 JSON 或 `name=value` 文本；JSON / XML 控件独立提取对应格式。启用脚本不会关闭这些解析器，脚本字段也不会进入它们的结果。同一串口可交替发送自定义帧、完整波形文本行和日志，分别展示。
+波形和实时数值仅识别 `@wave name=value,...` 专用文本行；JSON / XML 控件独立提取对应格式。启用脚本不会关闭这些解析器，脚本字段也不会进入它们的结果。同一串口可交替发送自定义帧、完整波形文本行和日志，分别展示。
 
 编辑器带行号、高亮、语法检查、HEX 试解析及脚本导入导出。每行 HEX 模拟一次接收，可验证半帧与连续多帧。脚本在后台执行，越界、死循环或缓存超限会停用解析并提示行号，连接继续运行。代码和开关按连接保存；程序启动时不自动连接设备。
 
@@ -275,7 +281,7 @@ $env:MINGW_BIN = 'D:/lib/Qt/Tools/mingw1310_64/bin'
 # 打包后的 HTTP / STDIO 集成测试，需要 Python MCP SDK
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r tests/integration/requirements.txt
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.14.1
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.0
 ```
 
 测试覆盖独立读取与分页、真实 TCP/UDP socket、软件串口回环及重配置、UTF-8/GBK 分片解析、ANSI 颜色与终端、连接标签和布局、设置恢复、MCP HTTP/STDIO、权限、非阻塞等待和错误参数。实际 COM 硬件、USB 设备的实际线速及各 AI 客户端的完整对话需要在对应环境验证。
@@ -286,7 +292,7 @@ python -m venv .venv
 
 ```powershell
 .\scripts\package-release.ps1 -QtSourceRoot 'D:/lib/Qt/6.11.1/Src' -MakeNSIS makensis
-.\.venv\Scripts\python.exe tests/integration/smoke_release.py --expected-version 0.14.1
+.\.venv\Scripts\python.exe tests/integration/smoke_release.py --expected-version 0.15.0
 ```
 
 产物位于 `dist/releases/`，包含单文件 EXE、便携 ZIP 和 SHA-256 校验文件。打包仅复制程序、运行库、插件与许可证，排除本机 `settings.json` 及其备份。发布包测试在不含 Qt SDK 的 PATH 下验证便携版、单文件首次与缓存启动、Unicode 路径、参数传递及 HTTP/STDIO 共享会话。

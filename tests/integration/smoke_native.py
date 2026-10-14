@@ -89,14 +89,28 @@ async def check(url, bridge, allow, expected_version=None):
                     }))
                     await asyncio.sleep(0.1)
                     unpack(await second.call_tool("send_data", {
-                        "channel_id": channel_id, "payload": "temperature=25.5,voltage=3.3\n",
+                        "channel_id": channel_id,
+                        "payload": "@wave temperature=25.5,voltage=3.3,count=4294967295,precision=1.2345678901234567\n",
                     }))
                     assert unpack(await waiter)["events"]
                     await asyncio.sleep(0.1)
                     retained = unpack(await second.call_tool("read_events", {"after": start, "channel_id": channel_id}))
                     assert any(e["direction"] == "rx" and "temperature=25.5" in e["text"] for e in retained["events"])
                     wave = unpack(await client.call_tool("read_waveform", {"channel_id": channel_id}))
+                    assert wave["protocol"] == "wave/1"
                     assert wave["sources"]["default"]["samples"]
+                    values = wave["sources"]["default"]["samples"][-1]["values"]
+                    assert values["count"] == 4294967295
+                    assert values["precision"] == 1.2345678901234567
+                    sample_count = wave["sources"]["default"]["total_samples"]
+                    unpack(await second.call_tool("send_data", {
+                        "channel_id": channel_id,
+                        "payload": 'temperature=999\n{"temperature":888}\n1,2,3\n',
+                    }))
+                    await asyncio.sleep(0.1)
+                    unchanged = unpack(await client.call_tool("read_waveform", {"channel_id": channel_id}))
+                    assert unchanged["sources"]["default"]["total_samples"] == sample_count
+                    assert unchanged["sources"]["default"]["rejected_lines"] == 0
                     unpack(await second.call_tool("close_connection", {"channel_id": channel_id}))
                     reopened = unpack(await second.call_tool("open_connection", config))
                     assert reopened["id"] == channel_id
@@ -107,7 +121,7 @@ async def check(url, bridge, allow, expected_version=None):
                     assert invalid.isError
                     status = unpack(await client.call_tool("get_status"))
                     assert status["session_id"] == events["session_id"]
-                    print("PASS HTTP/stdio, 10 tools, shared history, baud reconfiguration, long poll, loopback, waveform, reconnect, validation")
+                    print("PASS HTTP/stdio, 10 tools, shared history, baud reconfiguration, long poll, loopback, strict wave/1, integer/double values, reconnect, validation")
 
 
 def main():

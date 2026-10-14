@@ -934,7 +934,7 @@ void WavePlot::paintEvent(QPaintEvent *)
     if (series.isEmpty())
     {
         p.setPen(theme.muted);
-        p.drawText(area, Qt::AlignCenter, "等待数值报文\n支持 CSV、命名数值和 JSON");
+        p.drawText(area, Qt::AlignCenter | Qt::TextWordWrap, "等待 @wave 报文\n点击「数据格式」查看示例");
         return;
     }
     double xmin = std::numeric_limits<double>::max();

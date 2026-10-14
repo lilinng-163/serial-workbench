@@ -364,7 +364,7 @@ void Instrument::tick(Channel *channel)
             count += value.toObject()["total_samples"].toInteger();
             rejected += value.toObject()["rejected_lines"].toInt();
         }
-        info->setText(QString("%1 个采样    %2 条曲线    忽略 %3 行").arg(count).arg(plot->series.size()).arg(rejected));
+        info->setText(QString("%1 个采样    %2 条曲线    格式错误 %3 帧").arg(count).arg(plot->series.size()).arg(rejected));
     }
     else if (kind == "values")
     {
@@ -381,7 +381,7 @@ void Instrument::tick(Channel *channel)
             const auto values = sample["values"].toObject();
             for (auto value = values.begin(); value != values.end(); ++value)
             {
-                new QTreeWidgetItem(table, {value.key(), QString::number(value.value().toDouble(), 'g', 9), source.key() == "default" ? "本连接" : source.key(), QString::number(sample["index"].toInteger())});
+                new QTreeWidgetItem(table, {value.key(), QLocale::c().toString(value.value().toDouble(), 'g', QLocale::FloatingPointShortest), source.key() == "default" ? "本连接" : source.key(), QString::number(sample["index"].toInteger())});
             }
         }
     }
@@ -2974,12 +2974,17 @@ void Window::waveHelp()
     dialog->resize(640, 540);
     auto body = new QVBoxLayout(dialog);
     auto content = new QTextBrowser();
-    content->setHtml(R"(<h2>每个采样发送一行</h2><p>用 LF 或 CRLF 结束，串口、TCP、UDP 均支持。</p>
-        <h3>CSV</h3><pre>1.2,3.4,5.6</pre><h3>命名数值</h3><pre>temperature=25.6,voltage=3.3</pre>
-        <h3>JSON</h3><pre>{"temperature":25.6,"voltage":3.3}\n[1.2,3.4]</pre>
-        <h3>单片机 C 示例</h3><pre>printf("temperature=%.2f,voltage=%.3f\n", temperature, voltage);</pre>
-        <p>每行最多 16 个有限数值，每个来源保留 5000 个采样。普通日志会被忽略并计数。</p>
-        <p>滚轮缩放、拖动平移、双击恢复自动范围。波形显示数值报文，不测量 UART 物理电平。</p>)");
+    content->setHtml(R"(<h2>波形专用协议 wave/1</h2>
+        <pre>@wave count=120,temperature=25.50,voltage=3.300</pre>
+        <p>每个采样独占一行，必须以小写 <b>@wave 加一个空格</b>开头，以 CR、LF 或 CRLF 结束。串口、TCP、UDP 均支持。</p>
+        <p>字段名就是通道名，与字段顺序无关。名称可用字母、汉字、数字和下划线，不能以数字开头，最长 64 个字符；同一帧不能重名。</p>
+        <p>用逗号分隔 name=value 字段，每帧 1～16 个通道。支持整数、负数、小数及科学计数法，例如 -12、3.3、1.25e-3。字段两侧可有空格或 Tab。</p>
+        <h3>单片机 C / C++ 示例</h3>
+        <pre>printf("@wave count=%d,temperature=%.2f,voltage=%.3f\r\n",
+       count, (double)temperature, (double)voltage);</pre>
+        <p>普通日志、无前缀数字/CSV/JSON、自定义二进制帧均不进入波形和实时数值。脚本结果与 JSON/XML 控件仍独立处理。</p>
+        <p>无效专用帧整帧丢弃并计入格式错误，不生成部分采样。每行最多 8192 字节，每个来源保留 5000 个采样。</p>
+        <p>滚轮缩放，放大后按住左键平移，双击恢复全部采样。</p>)");
     body->addWidget(content);
     auto done = button("关闭");
     connect(done, &QPushButton::clicked, dialog, &QDialog::close);

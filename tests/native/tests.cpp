@@ -683,13 +683,171 @@ private slots:
         socket.writeDatagram("datagram", QHostAddress::LocalHost, udp->udp->localPort());
         QTRY_COMPARE(udp->rx, 8);
     }
+    void strictWaveFrames_data()
+    {
+        QTest::addColumn<QByteArray>("frame");
+        QTest::addColumn<QJsonObject>("expected");
+        QTest::addColumn<bool>("malformed");
+
+        QTest::newRow("mixed-numeric-types")
+            << QByteArray("@wave count=4294967295,temperature=-25.50,precision=1.2345678901234567\r\n")
+            << QJsonObject {{"count", 4294967295.0}, {"temperature", -25.5}, {"precision", 1.2345678901234567}} << false;
+        QTest::newRow("scientific-and-spacing")
+            << QByteArray("@wave  _count = +12 , small=.125, power=-1.25e-3, whole=3.\t\n")
+            << QJsonObject {{"_count", 12}, {"small", 0.125}, {"power", -0.00125}, {"whole", 3}} << false;
+        QTest::newRow("chinese-names")
+            << QString("@wave 温度=25.5,电压=3.3\r").toUtf8()
+            << QJsonObject {{"温度", 25.5}, {"电压", 3.3}} << false;
+        QTest::newRow("maximum-name")
+            << ("@wave " + QByteArray(64, 'a') + "=1\n")
+            << QJsonObject {{QString(64, 'a'), 1}} << false;
+
+        QStringList fields;
+        QJsonObject values;
+        for (int index = 0; index < 16; ++index)
+        {
+            const QString name = "ch" + QString::number(index);
+            fields.append(name + "=" + QString::number(index));
+            values.insert(name, index);
+        }
+        QTest::newRow("sixteen-channels") << ("@wave " + fields.join(',') + "\n").toUtf8() << values << false;
+        QTest::newRow("too-many-channels")
+            << ("@wave " + fields.join(',') + ",ch16=16\n").toUtf8() << QJsonObject() << true;
+
+        const auto ignored = [](const char *name, const QByteArray &frame)
+        {
+            QTest::newRow(name) << frame << QJsonObject() << false;
+        };
+        ignored("plain-integer", "123\n");
+        ignored("plain-csv", "1,2,3\n");
+        ignored("plain-named", "temperature=25,voltage=3.3\n");
+        ignored("json-object", "{\"temperature\":25,\"voltage\":3.3}\n");
+        ignored("json-array", "[1,2,3]\n");
+        ignored("prefix-inside-log", "I (120) device: @wave count=1\n");
+        ignored("indented-prefix", " @wave count=1\n");
+        ignored("wrong-case", "@WAVE count=1\n");
+        ignored("wrong-separator", "@wave\tcount=1\n");
+
+        const auto rejected = [](const char *name, const QByteArray &frame)
+        {
+            QTest::newRow(name) << frame << QJsonObject() << true;
+        };
+        rejected("empty-frame", "@wave \n");
+        rejected("unnamed-csv", "@wave 1,2,3\n");
+        rejected("prefixed-json", "@wave {\"count\":1}\n");
+        rejected("duplicate-name", "@wave count=1,count=2\n");
+        rejected("too-long-name", "@wave " + QByteArray(65, 'a') + "=1\n");
+        rejected("numeric-name", "@wave 1count=1\n");
+        rejected("trailing-comma", "@wave count=1,\n");
+        rejected("empty-field", "@wave count=1,,value=2\n");
+        rejected("colon-assignment", "@wave count:1\n");
+        rejected("semicolon-separator", "@wave count=1;value=2\n");
+        rejected("hexadecimal-value", "@wave count=0x10\n");
+        rejected("nan-value", "@wave count=1,value=NaN\n");
+        rejected("infinite-value", "@wave value=inf\n");
+        rejected("overflow-value", "@wave value=1e999\n");
+        rejected("unit-in-value", "@wave voltage=3.3V\n");
+        rejected("log-after-value", "@wave count=1 device running\n");
+        rejected("invalid-utf8-name", "@wave " + QByteArray::fromHex("FF") + "=1\n");
+    }
+
+    void strictWaveFrames()
+    {
+        QFETCH(QByteArray, frame);
+        QFETCH(QJsonObject, expected);
+        QFETCH(bool, malformed);
+
+        sw::Engine engine;
+        sw::Config config;
+        config.port = "loop://";
+        auto channel = engine.open(config);
+        channel->receive(frame);
+        const auto waveform = channel->waveform();
+        QCOMPARE(waveform["protocol"].toString(), "wave/1");
+        const auto source = waveform["sources"].toObject()["default"].toObject();
+        const auto samples = source["samples"].toArray();
+        QCOMPARE(samples.size(), expected.isEmpty() ? 0 : 1);
+        QCOMPARE(source["rejected_lines"].toInt(), malformed ? 1 : 0);
+        if (!expected.isEmpty())
+        {
+            QCOMPARE(samples.first().toObject()["values"].toObject(), expected);
+        }
+        const auto raw = engine.journal.read(0)["events"].toArray().last().toObject();
+        QCOMPARE(QByteArray::fromHex(raw["hex"].toString().toLatin1()), frame);
+    }
+
+    void strictWaveFragmentationAndRecovery()
+    {
+        sw::Engine engine;
+        sw::Config config;
+        config.port = "loop://";
+        auto channel = engine.open(config);
+        channel->receive("@wa", "peer-a");
+        channel->receive("@wave temperature=30,count=2\r\n", "peer-b");
+        const auto bytes = QString("ve count=1,温度=25.5\r\n").toUtf8();
+        for (const char byte : bytes) { channel->receive(QByteArray(1, byte), "peer-a"); }
+        auto sources = channel->waveform()["sources"].toObject();
+        QCOMPARE(sources["peer-a"].toObject()["total_samples"].toInt(), 1);
+        QCOMPARE(sources["peer-b"].toObject()["total_samples"].toInt(), 1);
+        QCOMPARE(sources["peer-a"].toObject()["samples"].toArray().first().toObject()["values"].toObject()["温度"].toDouble(), 25.5);
+        channel->receive("@wave count=3");
+        QCOMPARE(channel->sources["default"]->count, 0);
+        channel->receive("\n");
+        QCOMPARE(channel->sources["default"]->count, 1);
+
+        channel->receive(QByteArray(9000, 'x'));
+        QVERIFY(channel->sources["default"]->wavePending.size() <= 8192);
+        channel->receive("@wave fake=99\n@wave recovered=4\n");
+        QCOMPARE(channel->sources["default"]->count, 2);
+        QCOMPARE(channel->sources["default"]->rejected, 0);
+
+        channel->receive("@wave value=" + QByteArray(9000, '1'));
+        QCOMPARE(channel->sources["default"]->rejected, 1);
+        channel->receive(QByteArray(9000, '2'));
+        channel->receive("\r\n@wave recovered=5\r\n");
+        QCOMPARE(channel->sources["default"]->count, 3);
+        QCOMPARE(channel->sources["default"]->rejected, 1);
+
+        channel->receive("@wave value=" + QByteArray(9000, '1') + "\n@wave recovered=6\n");
+        QCOMPARE(channel->sources["default"]->count, 4);
+        QCOMPARE(channel->sources["default"]->rejected, 2);
+    }
+
+    void strictWaveChannelsAndLiveValues()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        window.port->setCurrentText("loop://");
+        window.connectionAction();
+        auto channel = window.active->channel;
+        auto values = window.newInstrument("values", channel, false)->instrument;
+        auto wave = window.newInstrument("waveform", channel, false)->instrument;
+        channel->receive("@wave count=4294967295,precision=1.2345678901234567\n");
+        channel->receive("@wave precision=2.5,count=4294967294\n");
+        wave->tick(channel);
+        QCOMPARE(wave->plot->series.size(), 2);
+        QCOMPARE(wave->plot->series["count"].size(), 2);
+        QCOMPARE(wave->plot->series["count"][0].y(), 4294967295.0);
+        QCOMPARE(wave->plot->series["count"][1].y(), 4294967294.0);
+        values->tick(channel);
+        QCOMPARE(values->table->topLevelItemCount(), 2);
+        QCOMPARE(values->table->topLevelItem(0)->text(0), "count");
+        QCOMPARE(values->table->topLevelItem(0)->text(1), "4294967294");
+        QCOMPARE(values->table->topLevelItem(1)->text(1), "2.5");
+        channel->receive("@wave precision=1.2345678901234567\n");
+        values->tick(channel);
+        QCOMPARE(values->table->topLevelItem(0)->text(1).toDouble(), 1.2345678901234567);
+    }
+
     void fragmentedDecoders()
     {
         sw::Engine engine;
         sw::Config config;
         config.port = "loop://";
         auto channel = engine.open(config);
-        channel->receive("temp=24,");
+        channel->receive("@wave temp=24,");
         channel->receive("voltage=3.3\n");
         QCOMPARE(channel->waveform()["sources"].toObject()["default"].toObject()["samples"].toArray().size(), 1);
         channel->configureParser("auto");
@@ -1229,7 +1387,7 @@ private slots:
         QVERIFY(pane->isHidden());
         QVERIFY2(wave->isVisible(), "Detached waveform must update while its receive page is hidden");
         QVERIFY(parseWindow->isVisible());
-        channel->receive("temp=23,voltage=3.3\n{\"answer\":42}\n");
+        channel->receive("@wave temp=23,voltage=3.3\n{\"answer\":42}\n");
         QTRY_VERIFY(!wave->plot->series.isEmpty());
         QTRY_VERIFY(structured->table->topLevelItemCount() > 0);
         QCOMPARE(pane->payload->toPlainText(), "preserved draft");
@@ -1372,7 +1530,7 @@ private slots:
         QCOMPARE(wavePage->channel, first);
         QCOMPARE(engine.channels.size(), 1);
         window.tabs->setCurrentIndex(pageIndex(&window, wavePage));
-        first->receive("temp=23\n");
+        first->receive("@wave temp=23\n");
         QTRY_VERIFY(!wavePage->instrument->plot->series.isEmpty());
         QCOMPARE(window.parameterPane, receive);
         window.connectionAction();
@@ -1395,7 +1553,7 @@ private slots:
         QCOMPARE(wavePage->channel, other);
         QCOMPARE(window.parameterPane, window.findPane(other));
         QCOMPARE(window.findPane(first), receive);
-        other->receive("voltage=3.3\n");
+        other->receive("@wave voltage=3.3\n");
         QTRY_VERIFY(wavePage->instrument->plot->series.contains("voltage"));
         QVERIFY(!wavePage->instrument->plot->series.contains("temp"));
         engine.remove(other->id);

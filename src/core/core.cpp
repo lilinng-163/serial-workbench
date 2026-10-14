@@ -289,7 +289,7 @@ Channel::Channel(Engine *owner, const Config &configuration) : QObject(owner), e
     connect(&demoTimer, &QTimer::timeout, this, [this]
     {
         const double t = QDateTime::currentMSecsSinceEpoch() / 1000.0;
-        receive(QString("temperature=%1,voltage=%2,current=%3\r\n").arg(25 + 3 * std::sin(t), 0, 'f', 3).arg(3.3 + 0.2 * std::cos(t * 0.7), 0, 'f', 3).arg(0.4 + 0.1 * std::sin(t * 1.8), 0, 'f', 3).toUtf8());
+        receive(QString("@wave temperature=%1,voltage=%2,current=%3\r\n").arg(25 + 3 * std::sin(t), 0, 'f', 3).arg(3.3 + 0.2 * std::cos(t * 0.7), 0, 'f', 3).arg(0.4 + 0.1 * std::sin(t * 1.8), 0, 'f', 3).toUtf8());
     });
     retryTimer.setInterval(300);
     connect(&retryTimer, &QTimer::timeout, this, [this]
@@ -763,6 +763,9 @@ QJsonObject Channel::send(const QByteArray &data, const QString &peer, const QSt
 
 void Channel::parseWave(Source &source, const QByteArray &data)
 {
+    static const QRegularExpression fieldPattern(QStringLiteral(
+        R"(\A[ \t]*([\p{L}_][\p{L}\p{N}_]{0,63})[ \t]*=[ \t]*([+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)[ \t]*\z)"));
+
     source.wavePending += data;
     int end = -1;
     while (true)
@@ -771,52 +774,43 @@ void Channel::parseWave(Source &source, const QByteArray &data)
         const int lf = source.wavePending.indexOf('\n');
         end = cr < 0 ? lf : lf < 0 ? cr : qMin(cr, lf);
         if (end < 0) { break; }
-        QByteArray line = source.wavePending.left(end).trimmed();
+        const QByteArray line = source.wavePending.left(end);
         source.wavePending.remove(0, end + 1);
-        if (source.discarding || line.size() > 8192)
+        if (source.discarding)
         {
-            ++source.rejected;
             source.discarding = false;
             continue;
         }
+        if (!line.startsWith("@wave "))
+        {
+            continue;
+        }
+        if (line.size() > 8192)
+        {
+            ++source.rejected;
+            continue;
+        }
+
+        const auto fields = QString::fromUtf8(line.mid(6)).split(',', Qt::KeepEmptyParts);
         QJsonObject values;
-        const auto document = QJsonDocument::fromJson(line);
-        if (document.isObject())
+        bool valid = fields.size() <= 16;
+
+        for (const auto &field : fields)
         {
-            values = document.object();
-        }
-        else if (document.isArray())
-        {
-            int index = 0;
-            for (const auto &value : document.array())
+            if (!valid) { break; }
+            const auto match = fieldPattern.match(field);
+            bool numberValid = false;
+            const double number = match.captured(2).toDouble(&numberValid);
+            const QString name = match.captured(1);
+
+            if (!match.hasMatch() || !numberValid || !std::isfinite(number) || values.contains(name))
             {
-                values["CH" + QString::number(++index)] = value;
+                valid = false;
+                break;
             }
+            values.insert(name, number);
         }
-        else
-        {
-            auto parts = QString::fromUtf8(line).split(QRegularExpression("[,;\\s]+"), Qt::SkipEmptyParts);
-            int index = 0;
-            for (const auto &part : parts)
-            {
-                const auto position = part.indexOf(QRegularExpression("[=:]"));
-                const QString key = position < 0 ? "CH" + QString::number(++index) : part.left(position);
-                const QString text = position < 0 ? part : part.mid(position + 1);
-                bool ok = false;
-                const double number = text.toDouble(&ok);
-                if (!ok || !std::isfinite(number))
-                {
-                    values = {};
-                    break;
-                }
-                values[key.left(64)] = number;
-            }
-        }
-        bool valid = !values.isEmpty() && values.size() <= 16;
-        for (const auto &value : values)
-        {
-            valid = valid && value.isDouble() && std::isfinite(value.toDouble());
-        }
+
         if (valid)
         {
             source.samples.push_back({{"index", ++source.count}, {"time", QDateTime::currentMSecsSinceEpoch() / 1000.0}, {"values", values}});
@@ -825,13 +819,17 @@ void Channel::parseWave(Source &source, const QByteArray &data)
                 source.samples.pop_front();
             }
         }
-        else if (!line.isEmpty())
+        else
         {
             ++source.rejected;
         }
     }
     if (source.wavePending.size() > 8192)
     {
+        if (!source.discarding && source.wavePending.startsWith("@wave "))
+        {
+            ++source.rejected;
+        }
         source.wavePending.clear();
         source.discarding = true;
     }
@@ -1083,7 +1081,7 @@ QJsonObject Channel::waveform(int limit) const
         }
         result[it.key()] = QJsonObject {{"samples", samples}, {"total_samples", source.count}, {"rejected_lines", source.rejected}};
     }
-    return {{"channel_id", id}, {"sources", result}};
+    return {{"channel_id", id}, {"protocol", "wave/1"}, {"sources", result}};
 }
 
 QJsonObject Channel::structured(qint64 after, int limit, const QJsonObject &cursors) const
