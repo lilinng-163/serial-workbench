@@ -269,6 +269,7 @@ public:
         footer->addWidget(cancel);
         footer->addWidget(apply);
         body->addLayout(footer);
+        makeDialogScrollable(this, QSize(560, 320));
 
         testProcessor = new FrameScriptProcessor(this);
         connect(testProcessor, &FrameScriptProcessor::samplesReady, this,

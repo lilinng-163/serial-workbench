@@ -5,6 +5,52 @@
 
 namespace sw
 {
+namespace
+{
+class AgentLogo : public QLabel
+{
+public:
+    explicit AgentLogo(const QString &asset) : asset(asset)
+    {
+        setObjectName("agentLogo");
+        setFixedSize(34, 34);
+        setAlignment(Qt::AlignCenter);
+        refreshImage();
+    }
+
+protected:
+    void changeEvent(QEvent *event) override
+    {
+        QLabel::changeEvent(event);
+        if (event->type() == QEvent::PaletteChange || event->type() == QEvent::StyleChange)
+        {
+            refreshImage();
+        }
+    }
+
+private:
+    QString asset;
+
+    void refreshImage()
+    {
+        const bool dark = palette().color(QPalette::WindowText).lightness() > 128;
+        QString file = asset;
+        if (dark && (asset == "opencode.svg" || asset == "hermes.svg"))
+        {
+            file.replace(".svg", "-dark.svg");
+        }
+        auto image = QIcon(":/agents/" + file).pixmap(QSize(30, 30), devicePixelRatioF());
+        if (asset == "codex.svg" || asset == "grok.svg")
+        {
+            QPainter painter(&image);
+            painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+            painter.fillRect(image.rect(), dark ? Qt::white : Qt::black);
+        }
+        setPixmap(image);
+    }
+};
+}
+
 AgentPanel::AgentPanel(McpServer *owner, QWidget *parent, std::function<AgentEnvironment()> provider)
     : QWidget(parent), environment(std::move(provider)), server(owner)
 {
@@ -44,11 +90,7 @@ AgentPanel::AgentPanel(McpServer *owner, QWidget *parent, std::function<AgentEnv
         layout->setContentsMargins(12, 12, 12, 12);
         layout->setSpacing(8);
         auto heading = new QHBoxLayout();
-        auto logo = new QLabel();
-        logo->setObjectName("agentLogo");
-        logo->setFixedSize(34, 34);
-        logo->setAlignment(Qt::AlignCenter);
-        logo->setPixmap(QIcon(":/agents/" + agent.logo).pixmap(28, 28));
+        auto logo = new AgentLogo(agent.logo);
         heading->addWidget(logo);
         auto title = new QLabel(agent.name);
         title->setObjectName("agentTitle");

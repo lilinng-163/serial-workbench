@@ -237,14 +237,14 @@ QList<AgentClient> AgentConfig::discover(const AgentEnvironment &environment)
     const auto openCodePath = environment.variable("OPENCODE_CONFIG", openCodeBase +
         (QFileInfo::exists(openCodeBase + "/opencode.jsonc") ? "/opencode.jsonc" : "/opencode.json"));
     QList<AgentClient> agents {
-        {"codex", "Codex", "openai.png", environment.executable("codex"), environment.variable("CODEX_HOME", home + "/.codex") + "/config.toml", "toml", {"mcp_servers"}},
+        {"codex", "Codex", "codex.svg", environment.executable("codex"), environment.variable("CODEX_HOME", home + "/.codex") + "/config.toml", "toml", {"mcp_servers"}},
         {"claude-code", "Claude Code", "claude.svg", environment.executable("claude"), (environment.variables.value("CLAUDE_CONFIG_DIR").isEmpty() ? home + "/.claude.json" : environment.variables.value("CLAUDE_CONFIG_DIR") + "/.claude.json"), "json", {"mcpServers"}},
         {"opencode", "OpenCode CLI", "opencode.svg", environment.executable("opencode"), openCodePath, "json", {"mcp"}},
         {"claude-desktop", "Claude Desktop", "claude.svg", desktopExecutable(environment, "Claude"), environment.appData + "/Claude/claude_desktop_config.json", "json", {"mcpServers"}},
         {"pi", "Pi Agent", "pi.svg", environment.executable("pi"), environment.variable("PI_CODING_AGENT_DIR", home + "/.pi/agent") + "/mcp.json", "json", {"mcpServers"}},
-        {"hermes", "Hermes", "hermes.png", environment.executable("hermes"), environment.variable("HERMES_HOME", home + "/.hermes") + "/config.yaml", "yaml", {"mcp_servers"}},
+        {"hermes", "Hermes", "hermes.svg", environment.executable("hermes"), environment.variable("HERMES_HOME", home + "/.hermes") + "/config.yaml", "yaml", {"mcp_servers"}},
         {"openclaw", "OpenClaw", "openclaw.svg", environment.executable("openclaw"), environment.variable("OPENCLAW_CONFIG_PATH", environment.variable("OPENCLAW_STATE_DIR", home + "/.openclaw") + "/openclaw.json"), "json", {"mcp", "servers"}},
-        {"grok", "Grok Build", "grok.png", environment.executable("grok"), environment.variable("GROK_HOME", home + "/.grok") + "/config.toml", "toml", {"mcp_servers"}},
+        {"grok", "Grok Build", "grok.svg", environment.executable("grok"), environment.variable("GROK_HOME", home + "/.grok") + "/config.toml", "toml", {"mcp_servers"}},
         {"gemini", "Gemini CLI", "gemini.svg", environment.executable("gemini"), home + "/.gemini/settings.json", "json", {"mcpServers"}}
     };
     if (!agents[0].installed()) { agents[0].executable = desktopExecutable(environment, "Codex"); }

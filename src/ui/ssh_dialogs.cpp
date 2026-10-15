@@ -73,6 +73,7 @@ void showSshAuthPrompt(SshAuthPrompt *prompt, QWidget *parent, const Theme &them
     {
         QTimer::singleShot(0, dialog, &QDialog::close);
     });
+    makeDialogScrollable(dialog, QSize(440, 260));
     dialog->open();
     if (!prompt->confirmation) { password->setFocus(); }
 }
@@ -111,6 +112,7 @@ void clearSshCache(const Config &config, Engine *engine, QWidget *parent, const 
         body->addWidget(buttons);
         QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
         QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+        makeDialogScrollable(&dialog, QSize(440, 260));
         if (dialog.exec() != QDialog::Accepted || (!passwords->isChecked() && !fingerprints->isChecked())) { return; }
         for (auto channel : engine->channels)
         {

@@ -1083,6 +1083,7 @@ void Pane::tick()
     sendButton->setEnabled(available && channel->config.kind != "demo");
     repeat->setEnabled(available && channel->config.kind != "demo");
     terminal->enabledInput = available && terminalMode;
+    terminal->keyboardSelectionEnabled = (channel ? channel->config.kind : draft.kind) == "ssh";
     transferButton->setVisible((channel ? channel->config.kind : draft.kind) == "serial");
     transferButton->setEnabled(available && channel->serial);
     exportButton->setEnabled(channel);
@@ -1324,7 +1325,8 @@ void Pane::clipboardMenu()
 {
     if (instrument || !terminal) { return; }
     QMenu menu(this);
-    auto *copyShortcut = menu.addAction("复制快捷键（Ctrl + Shift + C）");
+    auto *copyShortcut = menu.addAction("复制快捷键（有选区时 Ctrl+C / Ctrl+Shift+C）");
+    copyShortcut->setToolTip("有选区时复制并清除选区；无选区时 Ctrl+C 发送中断。Ctrl+Shift+C 仅复制。");
     copyShortcut->setCheckable(true);
     copyShortcut->setChecked(terminal->copyShortcutEnabled);
     auto *pasteShortcut = menu.addAction("粘贴快捷键（Ctrl + Shift + V）");
@@ -3334,6 +3336,8 @@ void Window::waveHelp()
     auto dialog = new QDialog(this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     dialog->setWindowTitle("数值报文格式");
+    dialog->setMinimumSize(360, 240);
+    dialog->setSizeGripEnabled(true);
     dialog->resize(640, 540);
     auto body = new QVBoxLayout(dialog);
     auto content = new QTextBrowser();
@@ -3379,16 +3383,6 @@ void Window::openSettings()
     body->setContentsMargins(20, 16, 20, 16);
     auto pages = new DetachableTabs();
     pages->setObjectName("settingsPages");
-    auto scrollPage = [](QWidget *content, const QString &name)
-    {
-        auto scroll = new QScrollArea();
-        scroll->setObjectName(name);
-        scroll->setFrameShape(QFrame::NoFrame);
-        scroll->setWidgetResizable(true);
-        scroll->setWidget(content);
-        content->setAutoFillBackground(false);
-        return scroll;
-    };
     auto appearance = new QWidget();
     auto appearanceBody = new QVBoxLayout(appearance);
     appearanceBody->setContentsMargins(20, 24, 20, 20);
@@ -3457,7 +3451,7 @@ void Window::openSettings()
     fontHint->setWordWrap(true);
     appearanceBody->addWidget(fontHint);
     appearanceBody->addStretch();
-    pages->addTab(scrollPage(appearance, "appearanceScroll"), "外观");
+    pages->addTab(scrollPanel(appearance, "appearanceScroll"), "外观");
 
     auto mcpPage = new QWidget();
     auto mcpBody = new QVBoxLayout(mcpPage);
@@ -3538,6 +3532,8 @@ void Window::openSettings()
 
     auto mcpTabs = new DetachableTabs();
     mcpTabs->setObjectName("mcpPages");
+    mcpTabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Ignored);
+    mcpTabs->setMinimumHeight(160);
     mcpConnections = new QTreeWidget();
     mcpConnections->setRootIsDecorated(false);
     mcpConnections->setHeaderLabels({"连接", "协议", "状态", "连接 ID", "RX / TX"});
@@ -3557,7 +3553,7 @@ void Window::openSettings()
         mcpPort->setValue(port);
         clients->refresh();
     });
-    mcpTabs->addTab(scrollPage(clients, "clientsScroll"), "Agent 接入");
+    mcpTabs->addTab(scrollPanel(clients, "clientsScroll"), "Agent 接入");
     mcpTabs->setCurrentIndex(1);
     const auto switchPort = [this, mcpPort, address, portResult, clients](quint16 requested)
     {
@@ -3584,7 +3580,7 @@ void Window::openSettings()
     auditTable->setColumnWidth(2, 160);
     mcpTabs->addTab(auditTable, "调用日志");
     mcpBody->addWidget(mcpTabs, 1);
-    pages->addTab(mcpPage, "AI / MCP");
+    pages->addTab(scrollPanel(mcpPage, "mcpScroll"), "AI / MCP");
     auto about = new QWidget();
     about->setObjectName("aboutPage");
     auto aboutBody = new QVBoxLayout(about);
@@ -3626,7 +3622,7 @@ void Window::openSettings()
                               "发送报文与控制连接需在 AI / MCP 中启用权限。");
     aboutBody->addLayout(features);
     aboutBody->addStretch();
-    pages->addTab(scrollPage(about, "aboutScroll"), "关于");
+    pages->addTab(scrollPanel(about, "aboutScroll"), "关于");
     body->addWidget(pages, 1);
     auto footer = horizontal();
     footer->addStretch();

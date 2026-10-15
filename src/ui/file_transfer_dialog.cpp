@@ -88,6 +88,7 @@ FileTransferDialog::FileTransferDialog(SerialTransfer *engine, QWidget *parent)
     actions->addWidget(stop);
     actions->addWidget(start);
     layout->addLayout(actions);
+    makeDialogScrollable(this, QSize(480, 280));
     connect(browse, &QPushButton::clicked, this, [this]
     {
         const auto selected = direction->currentIndex() == 0

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "update_dialog.h"
+#include "controls.h"
 
 #include <QDateTime>
 #include <QDesktopServices>
@@ -61,6 +62,7 @@ UpdateDialog::UpdateDialog(UpdateService *updater, QWidget *parent)
     buttons->addWidget(cancel);
     buttons->addWidget(action);
     layout->addLayout(buttons);
+    makeDialogScrollable(this, QSize(440, 280));
 
     connect(action, &QPushButton::clicked, this, [this]
     {

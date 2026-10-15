@@ -32,6 +32,8 @@ struct Theme
 };
 
 QIcon icon(const QString &name, const QColor &color, int size = 20);
+QScrollArea *scrollPanel(QWidget *content, const QString &name = {});
+void makeDialogScrollable(QDialog *dialog, const QSize &minimum);
 void drawIcon(QPainter &painter, const QString &name, QRectF rect, const QColor &color, qreal rotation = 0);
 
 class StatusLed : public QWidget

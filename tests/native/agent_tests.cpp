@@ -212,6 +212,64 @@ private slots:
         window.close();
     }
 
+    void logosBlendWithTheme()
+    {
+        QTemporaryDir directory;
+        auto env = environment(directory);
+        sw::Engine engine;
+        sw::McpServer server(&engine);
+        sw::AgentPanel panel(&server, nullptr, [env] { return env; });
+        panel.setObjectName("root");
+        panel.resize(840, 1020);
+        panel.show();
+        for (bool dark : {false, true, false})
+        {
+            const auto theme = sw::Theme::make(dark);
+            panel.setStyleSheet(theme.stylesheet());
+            QApplication::processEvents();
+            auto logos = panel.findChildren<QLabel *>("agentLogo");
+            QCOMPARE(logos.size(), 9);
+            for (auto logo : logos)
+            {
+                const auto image = logo->pixmap().toImage().convertToFormat(QImage::Format_ARGB32);
+                QVERIFY(!image.isNull());
+                QCOMPARE(logo->pixmap().devicePixelRatio(), logo->devicePixelRatioF());
+                bool transparent = false;
+                for (int y = 0; y < image.height(); ++y)
+                {
+                    for (int x = 0; x < image.width(); ++x)
+                    {
+                        transparent |= image.pixelColor(x, y).alpha() == 0;
+                    }
+                }
+                QVERIFY2(transparent, qPrintable(logo->parent()->property("agentId").toString()));
+                const auto rendered = logo->grab().toImage();
+                QCOMPARE(rendered.pixelColor(0, 0).alpha(), 0);
+                if (logo->parent()->property("agentId") == "codex")
+                {
+                    bool visible = false;
+                    for (int y = 0; y < image.height(); ++y)
+                    {
+                        for (int x = 0; x < image.width(); ++x)
+                        {
+                            const auto pixel = image.pixelColor(x, y);
+                            if (pixel.alpha() < 200) { continue; }
+                            QCOMPARE(pixel.lightness() > 128, dark);
+                            visible = true;
+                        }
+                    }
+                    QVERIFY(visible);
+                }
+            }
+            const auto capture = qEnvironmentVariable("SW_UI_CAPTURE_DIR");
+            if (!capture.isEmpty())
+            {
+                QDir().mkpath(capture);
+                QVERIFY(panel.grab().save(capture + (dark ? "/agent-logos-dark.png" : "/agent-logos-light.png")));
+            }
+        }
+    }
+
     void cardsAndBatchUpdate()
     {
         QTemporaryDir directory;

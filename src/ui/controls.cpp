@@ -197,6 +197,57 @@ Theme Theme::make(bool dark)
     return t;
 }
 
+QScrollArea *scrollPanel(QWidget *content, const QString &name)
+{
+    auto scroll = new QScrollArea();
+    scroll->setObjectName(name);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidgetResizable(true);
+    scroll->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Ignored);
+    scroll->setMinimumSize(0, 0);
+    scroll->setWidget(content);
+    content->setAutoFillBackground(false);
+    return scroll;
+}
+
+void makeDialogScrollable(QDialog *dialog, const QSize &minimum)
+{
+    auto body = qobject_cast<QVBoxLayout *>(dialog->layout());
+    Q_ASSERT(body && body->count() > 1);
+    const auto initialSize = dialog->testAttribute(Qt::WA_Resized) ? dialog->size() : body->totalSizeHint();
+    auto content = new QWidget();
+    content->setObjectName("dialogContent");
+    auto layout = new QVBoxLayout(content);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(body->spacing());
+    // Keep the final row outside the scroll area and preserve editor stretch.
+    while (body->count() > 1)
+    {
+        const int stretch = body->stretch(0);
+        auto item = body->takeAt(0);
+        if (auto widget = item->widget())
+        {
+            layout->addWidget(widget, stretch, item->alignment());
+            delete item;
+        }
+        else if (auto child = item->layout())
+        {
+            child->setParent(nullptr);
+            layout->addLayout(child, stretch);
+        }
+        else
+        {
+            layout->addItem(item);
+            layout->setStretch(layout->count() - 1, stretch);
+        }
+    }
+    body->insertWidget(0, scrollPanel(content, "dialogContentScroll"), 1);
+    dialog->setMinimumSize(minimum);
+    dialog->setSizeGripEnabled(true);
+    dialog->setWindowFlag(Qt::WindowMaximizeButtonHint);
+    dialog->resize(initialSize.expandedTo(minimum));
+}
+
 QString Theme::stylesheet() const
 {
     installButtonFocusFeedback();
@@ -205,7 +256,7 @@ QString Theme::stylesheet() const
         QMainWindow, QDialog, QWidget#root { background: $bg; }
         QFrame#agentCard { background: $panel; border: 1px solid $line; }
         QLabel#agentTitle { font-size: 14px; font-weight: 600; }
-        QLabel#agentLogo { background: #ffffff; border: none; }
+        QLabel#agentLogo { background: transparent; border: none; }
         QFrame#sidebar { background: $side; border-right: 2px solid $edge; }
         QFrame#rail { background: $rail; border-right: 2px solid $rail; }
         QWidget#workspace, QWidget#page { background: $panel; }

@@ -195,7 +195,6 @@ private slots:
             QTest::keyClick(width, Qt::Key_Tab);
             QCOMPARE(width->value(), 4.5);
             QVERIFY(!dialog->findChild<QCheckBox *>("waveInheritStyle")->isChecked());
-            dialog->findChild<QCheckBox *>("waveAutomaticColor")->click();
             QTimer::singleShot(0, dialog, []
             {
                 auto colorDialog = qobject_cast<QColorDialog *>(QApplication::activeModalWidget());
@@ -257,6 +256,84 @@ private slots:
         sw::WavePlot devicePlot;
         sample(devicePlot);
         QCOMPARE(devicePlot.curveLabel("sawtooth"), QString("sawtooth"));
+    }
+
+    void colorClickOverridesAutomaticStyle_data()
+    {
+        QTest::addColumn<bool>("acceptColor");
+        QTest::addColumn<bool>("acceptSettings");
+        QTest::newRow("choose-and-save") << true << true;
+        QTest::newRow("cancel-color-and-save") << false << true;
+        QTest::newRow("choose-and-cancel-settings") << true << false;
+        QTest::newRow("cancel-both") << false << false;
+    }
+
+    void colorClickOverridesAutomaticStyle()
+    {
+        QFETCH(bool, acceptColor);
+        QFETCH(bool, acceptSettings);
+        sw::WavePlot plot;
+        sample(plot);
+        const auto original = plot.presentationSettings();
+        const QColor previous = plot.curveColor("temperature");
+        const QColor chosen("#336699");
+        QTimer::singleShot(0, &plot, [&]
+        {
+            auto dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            QVERIFY(dialog);
+            QTimer::singleShot(3000, dialog, &QDialog::reject);
+            auto automatic = dialog->findChild<QCheckBox *>("waveAutomaticColor");
+            auto inherit = dialog->findChild<QCheckBox *>("waveInheritStyle");
+            auto color = dialog->findChild<QPushButton *>("waveCurveColor");
+            QVERIFY(automatic->isChecked());
+            QVERIFY(inherit->isChecked());
+            QVERIFY(color->isEnabled());
+            QTimer::singleShot(0, dialog, [&]
+            {
+                auto picker = qobject_cast<QColorDialog *>(QApplication::activeModalWidget());
+                QVERIFY(picker);
+                QTimer::singleShot(2000, picker, &QDialog::reject);
+                QVERIFY(!automatic->isChecked());
+                QVERIFY(!inherit->isChecked());
+                picker->setCurrentColor(chosen);
+                if (acceptColor) { picker->accept(); }
+                else { picker->reject(); }
+            });
+            color->click();
+            QVERIFY(!automatic->isChecked());
+            QVERIFY(!inherit->isChecked());
+            QCOMPARE(color->text(), (acceptColor ? chosen : previous).name().toUpper());
+            capture(dialog, "wave-color-click-" + QString::fromLatin1(QTest::currentDataTag()));
+            if (acceptSettings) { dialog->accept(); }
+            else { dialog->reject(); }
+        });
+        plot.openCurveSettings("temperature");
+        if (!acceptSettings)
+        {
+            QCOMPARE(plot.presentationSettings(), original);
+            return;
+        }
+        QCOMPARE(plot.curveStyle("temperature").color, acceptColor ? chosen : previous);
+        QTimer::singleShot(0, &plot, [&]
+        {
+            auto dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            QVERIFY(dialog);
+            QTimer::singleShot(3000, dialog, &QDialog::reject);
+            auto automatic = dialog->findChild<QCheckBox *>("waveAutomaticColor");
+            auto inherit = dialog->findChild<QCheckBox *>("waveInheritStyle");
+            auto color = dialog->findChild<QPushButton *>("waveCurveColor");
+            QVERIFY(!automatic->isChecked());
+            QVERIFY(!inherit->isChecked());
+            QCOMPARE(color->text(), (acceptColor ? chosen : previous).name().toUpper());
+            auto buttons = dialog->findChild<QDialogButtonBox *>();
+            buttons->button(QDialogButtonBox::RestoreDefaults)->click();
+            QVERIFY(automatic->isChecked());
+            QVERIFY(inherit->isChecked());
+            QVERIFY(color->isEnabled());
+            dialog->reject();
+        });
+        plot.openCurveSettings("temperature");
+        QCOMPARE(plot.curveStyle("temperature").color, acceptColor ? chosen : previous);
     }
 
     void savedWithPageAndRestoredBeforeData()

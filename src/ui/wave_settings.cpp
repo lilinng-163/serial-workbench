@@ -87,12 +87,13 @@ public:
         line->addItem("点线", int(Qt::DotLine));
         line->addItem("点划线", int(Qt::DashDotLine));
         form->addRow("线型", line);
-        connect(automatic, &QCheckBox::toggled, color, &QPushButton::setDisabled);
         connect(automatic, &QCheckBox::toggled, this, [this] { notifyEdit(); });
         connect(width, &QDoubleSpinBox::valueChanged, this, [this] { notifyEdit(); });
         connect(line, &QComboBox::currentIndexChanged, this, [this] { notifyEdit(); });
         connect(color, &QPushButton::clicked, this, [this]
         {
+            automatic->setChecked(false);
+            notifyEdit();
             const auto chosen = QColorDialog::getColor(selected, this, "选择曲线颜色", QColorDialog::DontUseNativeDialog);
             if (!chosen.isValid()) { return; }
             selected = chosen;
@@ -119,7 +120,6 @@ public:
         loading = true;
         if (style.color.isValid()) { selected = style.color; }
         automatic->setChecked(!style.color.isValid());
-        color->setDisabled(automatic->isChecked());
         width->setValue(style.width);
         line->setCurrentIndex(line->findData(int(style.line)));
         refreshColor();
@@ -329,6 +329,7 @@ void WavePlot::openCurveSettings(const QString &name)
     connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     body->addWidget(buttons);
+    makeDialogScrollable(&dialog, QSize(400, 240));
     if (!curveDialogGeometry.isEmpty()) { dialog.restoreGeometry(curveDialogGeometry); }
     const auto result = dialog.exec();
     curveDialogGeometry = dialog.saveGeometry();
@@ -350,6 +351,7 @@ void WavePlot::openPlotSettings()
     body->addWidget(tabs);
     auto axes = new QWidget();
     auto form = new QFormLayout(axes);
+    form->setRowWrapPolicy(QFormLayout::WrapLongRows);
     form->setContentsMargins(14, 16, 14, 16);
     form->setVerticalSpacing(12);
     auto xName = new QLineEdit(xTitle);
@@ -376,7 +378,7 @@ void WavePlot::openPlotSettings()
     form->addRow("Y 轴单位", unitEditor(&yUnits, "waveYUnit"));
     xUnits->setText(xUnit);
     yUnits->setText(yUnit);
-    tabs->addTab(axes, "坐标轴与单位");
+    tabs->addTab(scrollPanel(axes, "waveAxesScroll"), "坐标轴与单位");
     auto defaults = new QWidget();
     auto defaultBody = new QVBoxLayout(defaults);
     defaultBody->setContentsMargins(14, 16, 14, 16);
@@ -388,7 +390,7 @@ void WavePlot::openPlotSettings()
     editor->setValue(defaultStyle);
     defaultBody->addWidget(editor);
     defaultBody->addStretch();
-    tabs->addTab(defaults, "默认曲线样式");
+    tabs->addTab(scrollPanel(defaults, "waveDefaultsScroll"), "默认曲线样式");
     tabs->setCurrentIndex(plotSettingsTab);
     bool resetAll = false;
     auto buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel | QDialogButtonBox::RestoreDefaults);
@@ -412,6 +414,7 @@ void WavePlot::openPlotSettings()
     connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     body->addWidget(buttons);
+    makeDialogScrollable(&dialog, QSize(480, 280));
     if (!plotDialogGeometry.isEmpty()) { dialog.restoreGeometry(plotDialogGeometry); }
     const auto result = dialog.exec();
     plotDialogGeometry = dialog.saveGeometry();

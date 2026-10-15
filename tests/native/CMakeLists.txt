@@ -115,3 +115,26 @@ add_test(NAME json_tools_tests COMMAND "${CMAKE_COMMAND}" -E env
     -o "${PROJECT_BINARY_DIR}/json-tools-tests.txt,txt"
 )
 set_tests_properties(json_tools_tests PROPERTIES TIMEOUT 30)
+
+qt_add_executable(dialog_resize_tests dialog_resize_tests.cpp)
+workbench_configure_target(dialog_resize_tests)
+target_link_libraries(dialog_resize_tests PRIVATE workbench_ui Qt6::Test)
+add_dependencies(dialog_resize_tests fake_ssh)
+add_test(NAME dialog_resize_tests COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=${workbench_test_path}"
+    $<TARGET_FILE:dialog_resize_tests>
+    -platform offscreen
+    -o "${PROJECT_BINARY_DIR}/dialog-resize-tests.txt,txt"
+)
+set_tests_properties(dialog_resize_tests PROPERTIES TIMEOUT 30)
+
+qt_add_executable(terminal_keyboard_tests terminal_keyboard_tests.cpp)
+workbench_configure_target(terminal_keyboard_tests)
+target_link_libraries(terminal_keyboard_tests PRIVATE workbench_ui Qt6::Test)
+add_test(NAME terminal_keyboard_tests COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=${workbench_test_path}"
+    $<TARGET_FILE:terminal_keyboard_tests>
+    -platform offscreen
+    -o "${PROJECT_BINARY_DIR}/terminal-keyboard-tests.txt,txt"
+)
+set_tests_properties(terminal_keyboard_tests PROPERTIES TIMEOUT 30)

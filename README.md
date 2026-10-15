@@ -4,7 +4,7 @@
 
 一个面向嵌入式开发的 Windows 串口、网络与 SSH 调试助手。人在界面查看数据，Codex、Claude、OpenCode、Pi Agent 等 AI 通过 MCP 同时读取同一份数据，无需再次打开串口。
 
-当前版本：0.15.14。Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
+当前版本：0.15.15。Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
 
 ## 功能概览
 
@@ -34,9 +34,9 @@
 
 工作台启动后会优先检查国内 HTTPS 镜像上的最新正式版，并定期复查；镜像不可用时回退 GitHub。发现新版本时，窗口右下角会出现版本提醒；点击后打开独立更新窗口，可查看特性与修复说明。下载可在后台进行，不影响工作台使用；校验完成后由用户选择何时关闭工作台并安装，安装向导会沿用原安装目录。检查失败或离线时不影响串口、网络和 MCP 功能。
 
-无需编译时，可从 [GitHub Releases](https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.14) 下载 `SerialWorkbench-0.15.14-windows-x64-setup.exe`，双击安装。安装包包含完整 Qt / MinGW 运行库和原生 MCP 桥，可选择安装目录，提供卸载入口。Release 同时提供 `SHA256SUMS.txt` 校验文件。
+无需编译时，可从 [GitHub Releases](https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.15) 下载 `SerialWorkbench-0.15.15-windows-x64-setup.exe`，双击安装。安装包包含完整 Qt / MinGW 运行库和原生 MCP 桥，可选择安装目录，提供卸载入口。Release 同时提供 `SHA256SUMS.txt` 校验文件。
 
-[直接下载 0.15.14 安装包](https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.14/SerialWorkbench-0.15.14-windows-x64-setup.exe)。ICP 备案期间，网站与国内更新镜像保持冻结，仍提供 [0.15.13 安装包](https://162.14.72.194/updates/SerialWorkbench-0.15.13-windows-x64-setup.exe)；本次仅发布 GitHub Release。已安装版本优先检查镜像，镜像仍返回旧版本时不会提示此版更新，需要从 GitHub 手动下载安装。
+[直接下载 0.15.15 安装包](https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.15/SerialWorkbench-0.15.15-windows-x64-setup.exe)。ICP 备案期间，网站与国内更新镜像保持冻结，仍提供 [0.15.13 安装包](https://162.14.72.194/updates/SerialWorkbench-0.15.13-windows-x64-setup.exe)；本次仅发布 GitHub Release。已安装版本优先检查镜像，镜像仍返回旧版本时不会提示此版更新，需要从 GitHub 手动下载安装。
 
 镜像部署与后续发布步骤见[国内更新镜像](docs/update-mirror.md)。
 
@@ -72,7 +72,7 @@
 
 连接按钮上方的 LED 状态灯与当前连接同步：绿色表示已连接或监听中，黄色表示连接中或重连中，红色表示异常，灰色表示未连接或已断开。旁边同时显示状态文字，连接中的操作按钮可取消连接。
 
-设置窗口可拖动边缘或右下角调整大小，也可最大化。外观与客户端列表在空间不足时滚动，连接总览和调用日志随窗口伸缩；关闭后保留设置窗口的尺寸与位置。
+设置窗口可拖动边缘或右下角调整大小，也可最大化，最小支持 440×320。外观、AI / MCP 和关于页面在空间不足时滚动，连接总览和调用日志随窗口伸缩；关闭后保留尺寸与位置。曲线样式、坐标单位、SSH 认证与缓存、文件传输、更新详情、JSON 助手和脚本编辑窗口也支持缩小后滚动查看，保存、取消等底部操作按钮保持可见。
 
 左侧连接参数栏可拖动右边缘调整宽度，字段随栏宽伸缩，关闭后保留设置。双击分隔线恢复默认宽度；分隔线获得键盘焦点后，左右键微调、Shift 加速、Home 恢复默认。窄窗口中的参数浮层也可调整宽度，隐藏后重新展开会沿用设置。
 
@@ -113,6 +113,12 @@ Espressif USB Serial/JTAG（VID `303A` / PID `1001`）会显示 USB 速率提示
 ## 终端
 
 SSH 终端会将窗口行列数同步到远端；调整窗口大小或字号后无需重连，长输入会按当前宽度换行。
+
+SSH 终端支持本地键盘选区：Shift + 左右箭头按字符选择，Ctrl + Shift + 左右箭头按词选择，Shift + 上下箭头跨行选择，Shift + Home/End 选择到行首/行尾，Ctrl + Shift + Home/End 选择到当前屏幕文本起止。选择过程不移动远端光标。Esc 清除选区，继续输入、粘贴或发送命令时退出选择。
+
+从当前光标用键盘选中的同一行输入，按 Backspace 或 Delete 可整段删除，由远端命令行处理并回显。鼠标选区、跨行历史输出，以及选中后已被新输出刷新或因窗口缩放改变的选区只用于复制，不会据此删除远端输入；可清除选区后重新选择。没有选区时，Backspace 和 Delete 仍按普通终端按键发送。
+
+启用复制快捷键时，Ctrl+C 有选区则复制并清除选区，无选区则发送中断字符（ETX，0x03）；因此复制后再按一次可中断远端程序。Ctrl+Shift+C 与 Ctrl+Insert 只复制；Ctrl+Shift+V、Shift+Insert 粘贴。断开连接后仍可选择、复制屏幕上的文字。普通方向键、Ctrl+方向键、Tab 等继续交给远端应用。
 
 SSH 使用 Windows 自带的 `ssh.exe`，沿用 `~/.ssh/config` 的 `HostName`、`User`、`Port`、`IdentityFile`、`ProxyJump` 等设置和现有密钥代理。打开左侧协议选择中的 SSH，选择别名后点击「建立连接」；程序会自动检测配置文件及 `Include` 文件的变化并更新主机列表。程序不会读取或保存私钥内容。
 
@@ -338,7 +344,7 @@ $env:MINGW_BIN = 'D:/lib/Qt/Tools/mingw1310_64/bin'
 # 打包后的 HTTP / STDIO 集成测试，需要 Python MCP SDK
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r tests/integration/requirements.txt
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.14
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.15
 ```
 
 测试覆盖独立读取与分页、真实 TCP/UDP socket、软件串口回环及重配置、UTF-8/GBK 分片解析、ANSI 颜色与终端、连接标签和布局、设置恢复、MCP HTTP/STDIO、权限、非阻塞等待和错误参数。实际 COM 硬件、USB 设备的实际线速及各 AI 客户端的完整对话需要在对应环境验证。
@@ -349,7 +355,7 @@ python -m venv .venv
 
 ```powershell
 .\scripts\package-release.ps1 -QtSourceRoot 'D:/lib/Qt/6.11.1/Src' -MakeNSIS makensis
-.\.venv\Scripts\python.exe tests/integration/smoke_release.py --expected-version 0.15.14
+.\.venv\Scripts\python.exe tests/integration/smoke_release.py --expected-version 0.15.15
 ```
 
 产物位于 `dist/releases/`，包含安装包、单文件 EXE、便携 ZIP 和 SHA-256 校验文件。`-InstallerOnly` 可仅生成安装包。打包仅复制程序、运行库、插件与许可证，排除本机 `settings.json` 及其备份。发布包测试在不含 Qt SDK 的 PATH 下验证便携版、单文件首次与缓存启动、Unicode 路径、参数传递及 HTTP/STDIO 共享会话。

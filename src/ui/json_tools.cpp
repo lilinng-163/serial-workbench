@@ -510,6 +510,7 @@ public:
                 : tabs->currentIndex() == 3 ? reference->toPlainText() : analysis.formatted;
             if (!text.isEmpty()) { QApplication::clipboard()->setText(text); }
         });
+        makeDialogScrollable(this, QSize(560, 320));
         input->setPlainText(initial);
         refresh();
     }

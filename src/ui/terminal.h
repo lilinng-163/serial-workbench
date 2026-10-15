@@ -55,6 +55,7 @@ public:
         QColor foreground;
         QColor background;
         bool bold = false;
+        bool continuation = false;
     };
     Theme theme;
     QVector<QVector<Cell>> grid;
@@ -79,6 +80,8 @@ public:
     QPoint selectionCursor;
     bool selecting = false;
     bool selectionActive = false;
+    bool keyboardSelectionEnabled = false;
+    bool keyboardSelection = false;
     QString preeditText;
     QTimer blink;
     void feed(const QByteArray &data);
@@ -101,14 +104,20 @@ public:
     QString selectedText() const;
     void copySelection();
     void pasteClipboard();
+    void clearSelection();
 signals:
     void transmit(const QByteArray &data);
     void zoomRequested(int steps);
     void cursorShapeChanged(bool block);
     void gridSizeChanged(const QSize &size);
 private:
+    bool copyHeld = false;
+    bool selectionCanEdit = false;
     void csi(QChar command, const QString &parameters);
     void newline();
     QPoint cellAt(const QPointF &position) const;
+    QPair<int, int> selectionRange() const;
+    bool selectWithKeyboard(QKeyEvent *event);
+    QByteArray selectionDeletion() const;
 };
 }
