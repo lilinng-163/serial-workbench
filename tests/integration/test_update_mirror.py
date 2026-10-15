@@ -1,0 +1,71 @@
+# SPDX-License-Identifier: Apache-2.0
+import hashlib
+import importlib.util
+import io
+import json
+from pathlib import Path
+import tempfile
+import unittest
+
+ROOT = Path(__file__).resolve().parents[2]
+spec = importlib.util.spec_from_file_location('mirror', ROOT / 'deploy/update-mirror/sync_github_release.py')
+mirror = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mirror)
+PAYLOAD = b'MZ verified installer fixture'
+
+
+def release(version='0.15.14', notes='## Fixes\n\nSSH wrapping fixed.'):
+    filename = f'SerialWorkbench-{version}-windows-x64-setup.exe'
+    return {
+        'tag_name': 'v' + version,
+        'name': 'Serial Workbench ' + version,
+        'body': notes,
+        'published_at': '2026-10-14T15:00:00Z',
+        'assets': [{
+            'name': filename, 'state': 'uploaded', 'size': len(PAYLOAD),
+            'digest': 'sha256:' + hashlib.sha256(PAYLOAD).hexdigest(),
+            'browser_download_url': f'https://github.com/{mirror.REPOSITORY}/releases/download/v{version}/{filename}',
+        }],
+    }
+
+
+class MirrorTests(unittest.TestCase):
+    def test_verified_download_and_notes_update(self):
+        calls = []
+        def opener(request, timeout):
+            calls.append(request.full_url)
+            return io.BytesIO(PAYLOAD)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            info = mirror.publish(release(), root, 'https://162.14.72.194', opener)
+            self.assertEqual((root / info['filename']).read_bytes(), PAYLOAD)
+            self.assertEqual(json.loads((root / 'latest.json').read_text())['notes'], release()['body'])
+            mirror.publish(release(notes='New notes'), root, 'https://162.14.72.194', opener)
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(json.loads((root / 'latest.json').read_text())['notes'], 'New notes')
+
+    def test_corrupt_download_preserves_previous_version(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            mirror.publish(release(), root, 'https://162.14.72.194', lambda *a, **kw: io.BytesIO(PAYLOAD))
+            before = (root / 'latest.json').read_bytes()
+            with self.assertRaises(ValueError):
+                mirror.publish(release('0.15.15'), root, 'https://162.14.72.194', lambda *a, **kw: io.BytesIO(b'broken'))
+            self.assertEqual((root / 'latest.json').read_bytes(), before)
+            self.assertFalse(list(root.glob('.installer-*')))
+            with self.assertRaises(ValueError):
+                mirror.publish(release('0.15.13'), root, 'https://162.14.72.194')
+
+    def test_rejects_untrusted_asset(self):
+        data = release()
+        data['assets'][0]['browser_download_url'] = 'http://github.com/installer.exe'
+        with self.assertRaises(ValueError):
+            mirror.release_info(data, 'https://162.14.72.194')
+        data = release()
+        data['assets'][0]['digest'] = ''
+        with self.assertRaises(ValueError):
+            mirror.release_info(data, 'https://162.14.72.194')
+
+
+if __name__ == '__main__':
+    unittest.main()

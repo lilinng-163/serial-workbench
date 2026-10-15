@@ -5,6 +5,8 @@ add_library(workbench_core STATIC
     core.h
     ssh_profiles.cpp
     ssh_profiles.h
+    ssh_process.cpp
+    ssh_process.h
     frame_script.cpp
     frame_script.h
     script_worker.cpp

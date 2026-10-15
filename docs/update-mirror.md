@@ -1,16 +1,24 @@
-# 国内更新镜像
+# 国内更新镜像与自动同步
 
-从 0.15.13 起，工作台先请求 `https://162.14.72.194/updates/latest.json`。清单不可用时回退 GitHub Releases。安装包必须位于同一 HTTPS IP 的 `/updates/` 路径，文件名、版本、大小和 SHA-256 都要与清单一致；客户端在启动安装器前重新校验完整文件。
+客户端优先读取 `https://162.14.72.194/updates/latest.json`，镜像不可用时回退 GitHub Releases。清单包含版本、安装包 URL、大小、SHA-256、发布日期和更新说明。下载结束后校验完整文件，校验通过才允许安装。
 
-服务器 `t_ecs` 的网站容器继续提供 80 端口，`lilinng-https` 容器通过 443 端口代理现有网站。更新文件单独存放在 `/srv/lilinng-web/www/shared/updates`，不受网站 `current` 发布目录切换影响。服务器配置在 `deploy/update-mirror/`，本地发布命令为：
+0.15.14 增加独立更新窗口。点击右下角提醒可查看特性与修复说明，窗口支持自由调整大小、最小化及隐藏。下载期间工作台继续运行，主窗口保留进度。用户选择“关闭工作台并安装”后才退出并启动安装向导。
+
+## 自动发布与备案期间的冻结
+
+服务器同步器 `deploy/update-mirror/sync_github_release.py` 每十分钟读取 GitHub 最新正式 Release，使用 ETag 避免重复读取；下载并校验安装包后，以原子重命名更新清单。错误或校验失败时保留上一个可用版本。网站读取相同清单，自动显示版本、下载地址和说明。
+
+**当前正进行 ICP 备案，已按用户要求停用 `lilinng-release-sync.timer`。网站内容、版本清单和安装包均保持当前状态。未经用户明确允许恢复，不运行同步或部署。**
+
+恢复后，只需发布 `v<版本>` 正式 Release，附上 `SerialWorkbench-<版本>-windows-x64-setup.exe`，并在 Release 正文填写更新说明，服务器和网站即可自动更新。同步器不需要 GitHub 密钥。
+
+检查冻结状态：
 
 ```powershell
-./scripts/publish-update-mirror.ps1 `
-    -Installer dist/releases/<版本>/SerialWorkbench-<版本>-windows-x64-setup.exe
+ssh t_ecs 'sudo systemctl is-enabled lilinng-release-sync.timer'
+ssh t_ecs 'sudo systemctl is-active lilinng-release-sync.timer'
 ```
 
-脚本先上传安装包，在服务器上复核 SHA-256，再以原子重命名更新 `latest.json`。发布顺序应为：构建和测试安装包、发布 GitHub Release、发布镜像、从外部网络验证 HTTPS 清单及安装包。不要先更新清单再上传安装包。
+安装包位于 `/srv/lilinng-web/www/shared/updates`，与网站 `current` 发布目录独立。HTTPS 证书的自动续期继续运行，续期不修改网站内容。域名备案期间使用约六天有效的 IP 证书，`lilinng-cert-renew.timer` 每天检查两次并在到期前续期。
 
-目前域名仍在备案，HTTPS 使用 Let's Encrypt 的 IP 证书。证书约六天有效，服务器的 `lilinng-cert-renew.timer` 每天检查两次，到期前自动续期并重载 `lilinng-https`。可用 `sudo systemctl status lilinng-cert-renew.timer` 和 `sudo systemctl start lilinng-cert-renew.service` 检查续期。备案域名可用后，先配置该域名的 HTTPS，再在后续客户端版本中切换固定更新地址。
-
-0.15.12 及更早版本的更新器仍使用 GitHub 地址，无法远程修改其内置 URL；国内用户需要手动安装一次 0.15.13，之后才能走国内镜像。
+0.15.12 及更早版本内置 GitHub 更新地址，需要手动安装一次较新版本；0.15.13 已支持国内镜像。

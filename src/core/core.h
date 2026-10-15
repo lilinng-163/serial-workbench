@@ -8,6 +8,7 @@
 #include <QtNetwork>
 #include <QtSerialPort>
 #include <QProcess>
+#include "ssh_process.h"
 #include <QTextCodec>
 #include <deque>
 
@@ -107,7 +108,8 @@ public:
     QTcpSocket *client = nullptr;
     QTcpServer *listener = nullptr;
     QUdpSocket *udp = nullptr;
-    QProcess *ssh = nullptr;
+    SshProcess *ssh = nullptr;
+    QSize terminalSize {120, 32};
     QString sshError;
     QMap<QString, QTcpSocket *> peers;
     QMap<QString, std::shared_ptr<Source>> sources;
@@ -122,6 +124,7 @@ public:
     void close();
     void deviceMissing();
     void applySerial(const Config &next);
+    void resizeTerminal(const QSize &size);
     void receive(const QByteArray &data, const QString &peer = {});
     QJsonObject send(const QByteArray &data, const QString &peer = {}, const QString &origin = "gui");
     void status(const QString &value, const QString &message = {}, bool reset = false);

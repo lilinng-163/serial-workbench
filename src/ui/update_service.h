@@ -21,6 +21,9 @@ struct UpdateRelease
     QUrl url;
     QByteArray sha256;
     qint64 size = 0;
+    QString title;
+    QString notes;
+    QString publishedAt;
 };
 
 class UpdateService : public QObject
@@ -35,6 +38,11 @@ public:
 
     void check();
     void download();
+    void cancelDownload();
+    const std::optional<UpdateRelease> &latestRelease() const { return release; }
+    bool isDownloading() const { return !installerReply.isNull(); }
+    QString downloadedInstaller() const { return downloadedPath; }
+    qint64 downloadedBytes() const { return receivedBytes; }
 
 signals:
     void updateAvailable(const QString &version);
@@ -50,6 +58,7 @@ private:
     std::unique_ptr<QSaveFile> installerFile;
     QCryptographicHash installerHash {QCryptographicHash::Sha256};
     qint64 receivedBytes = 0;
+    QString downloadedPath;
 
     void startCheck(bool mirror);
     void receiveChunk(QNetworkReply *reply);

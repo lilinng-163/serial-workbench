@@ -437,15 +437,7 @@ void Channel::releaseTransport()
     if (ssh)
     {
         ssh->disconnect(this);
-        if (ssh->state() != QProcess::NotRunning)
-        {
-            ssh->terminate();
-            if (!ssh->waitForFinished(300))
-            {
-                ssh->kill();
-                ssh->waitForFinished(300);
-            }
-        }
+        ssh->stop();
         ssh->deleteLater();
     }
     for (auto socket : peers)
@@ -536,6 +528,12 @@ void Channel::applySerial(const Config &next)
         name = config.name;
     }
     emit engine->channelsChanged();
+}
+
+void Channel::resizeTerminal(const QSize &size)
+{
+    terminalSize = size;
+    if (ssh) { ssh->resize(size); }
 }
 
 void Channel::watchSocket(QTcpSocket *socket, const QString &peer)
@@ -672,7 +670,7 @@ void Channel::open()
         }
         else if (config.kind == "ssh")
         {
-            ssh = new QProcess(this);
+            ssh = new SshProcess(this);
             QStringList arguments {"-tt", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15",
                 "-o", "ServerAliveInterval=30", "-o", "ServerAliveCountMax=3"};
             if (!config.sshUser.isEmpty())
@@ -688,32 +686,38 @@ void Channel::open()
                 arguments << "-i" << config.sshIdentity;
             }
             arguments << config.sshHost;
-            ssh->setProgram(engine->sshExecutable);
-            ssh->setArguments(arguments);
-            auto environment = QProcessEnvironment::systemEnvironment();
-            environment.insert("TERM", "xterm-256color");
-            ssh->setProcessEnvironment(environment);
-            connect(ssh, &QProcess::readyReadStandardOutput, this, [this]
+            connect(ssh, &SshProcess::output, this, [this, escape = 0](const QByteArray &data) mutable
             {
-                const QByteArray data = ssh->readAllStandardOutput();
-                if (state == "connecting") { status("connected"); }
-                receive(data);
-            });
-            connect(ssh, &QProcess::readyReadStandardError, this, [this]
-            {
-                const QByteArray data = ssh->readAllStandardError();
-                sshError = (sshError + QString::fromUtf8(data)).right(2048);
-                receive(data);
-            });
-            connect(ssh, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error)
-            {
-                if (error == QProcess::FailedToStart)
+                bool visibleOutput = false;
+                for (const unsigned char byte : data)
                 {
-                    status("error", "无法启动系统 OpenSSH 客户端 ssh.exe");
+                    if (escape == 1)
+                    {
+                        escape = byte == '[' ? 2 : byte == ']' ? 3
+                            : QByteArray("()*+").contains(char(byte)) ? 5 : 0;
+                    }
+                    else if (escape == 2)
+                    {
+                        if (byte >= 0x40 && byte <= 0x7e) { escape = 0; }
+                    }
+                    else if (escape == 3)
+                    {
+                        if (byte == 7) { escape = 0; }
+                        else if (byte == 0x1b) { escape = 4; }
+                    }
+                    else if (escape == 4) { escape = byte == '\\' ? 0 : 3; }
+                    else if (escape == 5) { escape = 0; }
+                    else if (byte == 0x1b) { escape = 1; }
+                    else if (byte > 32 && byte != 0x7f) { visibleOutput = true; }
                 }
+                if (state == "connecting" && visibleOutput) { status("connected"); }
+                receive(data);
             });
-            connect(ssh, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-                [this](int code, QProcess::ExitStatus)
+            connect(ssh, &SshProcess::failed, this, [this](const QString &message)
+            {
+                status("error", message);
+            });
+            connect(ssh, &SshProcess::finished, this, [this](int code)
             {
                 if (code == 0 && state == "connected")
                 {
@@ -721,12 +725,14 @@ void Channel::open()
                 }
                 else if (state != "error")
                 {
-                    const QString reason = sshError.trimmed().section('\n', -1).trimmed();
-                    status("error", reason.isEmpty() ? QString("SSH 连接结束，退出码 %1").arg(code) : reason);
+                    status("error", QString("SSH 连接结束，退出码 %1").arg(code));
                 }
             });
             status("connecting");
-            ssh->start();
+            if (!ssh->start(engine->sshExecutable, arguments, terminalSize))
+            {
+                status("error", ssh->errorString());
+            }
         }
         else
         {

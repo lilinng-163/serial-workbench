@@ -4,7 +4,7 @@
 
 一个面向嵌入式开发的 Windows 串口、网络与 SSH 调试助手。人在界面查看数据，Codex、Claude、OpenCode、Pi Agent 等 AI 通过 MCP 同时读取同一份数据，无需再次打开串口。
 
-当前版本：0.15.13。Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
+当前开发版本：0.15.14；最新已发布版本：0.15.13。Qt 6 / C++17 原生应用。桌面程序和 STDIO 桥均不依赖 Python 运行时。
 
 ## 功能概览
 
@@ -18,7 +18,7 @@
 ![串口工作台](docs/pixel-workspace.png)
 
 采用灰绿面板、深绿侧栏和琥珀色强调。标题使用 Segoe UI，菜单、参数和说明使用微软雅黑 UI，收发数据采用等宽字体。工具栏统一使用矢量线条图标，鼠标悬停显示功能提示；图标悬停时轻微抬起，按下时下沉，设置齿轮在鼠标移入和移出时各转一整圈。输入框、按钮和菜单通过细边线与局部底边表现状态。设置中可选择浅色或深色主题，单独调整数据字体、字号或恢复推荐字体。
-旧版默认点阵数据字体自动迁移，其他自选字体保留。
+旧版默认点阵数据字体自动迁移，其他自选字体保留。字体、字号及粗细、斜体等样式在更改后立即保存，并同步到收发、终端、波形及解析数据区。
 
 串口连接后，点击收发工具栏的文件传输图标，选择方向、协议和文件即可操作。设备端需要对应的接收或发送程序，详见 [串口文件传输](docs/serial-file-transfer.md)。测试 Demo 单独构建，不进入正式安装包。
 
@@ -32,7 +32,7 @@
 
 安装后打开「设置 → AI / MCP → Agent 接入」重新配置 Agent，STDIO 桥路径会指向所选安装目录。详见 [安装与卸载](docs/windows-installer.md)。
 
-工作台启动后会优先检查国内 HTTPS 镜像上的最新正式版，并定期复查；镜像不可用时回退 GitHub。发现新版本时，窗口右下角会出现版本提醒；点击后可下载并校验安装包，随后自动打开安装向导。工作台会在安装向导启动后退出，安装向导会沿用原安装目录。检查失败或离线时不影响串口、网络和 MCP 功能。
+工作台启动后会优先检查国内 HTTPS 镜像上的最新正式版，并定期复查；镜像不可用时回退 GitHub。发现新版本时，窗口右下角会出现版本提醒；点击后打开独立更新窗口，可查看特性与修复说明。下载可在后台进行，不影响工作台使用；校验完成后由用户选择何时关闭工作台并安装，安装向导会沿用原安装目录。检查失败或离线时不影响串口、网络和 MCP 功能。
 
 无需编译时，可从[国内 HTTPS 镜像](https://162.14.72.194/updates/SerialWorkbench-0.15.13-windows-x64-setup.exe)或 [GitHub Releases](https://github.com/lilinng-163/serial-workbench/releases/latest) 下载 `SerialWorkbench-0.15.13-windows-x64-setup.exe`，双击安装。安装包包含完整 Qt / MinGW 运行库和原生 MCP 桥，可选择安装目录，提供卸载入口。Release 同时提供 `SHA256SUMS.txt` 校验文件。
 
@@ -112,13 +112,15 @@ Espressif USB Serial/JTAG（VID `303A` / PID `1001`）会显示 USB 速率提示
 
 ## 终端
 
+SSH 终端会将窗口行列数同步到远端；调整窗口大小或字号后无需重连，长输入会按当前宽度换行。
+
 SSH 使用 Windows 自带的 `ssh.exe`，沿用 `~/.ssh/config` 的 `HostName`、`User`、`Port`、`IdentityFile`、`ProxyJump` 等设置和现有密钥代理。打开左侧协议选择中的 SSH，选择别名后点击「建立连接」；程序会自动检测配置文件及 `Include` 文件的变化并更新主机列表。程序不会读取或保存私钥内容。SSH 连接只使用已配置的密钥或代理，不弹出密码输入框；若主机尚未加入 `known_hosts`，请先在系统终端执行一次 `ssh 主机别名` 完成主机验证。SSH 终端的输入不会写入共享日志，以免远端程序的密码输入进入日志；接收内容仍可由界面和 MCP 分别读取。
 
 收发工具栏最左侧的终端图标在日志与交互终端之间切换，下方发送栏在终端模式隐藏。点击终端即可直接输入，闪烁光标显示设备的输入位置。按 Insert 或点击工具栏光标图标，在方块和竖线光标之间切换；Insert 仅改变本地光标形状，不向设备发送字符。再次点击终端图标返回收发日志与发送栏，共享历史保留。终端输入发送到当前终端所属的连接。
 
 终端与 JSON/XML 解析可同时开启。恢复上次设置或调整解析格式时，终端保持显示；点击「JSON / XML」可查看解析结果，后台接收和解析继续运行。
 
-终端使用 VT100/ANSI 解析器处理颜色、光标移动、回车、退格、清屏等控制序列，提供随窗口和字号调整行列的彩色字符终端。支持方向键、Home/End、PageUp/PageDown、Tab、Esc、Ctrl+C、Ctrl+D 和输入法提交文本；输入法候选窗跟随终端光标。输入使用 UTF-8，回车发送 CR，不做本地回显。拖动可选择终端文本，按 Ctrl+C 或 Ctrl+Shift+C 复制；Ctrl+Shift+V 粘贴，右键也可粘贴。工具栏剪贴板图标可分别开关复制快捷键、粘贴快捷键和右键粘贴；Ctrl+C 在没有选区时仍发送给远端程序，Ctrl+V 保留为终端控制键。接收编码跟随发送栏的编码选择，建议选择等宽字体。时间戳仅用于收发监视，终端保持设备原始屏幕布局。
+终端使用 VT100/ANSI 解析器处理颜色、光标移动、回车、退格、清屏等控制序列，提供随窗口和字号调整行列的彩色字符终端。支持方向键、Home/End、PageUp/PageDown、Tab、Esc、Ctrl+C、Ctrl+D 和输入法提交文本；输入法候选窗跟随终端光标。输入使用 UTF-8，回车发送 CR，不做本地回显。拖动可选择终端文本，按 Ctrl+C 或 Ctrl+Shift+C 复制；Ctrl+Shift+V 粘贴，右键也可粘贴。工具栏剪贴板图标可分别开关复制快捷键、粘贴快捷键和右键粘贴；Ctrl+C 在没有选区时仍发送给远端程序，Ctrl+V 保留为终端控制键。SSH 终端统一使用 UTF-8；其他连接的接收编码跟随发送栏的编码选择，建议选择等宽字体。时间戳仅用于收发监视，终端保持设备原始屏幕布局。
 
 终端是所选连接的接收视图，不是本地 PowerShell。收发监视仍保留原始数据。TCP 服务端有多个客户端时，终端显示它们汇总的接收流，键盘发送按目标客户端选择；需要独立终端时使用单独连接。
 
@@ -320,7 +322,7 @@ $env:MINGW_BIN = 'D:/lib/Qt/Tools/mingw1310_64/bin'
 # 打包后的 HTTP / STDIO 集成测试，需要 Python MCP SDK
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r tests/integration/requirements.txt
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.13
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.14
 ```
 
 测试覆盖独立读取与分页、真实 TCP/UDP socket、软件串口回环及重配置、UTF-8/GBK 分片解析、ANSI 颜色与终端、连接标签和布局、设置恢复、MCP HTTP/STDIO、权限、非阻塞等待和错误参数。实际 COM 硬件、USB 设备的实际线速及各 AI 客户端的完整对话需要在对应环境验证。
@@ -331,7 +333,7 @@ python -m venv .venv
 
 ```powershell
 .\scripts\package-release.ps1 -QtSourceRoot 'D:/lib/Qt/6.11.1/Src' -MakeNSIS makensis
-.\.venv\Scripts\python.exe tests/integration/smoke_release.py --expected-version 0.15.13
+.\.venv\Scripts\python.exe tests/integration/smoke_release.py --expected-version 0.15.14
 ```
 
 产物位于 `dist/releases/`，包含安装包、单文件 EXE、便携 ZIP 和 SHA-256 校验文件。`-InstallerOnly` 可仅生成安装包。打包仅复制程序、运行库、插件与许可证，排除本机 `settings.json` 及其备份。发布包测试在不含 Qt SDK 的 PATH 下验证便携版、单文件首次与缓存启动、Unicode 路径、参数传递及 HTTP/STDIO 共享会话。

@@ -72,7 +72,9 @@ std::optional<UpdateRelease> UpdateService::parseRelease(const QByteArray &json,
             return std::nullopt;
         }
 
-        return UpdateRelease {version, fileName, url, match.captured(1).toLatin1().toLower(), size};
+        return UpdateRelease {version, fileName, url, match.captured(1).toLatin1().toLower(), size,
+            object.value("name").toString(), object.value("body").toString().left(128 * 1024),
+            object.value("published_at").toString()};
     }
     return std::nullopt;
 }
@@ -109,7 +111,9 @@ std::optional<UpdateRelease> UpdateService::parseMirrorManifest(const QByteArray
         return std::nullopt;
     }
 
-    return UpdateRelease {version, fileName, url, digest.toLatin1().toLower(), size};
+    return UpdateRelease {version, fileName, url, digest.toLatin1().toLower(), size,
+        object.value("title").toString(), object.value("notes").toString().left(128 * 1024),
+        object.value("published_at").toString()};
 }
 
 void UpdateService::check()
@@ -138,11 +142,13 @@ void UpdateService::startCheck(bool mirror)
             && reply->bytesAvailable() <= 1024 * 1024)
         {
             const auto data = reply->readAll();
-            release = mirror
+            const auto candidate = mirror
                 ? parseMirrorManifest(data, QCoreApplication::applicationVersion())
                 : parseRelease(data, QCoreApplication::applicationVersion());
-            if (release)
+            if (candidate)
             {
+                if (!release || release->version != candidate->version) { downloadedPath.clear(); }
+                release = candidate;
                 emit updateAvailable(release->version);
             }
             else if (mirror && !parseMirrorManifest(data, "0.0.0"))
@@ -190,6 +196,7 @@ void UpdateService::download()
     }
 
     receivedBytes = 0;
+    downloadedPath.clear();
     installerHash.reset();
     QNetworkRequest request(release->url);
     request.setHeader(QNetworkRequest::UserAgentHeader, "SerialWorkbench-Updater");
@@ -207,6 +214,11 @@ void UpdateService::download()
         }
     });
     connect(reply, &QNetworkReply::finished, this, [this, reply] { finishDownload(reply); });
+}
+
+void UpdateService::cancelDownload()
+{
+    if (installerReply) { installerReply->abort(); }
 }
 
 void UpdateService::receiveChunk(QNetworkReply *reply)
@@ -254,6 +266,7 @@ void UpdateService::finishDownload(QNetworkReply *reply)
         return;
     }
     installerFile.reset();
+    downloadedPath = path;
     emit downloadReady(path);
 }
 }

@@ -320,6 +320,9 @@ void TerminalView::reset(const QString &encoding)
     decoder.reset((codec ? codec : QTextCodec::codecForName("UTF-8"))->makeDecoder());
     ansi = {};
     x = y = 0;
+    wrapPending = false;
+    autoWrap = true;
+    cursorVisible = true;
     preeditText.clear();
     selecting = false;
     selectionActive = false;
@@ -340,6 +343,16 @@ void TerminalView::newline()
 
 void TerminalView::csi(QChar command, const QString &parameters)
 {
+    if ((command == 'h' || command == 'l') && parameters.startsWith('?'))
+    {
+        for (const auto &value : parameters.mid(1).split(';'))
+        {
+            if (value.toInt() == 7) { autoWrap = command == 'h'; }
+            if (value.toInt() == 25) { cursorVisible = command == 'h'; }
+        }
+        return;
+    }
+    if (command != 'm') { wrapPending = false; }
     QList<int> codes;
     for (const auto &value : parameters.split(';'))
     {
@@ -374,6 +387,46 @@ void TerminalView::csi(QChar command, const QString &parameters)
     else if (command == 'G')
     {
         x = qBound(0, n - 1, columns - 1);
+    }
+    else if (command == 'd')
+    {
+        y = qBound(0, n - 1, rows - 1);
+    }
+    else if (command == 'E' || command == 'F')
+    {
+        y = qBound(0, y + (command == 'E' ? n : -n), rows - 1);
+        x = 0;
+    }
+    else if (command == 'X' || command == '@' || command == 'P')
+    {
+        const int count = std::min(n, columns - x);
+        if (command == '@')
+        {
+            for (int col = columns - 1; col >= x + count; --col) { grid[y][col] = grid[y][col - count]; }
+        }
+        else if (command == 'P')
+        {
+            for (int col = x; col < columns - count; ++col) { grid[y][col] = grid[y][col + count]; }
+        }
+        const int begin = command == 'P' ? columns - count : x;
+        for (int col = begin; col < begin + count; ++col) { grid[y][col] = {}; }
+    }
+    else if (command == 'S' || command == 'T' || command == 'L' || command == 'M')
+    {
+        const int begin = command == 'L' || command == 'M' ? y : 0;
+        for (int i = 0; i < std::min(n, rows - begin); ++i)
+        {
+            if (command == 'T' || command == 'L')
+            {
+                grid.removeLast();
+                grid.insert(begin, QVector<Cell>(columns));
+            }
+            else
+            {
+                grid.removeAt(begin);
+                grid.append(QVector<Cell>(columns));
+            }
+        }
     }
     else if (command == 'J')
     {
@@ -438,12 +491,32 @@ void TerminalView::feed(const QByteArray &data)
                 csi(c, ansi.escape.mid(2, ansi.escape.size() - 3));
                 ansi.escape.clear();
             }
-            else if (ansi.escape.size() == 2 && c != '[' && c != ']')
+            else if (ansi.escape.size() == 3 && QString("()*+").contains(ansi.escape[1]))
+            {
+                ansi.escape.clear();
+            }
+            else if (ansi.escape.size() == 2 && c != '[' && c != ']' && !QString("()*+").contains(c))
             {
                 if (c == '7')
                 {
                     savedX = x;
                     savedY = y;
+                }
+                else if (c == 'D' || c == 'E')
+                {
+                    wrapPending = false;
+                    if (c == 'E') { x = 0; }
+                    newline();
+                }
+                else if (c == 'M')
+                {
+                    wrapPending = false;
+                    if (y > 0) { --y; }
+                    else
+                    {
+                        grid.removeLast();
+                        grid.prepend(QVector<Cell>(columns));
+                    }
                 }
                 else if (c == '8')
                 {
@@ -464,33 +537,41 @@ void TerminalView::feed(const QByteArray &data)
         }
         else if (c == '\r')
         {
+            wrapPending = false;
             x = 0;
         }
         else if (c == '\n')
         {
+            wrapPending = false;
             newline();
         }
         else if (c == '\b')
         {
+            wrapPending = false;
             x = std::max(0, x - 1);
         }
         else if (c == '\t')
         {
+            wrapPending = false;
             x = std::min(columns - 1, (x / 8 + 1) * 8);
         }
         else if (c.unicode() >= 32)
         {
-            if (x >= columns)
+            const int cellWidth = c.unicode() >= 0x2e80 && c.unicode() <= 0xffef ? 2 : 1;
+            if (autoWrap && (wrapPending || (cellWidth == 2 && x == columns - 1)))
             {
                 x = 0;
                 newline();
             }
+            wrapPending = false;
             grid[y][x] = {c, ansi.foreground, ansi.background, ansi.bold};
-            ++x;
-            if (c.unicode() >= 0x2e80 && c.unicode() <= 0xffef && x < columns)
+            if (cellWidth == 2 && x + 1 < columns) { grid[y][x + 1] = {}; }
+            if (x + cellWidth >= columns)
             {
-                grid[y][x++] = {};
+                x = columns - 1;
+                wrapPending = autoWrap;
             }
+            else { x += cellWidth; }
         }
     }
     update();
@@ -549,12 +630,12 @@ void TerminalView::paintEvent(QPaintEvent *)
             }
             p.setPen(selected ? theme.panel : cell.foreground.isValid() ? cell.foreground : theme.text);
             QFont current = font();
-            current.setBold(cell.bold);
+            current.setBold(cell.bold || font().bold());
             p.setFont(current);
             p.drawText(box.topLeft() + QPointF(0, metrics.ascent()), QString(cell.character));
         }
     }
-    if (caret && hasFocus() && enabledInput)
+    if (caret && cursorVisible && hasFocus() && enabledInput)
     {
         QColor color = theme.accent;
         color.setAlpha(150);
@@ -591,8 +672,9 @@ void TerminalView::changeEvent(QEvent *event)
 void TerminalView::resizeGrid()
 {
     const QFontMetricsF metrics(font());
-    const int newColumns = qBound(20, int((width() - 32) / metrics.horizontalAdvance('M')), 240);
-    const int newRows = qBound(4, int((height() - 24) / (metrics.height() * 1.15)), 100);
+    const int newColumns = qBound(2, int((width() - 32) / metrics.horizontalAdvance('M')), 500);
+    const int newRows = qBound(1, int((height() - 24) / (metrics.height() * 1.15)), 200);
+    const bool changed = columns != newColumns || rows != newRows;
     for (auto &row : grid)
     {
         row.resize(newColumns);
@@ -604,6 +686,7 @@ void TerminalView::resizeGrid()
     }
     columns = newColumns;
     rows = newRows;
+    if (changed) { wrapPending = false; }
     x = qBound(0, x, columns - 1);
     y = qBound(0, y, rows - 1);
     selectionAnchor.setX(qBound(0, selectionAnchor.x(), columns - 1));
@@ -614,6 +697,7 @@ void TerminalView::resizeGrid()
     {
         QApplication::inputMethod()->update(Qt::ImCursorRectangle);
     }
+    if (changed) { emit gridSizeChanged(QSize(columns, rows)); }
 }
 
 bool TerminalView::event(QEvent *event)

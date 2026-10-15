@@ -6,6 +6,7 @@
 #include "agent_config.h"
 #include "agent_panel.h"
 #include "file_transfer_dialog.h"
+#include "update_dialog.h"
 #include <QFileInfo>
 #include <QProcess>
 #include <QProgressBar>
@@ -777,12 +778,28 @@ Pane::Pane(Window *owner, const QString &instrumentKind) : QWidget(owner), windo
         {
             if (channel)
             {
-                channel->send(data, peer->currentText());
+                QByteArray input = data;
+#ifdef Q_OS_WIN
+                if (channel->config.kind == "ssh")
+                {
+                    // ConPTY accepts the standard VT Home/End key forms.
+                    if (input == "\x1b[7~") { input = "\x1b[H"; }
+                    else if (input == "\x1b[4~") { input = "\x1b[F"; }
+                }
+#endif
+                channel->send(input, peer->currentText());
             }
         }
         catch (const std::exception &exception)
         {
             window->error(QString::fromUtf8(exception.what()));
+        }
+    });
+    connect(terminal, &TerminalView::gridSizeChanged, this, [this](const QSize &size)
+    {
+        if (channel && channel->config.kind == "ssh" && terminalMode && terminal->isVisible())
+        {
+            channel->resizeTerminal(size);
         }
     });
     const auto zoom = [this](int steps)
@@ -820,7 +837,14 @@ void Pane::setChannel(Channel *value)
     {
         draft = value->config;
         if (instrument) { sourceKey = value->config.key(); }
-        if (!instrument && value->config.kind == "ssh") { setTerminal(true); }
+        if (!instrument && value->config.kind == "ssh")
+        {
+            setTerminal(true);
+            QTimer::singleShot(0, this, [this]
+            {
+                if (channel && terminal->isVisible()) { channel->resizeTerminal(QSize(terminal->columns, terminal->rows)); }
+            });
+        }
         if (supportsScript())
         {
             if (value->scriptEnabled)
@@ -926,25 +950,34 @@ bool Pane::eventFilter(QObject *object, QEvent *event)
 
 void Pane::applyAppearance()
 {
+    const QString fontStyle = QString("font-family: '%1'; font-size: %2pt; font-weight: %3; font-style: %4;")
+        .arg(window->dataFont.families().join("', '"))
+        .arg(window->dataFont.pointSizeF())
+        .arg(int(window->dataFont.weight()))
+        .arg(window->dataFont.italic() ? "italic" : "normal");
     if (instrument)
     {
         if (instrument->plot)
         {
             instrument->plot->theme = window->theme;
             instrument->plot->setFont(window->dataFont);
+            instrument->plot->setStyleSheet(fontStyle);
             instrument->plot->update();
         }
         if (instrument->detail)
         {
             instrument->detail->setFont(window->dataFont);
+            instrument->detail->setStyleSheet(fontStyle);
+        }
+        if (instrument->table)
+        {
+            instrument->table->setFont(window->dataFont);
+            instrument->table->setStyleSheet(fontStyle);
         }
         return;
     }
     log->theme = window->theme;
     terminal->theme = window->theme;
-    const QString fontStyle = QString("font-family: '%1'; font-size: %2pt;")
-        .arg(window->dataFont.families().join("', '"))
-        .arg(window->dataFont.pointSizeF());
     log->setFont(window->dataFont);
     log->setStyleSheet(fontStyle);
     payload->setFont(window->dataFont);
@@ -1022,7 +1055,7 @@ void Pane::tick()
         {
             log->append("部分旧数据已被历史缓冲区覆盖");
             log->streams.clear();
-            terminal->reset(encoding->currentText());
+            terminal->reset(channel && channel->config.kind == "ssh" ? "utf-8" : encoding->currentText());
         }
         for (const auto &value : batch["events"].toArray())
         {
@@ -1030,7 +1063,7 @@ void Pane::tick()
             log->feed(event);
             if (event["stream_reset"].toBool())
             {
-                terminal->reset(encoding->currentText());
+                terminal->reset(channel && channel->config.kind == "ssh" ? "utf-8" : encoding->currentText());
             }
             if (event["direction"] == "rx" && event["message"] != "file-transfer")
             {
@@ -1105,7 +1138,7 @@ void Pane::clearView()
     cursor = window->engine->journal.sequence;
     viewStart = cursor;
     log->reset();
-    terminal->reset(encoding->currentText());
+    terminal->reset(channel && channel->config.kind == "ssh" ? "utf-8" : encoding->currentText());
     clearScriptResults();
 }
 
@@ -1114,7 +1147,7 @@ void Pane::replay()
     if (instrument) { return; }
     cursor = viewStart;
     log->reset();
-    terminal->reset(encoding->currentText());
+    terminal->reset(channel && channel->config.kind == "ssh" ? "utf-8" : encoding->currentText());
 }
 
 void Pane::exportLog()
@@ -1407,6 +1440,8 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
         && savedFamily == Theme::fontFamily(12) && appearance["font_size"].toInt() == 18;
     if (!savedFamily.isEmpty() && !previousDefault)
     {
+        const auto specification = appearance["font_spec"].toString();
+        if (!specification.isEmpty()) { dataFont.fromString(specification); }
         dataFont.setFamilies({savedFamily, "Microsoft YaHei UI"});
         dataFont.setPointSize(qBound(8, appearance["font_size"].toInt(12), 32));
         dataFont.setStyleStrategy(savedFamily.startsWith("Fusion Pixel") ? QFont::NoAntialias : QFont::PreferAntialias);
@@ -1744,7 +1779,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     {
         updater = new UpdateService(this);
         updateButton = button("", "updateButton");
-        updateButton->setToolTip("下载并安装最新版本");
+        updateButton->setToolTip("查看新版本及更新说明");
         updateProgress = new QProgressBar();
         updateProgress->setObjectName("updateProgress");
         updateProgress->setFixedWidth(90);
@@ -1758,22 +1793,36 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
         connect(updater, &UpdateService::updateAvailable, this, [this](const QString &version)
         {
             updateButton->setText(QString("发现新版本 v%1  ↓").arg(version));
-            updateButton->setToolTip(QString("下载并安装 Serial Workbench v%1").arg(version));
+            updateButton->setToolTip(QString("查看 Serial Workbench v%1 的更新说明").arg(version));
             updateButton->show();
         });
         connect(updateButton, &QAbstractButton::clicked, this, [this]
         {
-            updateButton->setEnabled(false);
-            updateProgress->setRange(0, 100);
-            updateProgress->setValue(0);
-            updateProgress->show();
-            updater->download();
+            if (!updateDialog)
+            {
+                updateDialog = new UpdateDialog(updater, this);
+                connect(updateDialog, &UpdateDialog::installRequested, this, [this](const QString &path)
+                {
+                    if (!QProcess::startDetached(path, {}, QFileInfo(path).absolutePath()))
+                    {
+                        statusBar()->showMessage("无法启动更新安装程序", 10000);
+                        return;
+                    }
+                    QApplication::closeAllWindows();
+                });
+            }
+            updateDialog->refresh();
+            updateDialog->showNormal();
+            updateDialog->raise();
+            updateDialog->activateWindow();
         });
         connect(updater, &UpdateService::downloadProgress, this, [this](qint64 received, qint64 total)
         {
             if (total > 0)
             {
+                updateProgress->show();
                 updateProgress->setValue(int(received * 100 / total));
+                updateButton->setText(QString("正在下载更新 %1% ↓").arg(received * 100 / total));
                 updateProgress->setToolTip(QString("已下载 %1 / %2 MB")
                     .arg(received / 1024.0 / 1024.0, 0, 'f', 1)
                     .arg(total / 1024.0 / 1024.0, 0, 'f', 1));
@@ -1783,18 +1832,14 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
         {
             updateProgress->hide();
             updateButton->setEnabled(true);
+            updateButton->setText("更新下载未完成 · 查看并重试");
             statusBar()->showMessage(message, 10000);
         });
-        connect(updater, &UpdateService::downloadReady, this, [this](const QString &installerPath)
+        connect(updater, &UpdateService::downloadReady, this, [this](const QString &)
         {
-            if (!QProcess::startDetached(installerPath, {}, QFileInfo(installerPath).absolutePath()))
-            {
-                updateProgress->hide();
-                updateButton->setEnabled(true);
-                statusBar()->showMessage("无法启动更新安装程序", 10000);
-                return;
-            }
-            QApplication::closeAllWindows();
+            updateProgress->hide();
+            updateButton->setText("更新已下载 · 查看并安装");
+            updateButton->setToolTip("安装包已校验，点击打开更新窗口");
         });
     }
     statusBar()->setContentsMargins(12, 2, 12, 2);
@@ -2850,6 +2895,7 @@ void Window::setDataFont(const QFont &font)
         hostWindow->dataFont = dataFont;
         for (auto pane : hostWindow->panes) { pane->applyAppearance(); }
     }
+    saveSettings();
 }
 
 void Window::error(const QString &message)
@@ -2995,6 +3041,7 @@ void Window::saveSettings()
     appearance["theme"] = theme.dark ? "dark" : "light";
     appearance["pixel_theme"] = true;
     appearance["readable_type"] = true;
+    appearance["font_spec"] = dataFont.toString();
     appearance["font_family"] = dataFont.family();
     appearance["font_size"] = dataFont.pointSize();
     appearance["parameter_width"] = parameterWidth;
@@ -3238,6 +3285,7 @@ void Window::openSettings()
     themeChoice->setCurrentIndex(theme.dark ? 1 : 0);
     connect(themeChoice, &QComboBox::currentIndexChanged, this, [this](int index) { applyTheme(index == 1); });
     auto font = button(dataFont.family(), "outline");
+    font->setObjectName("dataFontChoice");
     connect(font, &QPushButton::clicked, this, [this, font]
     {
         QFontDialog dialog(dataFont, settingsDialog);
@@ -3250,9 +3298,15 @@ void Window::openSettings()
             const auto selected = dialog.selectedFont();
             setDataFont(selected);
             font->setText(selected.family());
+            if (auto size = settingsDialog->findChild<QSpinBox *>("dataFontSize"))
+            {
+                const QSignalBlocker blocker(size);
+                size->setValue(dataFont.pointSize());
+            }
         }
     });
     auto size = new QSpinBox();
+    size->setObjectName("dataFontSize");
     size->setRange(8, 32);
     size->setValue(dataFont.pointSize());
     connect(size, &QSpinBox::valueChanged, this, [this](int value)

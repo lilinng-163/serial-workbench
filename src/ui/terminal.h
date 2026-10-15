@@ -69,6 +69,9 @@ public:
     bool enabledInput = false;
     bool caret = true;
     bool blockCursor = true;
+    bool wrapPending = false;
+    bool autoWrap = true;
+    bool cursorVisible = true;
     bool copyShortcutEnabled = true;
     bool pasteShortcutEnabled = true;
     bool rightClickPasteEnabled = true;
@@ -102,6 +105,7 @@ signals:
     void transmit(const QByteArray &data);
     void zoomRequested(int steps);
     void cursorShapeChanged(bool block);
+    void gridSizeChanged(const QSize &size);
 private:
     void csi(QChar command, const QString &parameters);
     void newline();

@@ -3,6 +3,7 @@
 #include "window.h"
 #include "ssh_profiles.h"
 #include "agent_config.h"
+#include "update_dialog.h"
 #include <QtTest>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -43,6 +44,9 @@ private slots:
             {"tag_name", "v0.15.11"},
             {"draft", false},
             {"prerelease", false},
+            {"name", "Serial Workbench 0.15.11"},
+            {"body", "## Fixes\n\nSSH wrapping fixed."},
+            {"published_at", "2026-10-14T15:00:00Z"},
             {"assets", QJsonArray {asset}}
         };
         const auto parse = [&release]
@@ -55,6 +59,7 @@ private slots:
         QCOMPARE(result->version, version);
         QCOMPARE(result->sha256, QByteArray(64, 'a'));
         QCOMPARE(result->size, qint64(2048));
+        QCOMPARE(result->notes, QString("## Fixes\n\nSSH wrapping fixed."));
         QVERIFY(!sw::UpdateService::parseRelease(QJsonDocument(release).toJson(), version));
 
         release["prerelease"] = true;
@@ -142,6 +147,187 @@ private slots:
         QVERIFY(window.updateButton->isVisible());
         QVERIFY(window.updateButton->text().contains("0.15.11"));
         QVERIFY(!window.updateProgress->isVisible());
+        QTest::mouseClick(window.updateButton, Qt::LeftButton);
+        QVERIFY(window.updateDialog);
+        QVERIFY(window.updateDialog->isVisible());
+        QVERIFY(!window.updateDialog->isModal());
+        auto background = window.updateDialog->findChild<QPushButton *>("updateBackground");
+        QVERIFY(background);
+        QTest::mouseClick(background, Qt::LeftButton);
+        QVERIFY(!window.updateDialog->isVisible());
+        QVERIFY(window.isVisible());
+        emit window.updater->downloadReady("unused-test-installer.exe");
+        QVERIFY(window.isVisible());
+        QVERIFY(window.updateButton->text().contains("已下载"));
+    }
+
+    void terminalWrappingCancelsPendingWrapOnControl()
+    {
+        sw::TerminalView terminal;
+        terminal.columns = 20;
+        terminal.rows = 6;
+        terminal.reset();
+        terminal.feed(QByteArray(20, 'A'));
+        QVERIFY(terminal.wrapPending);
+        terminal.feed("\r\nB");
+        QCOMPARE(terminal.y, 1);
+        QCOMPARE(terminal.x, 1);
+        QCOMPARE(terminal.grid[1][0].character, QChar('B'));
+        terminal.reset();
+        terminal.feed(QByteArray(20, 'A'));
+        terminal.feed("\x1b[20GZ");
+        QCOMPARE(terminal.y, 0);
+        QCOMPARE(terminal.grid[0][19].character, QChar('Z'));
+        terminal.reset();
+        terminal.feed("\x1b[?7l");
+        terminal.feed(QByteArray(80, 'X'));
+        QCOMPARE(terminal.y, 0);
+        QCOMPARE(terminal.x, 19);
+        terminal.reset();
+        terminal.feed(QByteArray(19, 'A') + QString("中").toUtf8());
+        QCOMPARE(terminal.y, 1);
+        QCOMPARE(terminal.grid[1][0].character, QChar(u'中'));
+    }
+
+    void sshLivePtyResize()
+    {
+        const auto target = qEnvironmentVariable("SERIAL_WORKBENCH_SSH_PROBE");
+        if (target.isEmpty()) { QSKIP("Live SSH probe is opt-in"); }
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        window.resize(1000, 600);
+        window.show();
+        window.protocol->setCurrentIndex(4);
+        window.sshTarget->setCurrentText(target);
+        window.connectionAction();
+        auto channel = window.active->channel;
+        auto terminal = window.active->terminal;
+        QByteArray received;
+        connect(channel, &sw::Channel::bytesReceived, this, [&received](const QByteArray &data) { received += data; });
+        QTRY_COMPARE_WITH_TIMEOUT(channel->state, QString("connected"), 20000);
+        QTRY_COMPARE(channel->terminalSize, QSize(terminal->columns, terminal->rows));
+        channel->send("printf '__SIZE__ '; stty size\r");
+        const auto firstSize = QString("__SIZE__ %1 %2").arg(terminal->rows).arg(terminal->columns).toLatin1();
+        QTRY_VERIFY_WITH_TIMEOUT(terminal->text().contains(QString::fromLatin1(firstSize)), 20000);
+        const QSize previousSize(terminal->columns, terminal->rows);
+        window.resize(680, 480);
+        QTRY_VERIFY(QSize(terminal->columns, terminal->rows) != previousSize);
+        QTRY_COMPARE(channel->terminalSize, QSize(terminal->columns, terminal->rows));
+        QTest::qWait(150);
+        channel->send("printf '__RESIZE__ '; stty size\r");
+        const auto nextSize = QString("__RESIZE__ %1 %2").arg(terminal->rows).arg(terminal->columns).toLatin1();
+        const bool resized = QTest::qWaitFor([terminal, &nextSize] { return terminal->text().contains(QString::fromLatin1(nextSize)); }, 5000);
+        if (!resized) { qDebug() << "EXPECTED" << nextSize << "SCREEN" << terminal->text(); }
+        QVERIFY(resized);
+        channel->send("read -e -p '__READ__' value; printf '\\n__KEYS__<%s>\\n' \"$value\"\r");
+        QTRY_VERIFY_WITH_TIMEOUT(terminal->text().trimmed().endsWith("__READ__"), 10000);
+        QTest::keyClicks(terminal, "middle");
+        QTest::keyClick(terminal, Qt::Key_Home);
+        QTest::keyClicks(terminal, "start-");
+        QTest::keyClick(terminal, Qt::Key_End);
+        QTest::keyClicks(terminal, "-end");
+        QTest::keyClick(terminal, Qt::Key_Return);
+        QTRY_VERIFY_WITH_TIMEOUT(terminal->text().contains("__KEYS__<start-middle-end>"), 10000);
+        channel->send(QByteArray(150, 'A'));
+        const bool visible = QTest::qWaitFor([terminal] { return terminal->text().count('A') >= 150; }, 10000);
+        if (!visible)
+        {
+            qDebug().noquote() << terminal->text();
+            qDebug() << "GRID" << terminal->columns << terminal->rows << terminal->x << terminal->y;
+        }
+        const auto capture = qEnvironmentVariable("SW_UI_CAPTURE_DIR");
+        if (!capture.isEmpty()) { terminal->grab().save(QDir(capture).filePath("ssh-wrap.png")); }
+        channel->send(QByteArray(1, char(3)));
+        channel->close();
+        QVERIFY(visible);
+        QVERIFY(terminal->x < terminal->columns);
+    }
+
+    void sshStartupControlSequencesDoNotSignalOnline()
+    {
+#ifdef Q_OS_WIN
+        sw::Engine engine;
+        engine.sshExecutable = QCoreApplication::applicationDirPath() + "/fake_ssh.exe";
+        sw::Config config;
+        config.kind = "ssh";
+        config.sshHost = "pty-wait";
+        auto channel = engine.open(config);
+        QTRY_VERIFY(channel->rx > 0);
+        QCOMPARE(channel->state, QString("connecting"));
+        QCOMPARE(channel->ssh->write("!"), qint64(1));
+        QTRY_COMPARE(channel->state, QString("connected"));
+        channel->close();
+#endif
+    }
+
+    void updateDialogLiveBackgroundDownload()
+    {
+        if (!qEnvironmentVariableIsSet("SERIAL_WORKBENCH_NETWORK_PROBE")) { QSKIP("Live HTTPS download is opt-in"); }
+        sw::UpdateService service;
+        QSignalSpy available(&service, &sw::UpdateService::updateAvailable);
+        const auto originalVersion = QCoreApplication::applicationVersion();
+        QCoreApplication::setApplicationVersion("0.0.0");
+        service.check();
+        const bool found = available.wait(20000);
+        QCoreApplication::setApplicationVersion(originalVersion.isEmpty() ? sw::Version : originalVersion);
+        QVERIFY(found);
+        QVERIFY(service.latestRelease());
+        QVERIFY(!service.latestRelease()->notes.isEmpty());
+        QWidget parent;
+        parent.setStyleSheet(sw::Theme::make(false).stylesheet());
+        parent.setFont(sw::Theme::interfaceFont());
+        parent.show();
+        sw::UpdateDialog dialog(&service, &parent);
+        dialog.show();
+        QVERIFY(!dialog.isModal());
+        auto notes = dialog.findChild<QTextBrowser *>("updateNotes");
+        QVERIFY(!notes->toPlainText().isEmpty());
+        QSignalSpy ready(&service, &sw::UpdateService::downloadReady);
+        QTest::mouseClick(dialog.findChild<QPushButton *>("updateAction"), Qt::LeftButton);
+        QVERIFY(service.isDownloading());
+        QTest::mouseClick(dialog.findChild<QPushButton *>("updateBackground"), Qt::LeftButton);
+        QVERIFY(!dialog.isVisible());
+        QVERIFY(parent.isVisible());
+        QVERIFY(ready.wait(120000));
+        QVERIFY(parent.isVisible());
+        QVERIFY(!dialog.isVisible());
+        QFile installer(service.downloadedInstaller());
+        QVERIFY(installer.open(QIODevice::ReadOnly));
+        QCOMPARE(installer.size(), service.latestRelease()->size);
+        QCOMPARE(QCryptographicHash::hash(installer.readAll(), QCryptographicHash::Sha256).toHex(), service.latestRelease()->sha256);
+        dialog.showNormal();
+        QVERIFY(dialog.findChild<QPushButton *>("updateAction")->text().contains("安装"));
+        const auto capture = qEnvironmentVariable("SW_UI_CAPTURE_DIR");
+        if (!capture.isEmpty()) { dialog.grab().save(QDir(capture).filePath("update-dialog.png")); }
+    }
+
+    void dataFontChangesPersistImmediatelyAndCompletely()
+    {
+        QTemporaryDir directory;
+        const auto path = directory.filePath("settings.json");
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, path);
+        QFont selected("Consolas", 17, QFont::Bold, true);
+        selected.setUnderline(true);
+        window.setDataFont(selected);
+        QFile saved(path);
+        QVERIFY(saved.open(QIODevice::ReadOnly));
+        const auto appearance = QJsonDocument::fromJson(saved.readAll()).object()["appearance"].toObject();
+        QVERIFY(!appearance["font_spec"].toString().isEmpty());
+        sw::Engine otherEngine;
+        sw::McpServer otherMcp(&otherEngine);
+        sw::Window restored(&otherEngine, &otherMcp, path);
+        QCOMPARE(restored.dataFont.family(), selected.family());
+        QCOMPARE(restored.dataFont.pointSize(), selected.pointSize());
+        QCOMPARE(restored.dataFont.weight(), selected.weight());
+        QCOMPARE(restored.dataFont.italic(), selected.italic());
+        QCOMPARE(restored.dataFont.underline(), selected.underline());
+        restored.active->terminal->ensurePolished();
+        QVERIFY(restored.active->terminal->font().italic());
+        QVERIFY(restored.active->terminal->font().bold());
     }
 
     void waveformDragMatchesScreen_data()
@@ -838,20 +1024,26 @@ private slots:
         auto channel = engine.open(config);
         QTRY_COMPARE(channel->state, QString("connected"));
         QTRY_VERIFY(channel->rx >= 6);
+#ifdef Q_OS_WIN
+        channel->resizeTerminal(QSize(57, 18));
+        channel->send(QByteArray(1, char(5)));
+        QTRY_VERIFY(engine.journal.read(0)["events"].toArray().last().toObject()["text"].toString().contains("PTY_SIZE 57 18"));
+#endif
 
         const QByteArray input("private-input\n");
+        sw::TerminalView echoed;
+        connect(channel, &sw::Channel::bytesReceived, &echoed, &sw::TerminalView::feed);
+        const auto receivedBeforeInput = channel->rx;
         const auto sent = channel->send(input);
         QCOMPARE(sent["bytes_sent"].toInt(), input.size());
-        QTRY_VERIFY(channel->rx >= 6 + input.size());
+        QTRY_VERIFY(channel->rx > receivedBeforeInput);
+        QTRY_VERIFY(echoed.text().contains("private-input"));
         const auto events = engine.journal.read(0)["events"].toArray();
-        bool received = false;
         for (const auto &value : events)
         {
             const auto event = value.toObject();
             QVERIFY(event["direction"].toString() != "tx");
-            received |= event["text"].toString().contains("private-input");
         }
-        QVERIFY(received);
         channel->close();
         QCOMPARE(channel->state, QString("closed"));
 
@@ -882,7 +1074,7 @@ private slots:
         QCOMPARE(transmitted.count(), 1);
         QCOMPARE(transmitted.first().first().toByteArray(), QByteArray("\t"));
         QVERIFY(terminal->hasFocus());
-        QTRY_COMPARE(window.active->channel->rx, receivedBeforeTab + 1);
+        QTRY_VERIFY(window.active->channel->rx > receivedBeforeTab);
         QCOMPARE(window.active->channel->tx, 1);
         QTest::keyClick(terminal, Qt::Key_Tab, Qt::ShiftModifier);
         QCOMPARE(transmitted.count(), 2);

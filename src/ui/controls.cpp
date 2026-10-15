@@ -262,6 +262,8 @@ QString Theme::stylesheet() const
         QPushButton#updateButton:pressed { color: $muted; padding-top: 2px; padding-bottom: 0; }
         QProgressBar#updateProgress { border: 1px solid $edge; background: $panel; padding: 0; }
         QProgressBar#updateProgress::chunk { background: $accent; }
+        QProgressBar#updateDialogProgress { border: 1px solid $edge; background: $panel; min-height: 20px; text-align: center; }
+        QProgressBar#updateDialogProgress::chunk { background: $accent; }
         QPushButton:disabled, QToolButton:disabled { color: $muted; }
         QPlainTextEdit, QTextEdit { border: 1px solid $edge; border-radius: 0; background: $panel; padding: 8px; selection-background-color: $accent; selection-color: $onaccent; }
         QPlainTextEdit:focus { border-color: $accent; }

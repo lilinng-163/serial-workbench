@@ -8,6 +8,7 @@
 namespace sw
 {
 class Window;
+class UpdateDialog;
 
 class Instrument : public QWidget
 {
@@ -187,6 +188,7 @@ public:
     QPushButton *updateButton = nullptr;
     QProgressBar *updateProgress = nullptr;
     UpdateService *updater = nullptr;
+    QPointer<UpdateDialog> updateDialog;
     QTimer timer;
     QTimer portTimer;
     QTimer sshConfigTimer;
