@@ -100,7 +100,8 @@ QString quoteArgument(const QString &value)
 }
 #endif
 
-bool SshProcess::start(const QString &program, const QStringList &arguments, const QSize &size)
+bool SshProcess::start(const QString &program, const QStringList &arguments, const QSize &size,
+    QProcessEnvironment environment)
 {
     stop();
     impl->error.clear();
@@ -155,7 +156,6 @@ bool SshProcess::start(const QString &program, const QStringList &arguments, con
     QStringList command {quoteArgument(QDir::toNativeSeparators(executable.isEmpty() ? program : executable))};
     for (const auto &argument : arguments) { command.append(quoteArgument(argument)); }
     std::wstring commandLine = command.join(' ').toStdWString();
-    auto environment = QProcessEnvironment::systemEnvironment();
     environment.insert("TERM", "xterm-256color");
     auto environmentEntries = environment.toStringList();
     environmentEntries.sort(Qt::CaseInsensitive);
@@ -217,7 +217,6 @@ bool SshProcess::start(const QString &program, const QStringList &arguments, con
     return true;
 #else
     impl->process = new QProcess(this);
-    auto environment = QProcessEnvironment::systemEnvironment();
     environment.insert("TERM", "xterm-256color");
     environment.insert("COLUMNS", QString::number(size.width()));
     environment.insert("LINES", QString::number(size.height()));

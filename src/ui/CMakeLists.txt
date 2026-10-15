@@ -5,10 +5,16 @@
 add_library(workbench_ui OBJECT
     window.cpp
     window.h
+    instrument_config.cpp
+    instrument_config.h
+    json_tools.cpp
+    json_tools.h
     update_service.cpp
     update_service.h
     update_dialog.cpp
     update_dialog.h
+    ssh_dialogs.cpp
+    ssh_dialogs.h
     file_transfer_dialog.cpp
     file_transfer_dialog.h
     agent_config.cpp
@@ -17,6 +23,7 @@ add_library(workbench_ui OBJECT
     agent_panel.h
     controls.cpp
     wave_plot.cpp
+    wave_settings.cpp
     controls.h
     terminal.cpp
     terminal.h
@@ -52,4 +59,5 @@ qt_add_resources(workbench_ui workbench_assets
         "${asset_root}/fonts/fusion-pixel-8px-monospaced-zh_hans.otf"
         "${asset_root}/fonts/fusion-pixel-12px-monospaced-zh_hans.otf"
         "${asset_root}/fonts/OFL.txt"
+        "${asset_root}/translations/qtbase_zh_CN.qm"
 )

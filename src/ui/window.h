@@ -17,15 +17,20 @@ public:
     Instrument(const QString &kind, QWidget *parent = nullptr);
     QString kind;
     QPointer<Window> helpWindow;
-    QCheckBox *freeze = nullptr;
+    IconButton *freeze = nullptr;
     QSpinBox *points = nullptr;
     QCheckBox *waveFollow = nullptr;
     QCheckBox *waveXAxis = nullptr;
     QCheckBox *waveYAxis = nullptr;
     WavePlot *plot = nullptr;
+    QPushButton *valuesToggle = nullptr;
+    QWidget *valuesPanel = nullptr;
+    Splitter *waveSplit = nullptr;
+    QList<int> valuesSizes {760, 320};
+    QJsonObject valuesSnapshot;
     QTreeWidget *table = nullptr;
     QPlainTextEdit *detail = nullptr;
-    Combo *parser = nullptr;
+    bool isStructured() const { return kind == "json" || kind == "xml"; }
     Combo *source = nullptr;
     QLabel *info = nullptr;
     QLineEdit *filter = nullptr;
@@ -33,6 +38,7 @@ public:
     QPointer<Channel> waveChannel;
     QTimer frameTimer;
     void tick(Channel *channel);
+    void refreshValues(Channel *channel);
     QJsonObject settings() const;
     void showEvent(QShowEvent *event) override;
     void hideEvent(QHideEvent *event) override;

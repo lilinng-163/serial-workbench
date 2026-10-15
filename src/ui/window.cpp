@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "window.h"
+#include "instrument_config.h"
+#include "json_tools.h"
 #include "ssh_profiles.h"
 #include "parameter_grip.h"
 #include "agent_config.h"
 #include "agent_panel.h"
 #include "file_transfer_dialog.h"
 #include "update_dialog.h"
+#include "ssh_dialogs.h"
 #include <QFileInfo>
 #include <QProcess>
 #include <QProgressBar>
@@ -53,6 +56,7 @@ static QPushButton *button(const QString &text, const QString &name = {})
 {
     auto result = new QPushButton(text);
     result->setObjectName(name);
+    result->setProperty("variant", name);
     result->setCursor(Qt::PointingHandCursor);
     return result;
 }
@@ -236,7 +240,7 @@ public:
     }
 };
 
-Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), kind(type)
+Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), kind(type == "values" ? "waveform" : type == "structured" ? "json" : type)
 {
     setObjectName("page");
     auto body = new QVBoxLayout(this);
@@ -251,7 +255,14 @@ Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), 
     sourceRow->addStretch();
     body->addLayout(sourceRow);
     auto tools = horizontal();
-    freeze = new QCheckBox("冻结显示");
+    freeze = new IconButton("pause", "暂停显示，后台继续接收");
+    freeze->setObjectName("pauseInstrumentDisplay");
+    freeze->setCheckable(true);
+    connect(freeze, &QAbstractButton::toggled, this, [this](bool paused)
+    {
+        freeze->setToolTip(paused ? "继续显示，后台仍在接收" : "暂停显示，后台继续接收");
+        freeze->setAccessibleName(freeze->toolTip());
+    });
     tools->addWidget(freeze);
     tools->addStretch();
     body->addLayout(tools);
@@ -263,6 +274,8 @@ Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), 
         points->setToolTip("保留的采样上限；滚轮调整可见范围");
         points->setFixedWidth(112);
         auto fit = button("自动缩放");
+        auto waveSettings = button("波形设置");
+        waveSettings->setObjectName("waveSettings");
         auto help = button("数据格式");
         waveFollow = new QCheckBox("跟随最新");
         waveFollow->setChecked(true);
@@ -270,8 +283,10 @@ Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), 
         tools->addWidget(waveFollow);
         tools->addWidget(points);
         tools->addWidget(fit);
+        tools->addWidget(waveSettings);
         tools->addWidget(help);
         plot = new WavePlot();
+        connect(waveSettings, &QPushButton::clicked, plot, &WavePlot::openPlotSettings);
         waveXAxis = new QCheckBox("X 轴");
         waveYAxis = new QCheckBox("Y 轴");
         waveXAxis->setObjectName("waveXAxis");
@@ -284,7 +299,57 @@ Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), 
         sourceRow->addWidget(waveYAxis);
         connect(waveXAxis, &QCheckBox::toggled, plot, &WavePlot::setXAxisVisible);
         connect(waveYAxis, &QCheckBox::toggled, plot, &WavePlot::setYAxisVisible);
-        body->addWidget(plot, 1);
+        valuesToggle = button("实时数值");
+        valuesToggle->setObjectName("waveValuesToggle");
+        valuesToggle->setCheckable(true);
+        valuesToggle->setToolTip("显示或隐藏波形页内的实时数值面板");
+        tools->insertWidget(1, valuesToggle);
+        valuesPanel = new QFrame();
+        valuesPanel->setObjectName("waveValuesPanel");
+        valuesPanel->setMinimumWidth(260);
+        auto panelBody = new QVBoxLayout(valuesPanel);
+        panelBody->setContentsMargins(10, 8, 6, 6);
+        auto heading = horizontal();
+        heading->addWidget(label("实时数值"));
+        heading->addStretch();
+        auto close = new IconButton("close", "隐藏实时数值面板");
+        heading->addWidget(close);
+        panelBody->addLayout(heading);
+        table = new QTreeWidget();
+        table->setObjectName("waveValues");
+        table->setRootIsDecorated(false);
+        table->setUniformRowHeights(true);
+        table->setAlternatingRowColors(true);
+        table->setHeaderLabels({"变量", "当前值", "来源", "采样序号"});
+        table->setColumnWidth(0, 115);
+        table->setColumnWidth(1, 135);
+        table->setColumnWidth(2, 80);
+        table->setColumnHidden(2, true);
+        table->setColumnHidden(3, true);
+        table->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+        table->header()->setSectionResizeMode(1, QHeaderView::Stretch);
+        panelBody->addWidget(table, 1);
+        waveSplit = new Splitter(Qt::Horizontal);
+        waveSplit->setObjectName("waveValuesSplitter");
+        waveSplit->addWidget(plot);
+        waveSplit->addWidget(valuesPanel);
+        waveSplit->setStretchFactor(0, 3);
+        waveSplit->setStretchFactor(1, 1);
+        valuesPanel->hide();
+        body->addWidget(waveSplit, 1);
+        connect(valuesToggle, &QPushButton::toggled, this, [this](bool visible)
+        {
+            if (!visible) { valuesSizes = waveSplit->sizes(); }
+            valuesPanel->setVisible(visible);
+            if (visible)
+            {
+                waveSplit->setSizes(valuesSizes);
+                valuesSnapshot = {};
+                if (!freeze->isChecked()) { refreshValues(waveChannel); }
+            }
+        });
+        connect(close, &QAbstractButton::clicked, valuesToggle, &QPushButton::click);
+        if (type == "values") { valuesToggle->setChecked(true); }
         connect(waveFollow, &QCheckBox::toggled, plot, &WavePlot::setFollowLatest);
         connect(plot, &WavePlot::followLatestChanged, waveFollow, &QCheckBox::setChecked);
         frameTimer.setTimerType(Qt::PreciseTimer);
@@ -293,7 +358,7 @@ Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), 
         {
             if (isVisible() && !window()->isMinimized()) { tick(waveChannel); }
         });
-        connect(freeze, &QCheckBox::toggled, this, [this](bool frozen)
+        connect(freeze, &QAbstractButton::toggled, this, [this](bool frozen)
         {
             if (frozen) { frameTimer.stop(); }
             else if (isVisible()) { frameTimer.start(); tick(waveChannel); }
@@ -318,52 +383,48 @@ Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), 
         table->setAlternatingRowColors(true);
         table->setUniformRowHeights(true);
         table->header()->setStretchLastSection(true);
-        if (kind == "values")
+        filter = new SearchBox();
+        filter->setPlaceholderText("筛选解析记录");
+        filter->setMinimumWidth(100);
+        filter->setMaximumWidth(210);
+        sourceRow->addWidget(filter);
+        connect(filter, &QLineEdit::textChanged, this, [this](const QString &text)
         {
-            table->setHeaderLabels({"变量", "当前值", "来源", "采样序号"});
-            table->setColumnWidth(0, 200);
-            table->setColumnWidth(1, 150);
-            table->setColumnWidth(2, 180);
-            body->addWidget(table, 1);
-        }
-        else
+            for (int index = 0; index < table->topLevelItemCount(); ++index)
+            {
+                auto item = table->topLevelItem(index);
+                item->setHidden(!item->data(0, Qt::UserRole).toJsonObject()["text"].toString().contains(text, Qt::CaseInsensitive));
+            }
+        });
+        if (kind == "json")
         {
-            parser = combo({"JSON / XML", "仅 JSON", "仅 XML"});
-            parser->setToolTip("显示串口按 JSON 或 XML 格式发送的数据");
-            parser->setMinimumWidth(145);
-            filter = new SearchBox();
-            filter->setPlaceholderText("筛选解析记录");
-            filter->setMinimumWidth(100);
-            filter->setMaximumWidth(210);
-            sourceRow->addWidget(filter);
-            connect(filter, &QLineEdit::textChanged, this, [this](const QString &text)
+            auto assistant = button("JSON 助手");
+            assistant->setObjectName("jsonAssistant");
+            tools->addWidget(assistant);
+            connect(assistant, &QPushButton::clicked, this, [this]
             {
-                for (int i = 0; i < table->topLevelItemCount(); ++i)
-                {
-                    auto item = table->topLevelItem(i);
-                    item->setHidden(!item->data(0, Qt::UserRole).toJsonObject()["text"].toString().contains(text, Qt::CaseInsensitive));
-                }
-            });
-            tools->addWidget(label("解析格式", "muted"));
-            tools->addWidget(parser);
-            table->setHeaderLabels({"时间", "格式", "来源", "内容"});
-            table->setColumnWidth(0, 130);
-            table->setColumnWidth(1, 80);
-            table->setColumnWidth(2, 150);
-            detail = new QPlainTextEdit();
-            detail->setReadOnly(true);
-            auto split = new Splitter(Qt::Vertical);
-            split->addWidget(table);
-            split->addWidget(detail);
-            split->setSizes({360, 200});
-            body->addWidget(split, 1);
-            connect(table, &QTreeWidget::currentItemChanged, this, [this](QTreeWidgetItem *current)
-            {
-                detail->setPlainText(current ? current->data(0, Qt::UserRole).toJsonObject()["pretty"].toString() : QString());
+                const auto item = table->currentItem();
+                const auto text = item ? item->data(0, Qt::UserRole).toJsonObject()["text"].toString() : QString();
+                showJsonAssistant(this, text);
             });
         }
+        table->setHeaderLabels({"时间", "格式", "来源", "内容"});
+        table->setColumnWidth(0, 130);
+        table->setColumnWidth(1, 80);
+        table->setColumnWidth(2, 150);
+        detail = new QPlainTextEdit();
+        detail->setReadOnly(true);
+        auto split = new Splitter(Qt::Vertical);
+        split->addWidget(table);
+        split->addWidget(detail);
+        split->setSizes({360, 200});
+        body->addWidget(split, 1);
+        connect(table, &QTreeWidget::currentItemChanged, this, [this](QTreeWidgetItem *current)
+        {
+            detail->setPlainText(current ? current->data(0, Qt::UserRole).toJsonObject()["pretty"].toString() : QString());
+        });
     }
-    info = label(kind == "values" ? "显示每个来源的最新数值，后台持续采集" : "等待设备数据", "muted");
+    info = label("等待设备数据", "muted");
     body->addWidget(info);
 }
 
@@ -387,10 +448,13 @@ QJsonObject Instrument::settings() const
         result["points"] = points->value();
         result["x_axis"] = waveXAxis->isChecked();
         result["y_axis"] = waveYAxis->isChecked();
+        result["wave_presentation"] = plot->presentationSettings();
     }
-    if (parser)
+    if (valuesToggle)
     {
-        result["parser"] = parser->currentIndex();
+        result["show_values"] = valuesToggle->isChecked();
+        const auto sizes = valuesToggle->isChecked() ? waveSplit->sizes() : valuesSizes;
+        result["values_sizes"] = QJsonArray {sizes.value(0, 760), sizes.value(1, 320)};
     }
     return result;
 }
@@ -412,26 +476,8 @@ void Instrument::tick(Channel *channel)
             count += source->count;
             rejected += source->rejected;
         }
+        if (valuesToggle->isChecked()) { refreshValues(channel); }
         info->setText(QString("%1 个采样    %2 条曲线    格式错误 %3 帧").arg(count).arg(plot->series.size()).arg(rejected));
-    }
-    else if (kind == "values")
-    {
-        table->clear();
-        const auto sources = channel->waveform(1)["sources"].toObject();
-        for (auto source = sources.begin(); source != sources.end(); ++source)
-        {
-            const auto samples = source.value().toObject()["samples"].toArray();
-            if (samples.isEmpty())
-            {
-                continue;
-            }
-            const auto sample = samples.last().toObject();
-            const auto values = sample["values"].toObject();
-            for (auto value = values.begin(); value != values.end(); ++value)
-            {
-                new QTreeWidgetItem(table, {value.key(), QLocale::c().toString(value.value().toDouble(), 'g', QLocale::FloatingPointShortest), source.key() == "default" ? "本连接" : source.key(), QString::number(sample["index"].toInteger())});
-            }
-        }
     }
     else
     {
@@ -443,7 +489,7 @@ void Instrument::tick(Channel *channel)
             for (const auto &value : batch["records"].toArray())
             {
                 const auto record = value.toObject();
-                if ((parser->currentIndex() == 1 && record["format"] != "json") || (parser->currentIndex() == 2 && record["format"] != "xml"))
+                if (record["format"].toString() != kind)
                 {
                     continue;
                 }
@@ -499,6 +545,10 @@ Pane::Pane(Window *owner, const QString &instrumentKind) : QWidget(owner), windo
     {
         instrument = new Instrument(instrumentKind, this);
         instrument->helpWindow = window->rootWindow();
+        if (instrument->plot)
+        {
+            connect(instrument->plot, &WavePlot::presentationChanged, this, [this] { window->saveSettings(); });
+        }
         body->addWidget(instrument, 1);
         connect(instrument->source, &QComboBox::activated, this, [this](int index)
         {
@@ -520,10 +570,9 @@ Pane::Pane(Window *owner, const QString &instrumentKind) : QWidget(owner), windo
             if (window->active == this) { window->syncParameterPane(true); }
             window->updateStatus();
         });
-        if (instrument->parser)
+        if (instrument->valuesToggle)
         {
-            // Parse both formats once; each page filters independently.
-            connect(instrument->parser, &QComboBox::currentIndexChanged, this, [this] { enableParser(); });
+            connect(instrument->valuesToggle, &QPushButton::clicked, this, [this] { window->saveSettings(); });
         }
         applyAppearance();
         return;
@@ -826,6 +875,7 @@ void Pane::setChannel(Channel *value)
     if (instrument && channel != value)
     {
         instrument->cursors = {};
+        instrument->valuesSnapshot = {};
         if (instrument->table) { instrument->table->clear(); }
         if (instrument->detail) { instrument->detail->clear(); }
         if (instrument->plot) { instrument->plot->setSamples({}); }
@@ -871,7 +921,7 @@ void Pane::setChannel(Channel *value)
 
 void Pane::enableParser()
 {
-    if (instrument && instrument->parser && channel)
+    if (instrument && instrument->isStructured() && channel)
     {
         auto sourcePane = window->findPane(channel);
         const QString encoding = sourcePane ? sourcePane->encoding->currentText() : "utf-8";
@@ -889,7 +939,7 @@ void Pane::refreshSource()
     const QSignalBlocker blocker(source);
     source->clear();
     source->addItem("选择数据来源", QString());
-    const bool structured = instrument->kind == "structured";
+    const bool structured = instrument->isStructured();
     const auto demo = structured ? Config::structuredDemo() : Config::waveformDemo();
     int demoIndex = -1;
     if (instrument->plot || structured)
@@ -901,8 +951,19 @@ void Pane::refreshSource()
         if (sourceKey == demo.key()) { source->setCurrentIndex(demoIndex); }
     }
     Channel *selected = nullptr;
+    const auto serialAvailable = [this](const QString &key)
+    {
+        if (key == "serial:loop://") { return true; }
+        for (const auto &value : window->lastPorts)
+        {
+            if ("serial:" + value.toObject()["port"].toString().toLower() == key) { return true; }
+        }
+        return false;
+    };
     for (auto candidate : window->engine->channels)
     {
+        if (candidate->config.kind == "serial" && candidate->state != "connected"
+            && !serialAvailable(candidate->config.key())) { continue; }
         if ((structured && candidate->config.kind == "demo" && !candidate->config.isStructuredDemo())
             || (!structured && candidate->config.isStructuredDemo())) { continue; }
         int index = demoIndex;
@@ -919,13 +980,15 @@ void Pane::refreshSource()
             source->setCurrentIndex(index);
         }
     }
-    if (!sourceKey.isEmpty() && !selected && !(demoIndex >= 0 && sourceKey == demo.key()))
+    const bool missingSerial = sourceKey.startsWith("serial:") && !selected && !serialAvailable(sourceKey);
+    if (!sourceKey.isEmpty() && !selected && !missingSerial && !(demoIndex >= 0 && sourceKey == demo.key()))
     {
         const auto name = sourceKey.startsWith("serial:") ? sourceKey.mid(7).toUpper() : sourceKey;
         source->addItem(name + " · 未建立连接", sourceKey);
         source->setCurrentIndex(source->count() - 1);
     }
-    source->setToolTip(sourceKey == demo.key() ? (structured ? "独立 JSON/XML 演示 · 每秒更新 · 不占用串口"
+    source->setToolTip(missingSerial ? "之前选择的串口当前不可用；连接设备后可重新选择"
+        : sourceKey == demo.key() ? (structured ? "独立 JSON/XML 演示 · 每秒更新 · 不占用串口"
         : "本地演示波形 · 50 Hz · 不占用串口")
         : sourceKey.isEmpty() ? (instrument->plot || structured ? "选择 Demo 预览，或选择已建立的设备连接"
             : "从收发页面建立连接后，在这里选择数据来源") : sourceKey);
@@ -957,6 +1020,11 @@ void Pane::applyAppearance()
         .arg(window->dataFont.italic() ? "italic" : "normal");
     if (instrument)
     {
+        for (auto control : instrument->findChildren<IconButton *>())
+        {
+            control->theme = window->theme;
+            control->update();
+        }
         if (instrument->plot)
         {
             instrument->plot->theme = window->theme;
@@ -1327,10 +1395,19 @@ void Pane::restore(const QJsonObject &settings)
             instrument->points->setValue(settings["points"].toInt(1000));
             instrument->waveXAxis->setChecked(settings["x_axis"].toBool(true));
             instrument->waveYAxis->setChecked(settings["y_axis"].toBool(true));
+            instrument->plot->restorePresentation(settings["wave_presentation"].toObject());
         }
-        if (instrument->parser) { instrument->parser->setCurrentIndex(qBound(0, settings["parser"].toInt(), 2)); }
+        if (instrument->valuesToggle)
+        {
+            const auto sizes = settings["values_sizes"].toArray();
+            if (sizes.size() == 2 && sizes[0].toInt() > 0 && sizes[1].toInt() > 0)
+            {
+                instrument->valuesSizes = {sizes[0].toInt(), sizes[1].toInt()};
+            }
+            instrument->valuesToggle->setChecked(settings["show_values"].toBool());
+        }
         sourceKey = settings["source_key"].toString();
-        if (instrument->kind == "structured" && sourceKey.startsWith("demo:")
+        if (instrument->isStructured() && sourceKey.startsWith("demo:")
             && sourceKey != Config::structuredDemo().key())
         {
             sourceKey = Config::structuredDemo().key();
@@ -1448,7 +1525,16 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     }
     if (!primary)
     {
+        connect(engine, &Engine::sshPromptRequested, this, [this](SshAuthPrompt *prompt)
+        {
+            showSshAuthPrompt(prompt, this, theme);
+        });
         engine->allowControl = saved["allow_ai_control"].toBool();
+        const auto protocols = saved["mcp_protocols"].toObject();
+        for (const auto &kind : {"serial", "tcp", "udp", "ssh"})
+        {
+            mcp->setProtocolEnabled(kind, protocols.value(kind).toBool(true));
+        }
     }
     else
     {
@@ -1641,6 +1727,20 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     {
         edit->setToolTip("留空时使用 ~/.ssh/config 中的设置");
     }
+    auto clearSsh = button("清除 SSH 缓存", "outline");
+    clearSsh->setObjectName("sshClearCache");
+    clearSsh->setToolTip("清除当前主机保存的密码及指纹记录，重新进行连接认证");
+    clearSsh->setEnabled(!sshTarget->currentText().trimmed().isEmpty());
+    connect(sshTarget->lineEdit(), &QLineEdit::textChanged, clearSsh, [clearSsh](const QString &text)
+    {
+        clearSsh->setEnabled(!text.trimmed().isEmpty());
+    });
+    connect(clearSsh, &QPushButton::clicked, this, [this]
+    {
+        try { clearSshCache(form(), engine, this, theme); }
+        catch (const std::exception &exception) { error(QString::fromUtf8(exception.what())); }
+    });
+    sshBody->addWidget(clearSsh);
     configStack->addWidget(sshPanel);
     refreshSshProfiles();
     sshConfigTimer.setInterval(500);
@@ -1879,7 +1979,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
         {
             restoreInstruments(view.value().toObject(), view.key());
         }
-        for (const auto &value : saved["widget_pages"].toArray())
+        for (const auto &value : migrateInstrumentPages(saved["widget_pages"].toArray()))
         {
             const auto settings = value.toObject();
             auto page = newInstrument(settings["kind"].toString(), nullptr, false, settings["source_key"].toString());
@@ -2045,7 +2145,8 @@ Pane *Window::newConnection()
 
 Pane *Window::newInstrument(const QString &kind, Channel *source, bool activatePage, const QString &pendingKey)
 {
-    if (!QStringList {"waveform", "values", "structured"}.contains(kind))
+    const QString canonical = kind == "values" ? "waveform" : kind == "structured" ? "json" : kind;
+    if (!QStringList {"waveform", "json", "xml"}.contains(canonical))
     {
         return nullptr;
     }
@@ -2053,8 +2154,8 @@ Pane *Window::newInstrument(const QString &kind, Channel *source, bool activateP
     {
         try
         {
-            if (kind == "structured" && !source->config.isStructuredDemo()) { source = engine->structuredDemo(); }
-            else if (kind != "structured" && source->config.isStructuredDemo()) { source = engine->waveformDemo(); }
+            if ((canonical == "json" || canonical == "xml") && !source->config.isStructuredDemo()) { source = engine->structuredDemo(); }
+            else if (canonical == "waveform" && source->config.isStructuredDemo()) { source = engine->waveformDemo(); }
         }
         catch (const std::exception &failure)
         {
@@ -2064,7 +2165,7 @@ Pane *Window::newInstrument(const QString &kind, Channel *source, bool activateP
     }
     auto previous = active;
     auto page = new Pane(this, kind);
-    const QString baseTitle = kind == "waveform" ? "数值波形" : kind == "values" ? "实时数值" : "JSON / XML";
+    const QString baseTitle = canonical == "waveform" ? "数值波形" : canonical.toUpper();
     QStringList titles;
     for (auto host : rootWindow()->hosts)
     {
@@ -2099,8 +2200,8 @@ QMenu *Window::newPageMenu()
     menu->addSeparator();
     auto widgets = menu->addMenu(icon("widgets", theme.text), "新建控件页面");
     widgets->setObjectName("newWidgetPage");
-    const QStringList kinds {"waveform", "values", "structured"};
-    const QStringList titles {"数值波形", "实时数值", "JSON / XML"};
+    const QStringList kinds {"waveform", "json", "xml"};
+    const QStringList titles {"数值波形", "JSON", "XML"};
     for (int i = 0; i < kinds.size(); ++i)
     {
         const auto kind = kinds[i];
@@ -2129,6 +2230,14 @@ void Window::restoreInstruments(const QJsonObject &settings, const QString &sour
     {
         controls.append(QJsonObject {{"kind", "structured"}, {"parser", settings["parser"].toInt() - 1}});
     }
+    QJsonArray pending;
+    for (const auto &entry : controls)
+    {
+        auto object = entry.toObject();
+        object["source_key"] = sourceKey;
+        pending.append(object);
+    }
+    controls = migrateInstrumentPages(pending);
     // Preserve repeated widgets while avoiding duplicate migrations on reconnect.
     QMap<QString, int> occurrences;
     for (const auto &value : controls)
@@ -2463,6 +2572,13 @@ void Window::refreshPorts()
     if (parameterPane && !parameterPane->channel)
     {
         parameterPane->draft.port = next;
+    }
+    if (changed)
+    {
+        for (auto pane : panes)
+        {
+            if (pane->instrument) { pane->refreshSource(); }
+        }
     }
     updateStatus();
 }
@@ -3060,6 +3176,7 @@ void Window::saveSettings()
     {
         file.write(QJsonDocument(QJsonObject {{"connection", connection}, {"appearance", appearance}, {"views", viewSettings},
             {"widget_pages", widgetPages}, {"templates", templates}, {"allow_ai_control", engine->allowControl},
+            {"mcp_protocols", mcp->protocolAccess()},
             {"settings_geometry", saved["settings_geometry"]}, {"mcp_port", mcp->isListening() ? int(mcp->serverPort()) : saved["mcp_port"].toInt(8765)}}).toJson(QJsonDocument::Indented));
         if (!file.commit())
         {
@@ -3288,6 +3405,14 @@ void Window::openSettings()
     font->setObjectName("dataFontChoice");
     connect(font, &QPushButton::clicked, this, [this, font]
     {
+        // Keep standard dialog labels Chinese in standalone installations too.
+        // Qt removes this scoped translator when the dialog has closed.
+        QTranslator translations;
+        if (translations.load(":/translations/qtbase_zh_CN.qm"))
+        {
+            QCoreApplication::installTranslator(&translations);
+        }
+
         QFontDialog dialog(dataFont, settingsDialog);
         dialog.setOption(QFontDialog::DontUseNativeDialog);
         dialog.setWindowTitle("数据字体");
@@ -3378,6 +3503,36 @@ void Window::openSettings()
         saveSettings();
     });
     mcpBody->addWidget(permission);
+    auto protocolRow = horizontal();
+    protocolRow->addWidget(label("向 AI 开放"));
+    const QStringList protocolKinds {"serial", "tcp", "udp", "ssh"};
+    const QStringList protocolTitles {"串口", "TCP", "UDP", "SSH"};
+    for (int i = 0; i < protocolKinds.size(); ++i)
+    {
+        const auto kind = protocolKinds[i];
+        auto enabled = new QCheckBox(protocolTitles[i]);
+        enabled->setObjectName("mcpAccess_" + kind);
+        enabled->setChecked(mcp->protocolEnabled(kind));
+        enabled->setToolTip(kind == "tcp"
+            ? "允许 AI 读取和访问 TCP 客户端、服务端会话"
+            : "允许 AI 读取和访问此协议的会话");
+        connect(enabled, &QCheckBox::toggled, this, [this, kind](bool checked)
+        {
+            mcp->setProtocolEnabled(kind, checked);
+            saveSettings();
+        });
+        connect(mcp, &McpServer::protocolAccessChanged, enabled, [this, enabled, kind]
+        {
+            const QSignalBlocker blocker(enabled);
+            enabled->setChecked(mcp->protocolEnabled(kind));
+        });
+        protocolRow->addWidget(enabled);
+    }
+    protocolRow->addStretch();
+    mcpBody->addLayout(protocolRow);
+    auto protocolHint = label("关闭后，AI 无法查看该协议的连接、历史和解析结果，也无法操作连接。本地连接不受影响。", "muted");
+    protocolHint->setWordWrap(true);
+    mcpBody->addWidget(protocolHint);
     mcpSummary = label("界面与 AI 共享同一连接，各自读取，不会消耗对方的数据。", "muted");
     mcpSummary->setWordWrap(true);
 
@@ -3463,7 +3618,7 @@ void Window::openSettings()
                                 "自动识别串口插拔，读取 SSH 主机配置，支持密钥登录。");
     addFeature(1, "收发与终端", "文本 / HEX 收发、搜索、日志导出与循环发送。\n"
                                   "ANSI 交互终端，支持中文输入、复制粘贴与快捷键。");
-    addFeature(2, "数据控件", "数值波形 · 实时数值 · JSON / XML 解析\n"
+    addFeature(2, "数据控件", "数值波形与实时数值面板 · JSON、XML 独立解析\n"
                                 "自定义帧由 C 风格脚本解析，在收发页独立展示。");
     addFeature(3, "标签与窗口", "标签重命名、拖动排序、分离为独立窗口与重新停靠。");
     addFeature(4, "AI / MCP", "HTTP / STDIO 共享会话，界面与 AI 各自读取同一份数据。\n"

@@ -23,7 +23,7 @@ $stageRoot = Join-Path $repoRoot ('build/' + $stageName)
 $payload = Join-Path $stageRoot 'SerialWorkbench'
 New-Item -ItemType Directory -Path $payload, $outputPath -Force | Out-Null
 
-foreach ($name in 'SerialWorkbench.exe', 'SerialWorkbenchMCP.exe')
+foreach ($name in 'SerialWorkbench.exe', 'SerialWorkbenchMCP.exe', 'SerialWorkbenchSSHAskpass.exe')
 {
     Copy-Item -LiteralPath (Join-Path $packagePath $name) -Destination $payload
 }
@@ -46,7 +46,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $payload 'platforms/qwindows.dll')))
 # Retain license texts and original attribution notices for the bundled Qt modules.
 $qtNotices = Join-Path $payload 'licenses/Qt'
 New-Item -ItemType Directory -Path $qtNotices -Force | Out-Null
-foreach ($module in 'qtbase', 'qt5compat', 'qtsvg')
+foreach ($module in 'qtbase', 'qt5compat', 'qtsvg', 'qttranslations')
 {
     $moduleRoot = Join-Path $qtSources $module
     if (-not (Test-Path -LiteralPath (Join-Path $moduleRoot 'LICENSES')))
@@ -85,7 +85,7 @@ SerialWorkbenchMCP.exe 是供 AI 客户端调用的 STDIO 桥。
 首次启动默认端口 NULL，不会自动连接硬件。
 
 项目源码与许可证：https://github.com/lilinng-163/serial-workbench
-Qt 来源：https://code.qt.io/ （qtbase、qt5compat、qtsvg）
+Qt 来源：https://code.qt.io/ （qtbase、qt5compat、qtsvg、qttranslations）
 项目采用 Apache-2.0；第三方许可证保留在 licenses 目录。
 "@
 [IO.File]::WriteAllText((Join-Path $payload 'README.txt'), $instructions, [Text.UTF8Encoding]::new($false))

@@ -135,11 +135,15 @@ void Config::validate() const
 }
 
 QJsonObject Journal::append(const QString &id, const QString &direction, const QByteArray &data,
-    const QString &peer, const QString &message, bool reset)
+    const QString &peer, const QString &message, bool reset, const QString &protocol)
 {
     QJsonObject event {{"seq", ++sequence}, {"time", now()}, {"channel_id", id},
         {"direction", direction}, {"hex", QString::fromLatin1(data.toHex(' '))},
         {"text", QString::fromUtf8(data)}, {"size", data.size()}, {"peer", peer}, {"message", message}};
+    if (!protocol.isEmpty())
+    {
+        event["protocol"] = protocol;
+    }
     if (reset)
     {
         event["stream_reset"] = true;
@@ -155,7 +159,8 @@ QJsonObject Journal::append(const QString &id, const QString &direction, const Q
     return event;
 }
 
-QJsonObject Journal::read(qint64 after, int limit, const QString &id) const
+QJsonObject Journal::read(qint64 after, int limit, const QString &id,
+    const std::function<bool(const QJsonObject &)> &visible) const
 {
     if (after < 0 || limit < 1 || limit > 1000)
     {
@@ -166,7 +171,8 @@ QJsonObject Journal::read(qint64 after, int limit, const QString &id) const
     for (const auto &entry : events)
     {
         const auto &event = entry.first;
-        if (event["seq"].toInteger() > after && (id.isEmpty() || event["channel_id"].toString() == id))
+        if (event["seq"].toInteger() > after && (id.isEmpty() || event["channel_id"].toString() == id)
+            && (!visible || visible(event)))
         {
             if (page.size() >= limit)
             {
@@ -401,7 +407,7 @@ void Channel::status(const QString &value, const QString &message, bool reset)
 {
     state = value;
     error = value == "error" || value == "reconnecting" ? message : QString();
-    engine->journal.append(id, "status", {}, {}, message.isEmpty() ? value : message, reset);
+    engine->journal.append(id, "status", {}, {}, message.isEmpty() ? value : message, reset, config.kind);
     emit engine->channelsChanged();
     emit engine->eventAdded();
 }
@@ -436,10 +442,13 @@ void Channel::releaseTransport()
     }
     if (ssh)
     {
+        if (sshAuth) { sshAuth->stop(); }
         ssh->disconnect(this);
         ssh->stop();
         ssh->deleteLater();
     }
+    if (sshAuth) { sshAuth->deleteLater(); }
+    sshAuth = nullptr;
     for (auto socket : peers)
     {
         socket->disconnect(this);
@@ -671,7 +680,13 @@ void Channel::open()
         else if (config.kind == "ssh")
         {
             ssh = new SshProcess(this);
-            QStringList arguments {"-tt", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15",
+            sshAuth = new SshAuthSession(config, engine->sshCacheDirectory, this);
+            connect(sshAuth, &SshAuthSession::promptRequested, engine, &Engine::sshPromptRequested);
+            connect(sshAuth, &SshAuthSession::cancelled, this, [this]
+            {
+                QTimer::singleShot(0, this, [this] { close(); });
+            });
+            QStringList arguments {"-tt", "-o", "BatchMode=no", "-o", "StrictHostKeyChecking=ask", "-o", "ConnectTimeout=15",
                 "-o", "ServerAliveInterval=30", "-o", "ServerAliveCountMax=3"};
             if (!config.sshUser.isEmpty())
             {
@@ -729,7 +744,7 @@ void Channel::open()
                 }
             });
             status("connecting");
-            if (!ssh->start(engine->sshExecutable, arguments, terminalSize))
+            if (!ssh->start(engine->sshExecutable, arguments, terminalSize, sshAuth->environment()))
             {
                 status("error", ssh->errorString());
             }
@@ -783,7 +798,7 @@ void Channel::receive(const QByteArray &data, const QString &peer)
     }
     rx += data.size();
     const bool transferring = bool(transferOwner);
-    auto event = engine->journal.append(id, "rx", data, peer, transferring ? "file-transfer" : QString());
+    auto event = engine->journal.append(id, "rx", data, peer, transferring ? "file-transfer" : QString(), false, config.kind);
     emit bytesReceived(data);
     if (transferring)
     {
@@ -870,7 +885,7 @@ QJsonObject Channel::send(const QByteArray &data, const QString &peer, const QSt
     // Only the byte count is shared with journal readers.
     if (config.kind != "ssh")
     {
-        engine->journal.append(id, "tx", data, peer, origin);
+        engine->journal.append(id, "tx", data, peer, origin, false, config.kind);
     }
     emit engine->eventAdded();
     return {{"channel_id", id}, {"bytes_sent", written}, {"peer", peer}};
@@ -992,7 +1007,7 @@ void Channel::configureScript(const QString &code, bool enabled)
             scriptEnabled = false;
             scriptError = message;
             scriptProcessor->configure(nullptr);
-            engine->journal.append(id, "status", {}, {}, "脚本解析已停用：" + message);
+            engine->journal.append(id, "status", {}, {}, "脚本解析已停用：" + message, false, config.kind);
             emit engine->eventAdded();
             emit engine->channelsChanged();
         });

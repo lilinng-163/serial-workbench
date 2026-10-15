@@ -9,8 +9,10 @@
 #include <QtSerialPort>
 #include <QProcess>
 #include "ssh_process.h"
+#include "ssh_auth.h"
 #include <QTextCodec>
 #include <deque>
+#include <functional>
 
 namespace sw
 {
@@ -56,8 +58,9 @@ public:
     qsizetype bytes = 0;
     std::deque<QPair<QJsonObject, qsizetype>> events;
 
-    QJsonObject append(const QString &id, const QString &direction, const QByteArray &data = {}, const QString &peer = {}, const QString &message = {}, bool reset = false);
-    QJsonObject read(qint64 after, int limit = 200, const QString &id = {}) const;
+    QJsonObject append(const QString &id, const QString &direction, const QByteArray &data = {}, const QString &peer = {}, const QString &message = {}, bool reset = false, const QString &protocol = {});
+    QJsonObject read(qint64 after, int limit = 200, const QString &id = {},
+        const std::function<bool(const QJsonObject &)> &visible = {}) const;
 };
 
 struct Source
@@ -109,6 +112,7 @@ public:
     QTcpServer *listener = nullptr;
     QUdpSocket *udp = nullptr;
     SshProcess *ssh = nullptr;
+    SshAuthSession *sshAuth = nullptr;
     QSize terminalSize {120, 32};
     QString sshError;
     QMap<QString, QTcpSocket *> peers;
@@ -159,6 +163,7 @@ public:
     QMap<QString, Channel *> channels;
     bool allowControl = false;
     QString sshExecutable = "ssh";
+    QString sshCacheDirectory = SshCredentialCache::directory();
 
     Channel *open(const Config &config);
     Channel *waveformDemo();
@@ -173,6 +178,7 @@ public:
 signals:
     void channelsChanged();
     void eventAdded();
+    void sshPromptRequested(sw::SshAuthPrompt *prompt);
 };
 
 QString stateText(const QString &state);

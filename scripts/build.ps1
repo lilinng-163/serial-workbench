@@ -57,14 +57,14 @@ try
 
     if (-not $SkipPackage)
     {
-        $running = Get-Process SerialWorkbench,SerialWorkbenchMCP -ErrorAction SilentlyContinue |
+        $running = Get-Process SerialWorkbench,SerialWorkbenchMCP,SerialWorkbenchSSHAskpass -ErrorAction SilentlyContinue |
             Where-Object { $_.Path -and ([IO.Path]::GetDirectoryName($_.Path) -eq $destination) }
         if ($running) { throw 'Close the native workbench before packaging over its running executable.' }
 
         & $cmakePath --install $buildPath --prefix $destination
         if ($LASTEXITCODE) { throw 'Package installation failed' }
 
-        foreach ($executable in 'SerialWorkbench.exe', 'SerialWorkbenchMCP.exe')
+        foreach ($executable in 'SerialWorkbench.exe', 'SerialWorkbenchMCP.exe', 'SerialWorkbenchSSHAskpass.exe')
         {
             & "$QtRoot/bin/windeployqt.exe" --release --no-translations `
                 --no-system-d3d-compiler --no-opengl-sw (Join-Path $destination $executable)

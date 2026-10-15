@@ -26,7 +26,7 @@ int main(int argc, char *argv[])
     parser.addOption({"mcp-port", "Local MCP port", "port", "8765"});
     parser.addOption({"settings", "Settings file", "path", defaultSettings});
     parser.addOption({"demo", "Show generated example data"});
-    parser.addOption({"view", "Preview waveform, values, structured, settings, dark, search, terminal, ssh, detached, floating-wave, narrow or protocol", "name"});
+    parser.addOption({"view", "Preview waveform, json, xml, settings, dark, search, terminal, ssh, detached, floating-wave, narrow or protocol", "name"});
     parser.addOption({"screenshot", "Save window preview", "path"});
     parser.addOption({"ready-file", "Write startup timing", "path"});
     parser.addOption({"quit-after", "Close after milliseconds", "ms"});
@@ -92,7 +92,7 @@ int main(int argc, char *argv[])
                 window.tabs->setCurrentIndex(window.stack->indexOf(pane));
             }
         }
-        for (const auto &kind : QStringList {"waveform", "values", "structured"})
+        for (const auto &kind : QStringList {"waveform", "json", "xml"})
         {
             window.newInstrument(kind, channel, false);
         }
@@ -109,7 +109,9 @@ int main(int argc, char *argv[])
                 file.write(QJsonDocument(QJsonObject {{"elapsed_ms", startup.elapsed()}, {"pid", QCoreApplication::applicationPid()}, {"version", sw::Version}}).toJson());
             }
         }
-        const auto view = parser.value("view");
+        const auto requestedView = parser.value("view");
+        const auto view = requestedView == "structured" ? QString("json")
+            : requestedView == "values" ? QString("waveform") : requestedView;
         if (view == "agents")
         {
             window.openSettings();
@@ -155,6 +157,7 @@ int main(int argc, char *argv[])
             {
                 if (page->instrument && page->instrument->kind == (view == "floating-wave" ? "waveform" : view))
                 {
+                    if (requestedView == "values") { page->instrument->valuesToggle->setChecked(true); }
                     for (int i = 0; i < window.tabs->count(); ++i)
                     {
                         if (window.tabs->tabData(i).value<QObject *>() == page)

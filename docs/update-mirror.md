@@ -10,6 +10,8 @@
 
 **当前正进行 ICP 备案，已按用户要求停用 `lilinng-release-sync.timer`。网站内容、版本清单和安装包均保持当前状态。未经用户明确允许恢复，不运行同步或部署。**
 
+0.15.14 仅发布至 GitHub Release，不上传国内镜像、不更新网站和版本清单。客户端从可用镜像读到旧版本时不会再查询 GitHub，因此此次升级需从 GitHub Release 手动下载安装。
+
 恢复后，只需发布 `v<版本>` 正式 Release，附上 `SerialWorkbench-<版本>-windows-x64-setup.exe`，并在 Release 正文填写更新说明，服务器和网站即可自动更新。同步器不需要 GitHub 密钥。
 
 检查冻结状态：

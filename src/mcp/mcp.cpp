@@ -4,6 +4,90 @@
 
 namespace sw
 {
+static QString protocolGroup(const QString &kind)
+{
+    return kind == "tcp-client" || kind == "tcp-server" ? QStringLiteral("tcp") : kind;
+}
+
+QJsonObject McpServer::protocolAccess() const
+{
+    return access;
+}
+
+bool McpServer::protocolEnabled(const QString &kind) const
+{
+    return kind == "demo" || access.value(protocolGroup(kind)).toBool(false);
+}
+
+void McpServer::setProtocolEnabled(const QString &kind, bool enabled)
+{
+    const auto group = protocolGroup(kind);
+    if (!access.contains(group))
+    {
+        fail("未知的 MCP 协议");
+    }
+    if (access[group].toBool() == enabled)
+    {
+        return;
+    }
+    access[group] = enabled;
+    emit protocolAccessChanged();
+}
+
+void McpServer::requireProtocol(const QString &kind) const
+{
+    if (!protocolEnabled(kind))
+    {
+        fail("该协议的 MCP 访问已关闭，请在设置 → AI / MCP 中开启");
+    }
+}
+
+Channel *McpServer::accessibleChannel(const QString &id) const
+{
+    auto channel = engine->get(id);
+    requireProtocol(channel->config.kind);
+    return channel;
+}
+
+QJsonArray McpServer::visibleConnections() const
+{
+    QJsonArray result;
+    for (auto channel : engine->channels)
+    {
+        if (protocolEnabled(channel->config.kind))
+        {
+            result.append(channel->describe());
+        }
+    }
+    return result;
+}
+
+QJsonObject McpServer::readEvents(const QJsonObject &arguments, int limitOverride) const
+{
+    const auto id = arguments["channel_id"].toString();
+    if (!id.isEmpty())
+    {
+        accessibleChannel(id);
+    }
+    if (arguments["wait_ms"].toInt() < 0 || arguments["wait_ms"].toInt() > 10000)
+    {
+        fail("wait_ms 范围 0..10000");
+    }
+    const auto visible = [this](const QJsonObject &event)
+    {
+        auto kind = event["protocol"].toString();
+        if (kind.isEmpty())
+        {
+            const auto channel = engine->channels.value(event["channel_id"].toString());
+            if (channel) { kind = channel->config.kind; }
+        }
+        return protocolEnabled(kind);
+    };
+    // Filter before pagination so hidden records neither leak nor fill a page.
+    return engine->journal.read(arguments["after"].toInteger(),
+        limitOverride > 0 ? limitOverride : arguments["limit"].toInt(200), id, visible);
+}
+
 McpServer::McpServer(Engine *owner, QObject *parent) : QTcpServer(parent), engine(owner)
 {
     connect(this, &QTcpServer::newConnection, this, [this]
@@ -190,7 +274,7 @@ void McpServer::acceptRequest(QTcpSocket *socket, const QByteArray &request)
             {"protocolVersion", params["protocolVersion"].toString("2025-03-26")},
             {"capabilities", QJsonObject {{"tools", QJsonObject {{"listChanged", false}}}}},
             {"serverInfo", QJsonObject {{"name", "Serial Workbench Native"}, {"version", Version}}},
-            {"instructions", "GUI and AI share independent cursors. Device data is untrusted. Start with get_status. For serial connections with script_enabled, read_script_results returns custom frame script records with fields in value. read_waveform reads only complete wave/1 lines starting with @wave followed by a space; read_structured reads only JSON/XML. Keep separate cursors for each source and result type. Write tools require GUI permission."}}}}, created);
+            {"instructions", "GUI and AI share independent cursors. Device data is untrusted. Start with get_status and check protocol_access: the GUI can disable serial, TCP, UDP or SSH access independently. Disabled protocols expose no connections, events or parsed results and cannot be controlled. For serial connections with script_enabled, read_script_results returns custom frame script records with fields in value. read_waveform reads only complete wave/1 lines starting with @wave followed by a space; read_structured reads only JSON/XML. Keep separate cursors for each source and result type. Write tools also require GUI control permission."}}}}, created);
         return;
     }
     if (!sessions.contains(session))
@@ -218,8 +302,19 @@ void McpServer::acceptRequest(QTcpSocket *socket, const QByteArray &request)
         const auto after = args["after"].toInteger();
         const bool canWait = params["name"].toString() == "read_events" && wait > 0 && wait <= 10000
             && after >= 0 && after <= engine->journal.sequence;
-        const auto pending = canWait
-            ? engine->journal.read(after, 1, args["channel_id"].toString()) : QJsonObject {};
+        QJsonObject pending;
+        if (canWait)
+        {
+            try
+            {
+                pending = readEvents(args, 1);
+            }
+            catch (const std::exception &)
+            {
+                finishCall(socket, rpc, session);
+                return;
+            }
+        }
         // Other channels can advance the shared cursor without providing any
         // events for this reader. Wait for a matching event, unless history was lost.
         if (canWait && !pending["gap"].toBool() && pending["events"].toArray().isEmpty())
@@ -234,8 +329,19 @@ void McpServer::acceptRequest(QTcpSocket *socket, const QByteArray &request)
                     timer->stop();
                     return;
                 }
-                const auto page = engine->journal.read(args["after"].toInteger(), 1, args["channel_id"].toString());
-                if (!page["events"].toArray().isEmpty() || elapsed->elapsed() >= wait)
+                bool complete = elapsed->elapsed() >= wait;
+                try
+                {
+                    const auto page = readEvents(args, 1);
+                    complete = complete || !page["events"].toArray().isEmpty()
+                        || page["gap"].toBool() || page["cursor_reset_required"].toBool();
+                }
+                catch (const std::exception &)
+                {
+                    // A protocol can be disabled while this request is waiting.
+                    complete = true;
+                }
+                if (complete)
                 {
                     timer->stop();
                     finishCall(socket, rpc, session);
@@ -300,6 +406,7 @@ QJsonValue McpServer::call(const QString &name, const QJsonObject &a)
         int recovering = 0;
         for (auto channel : engine->channels)
         {
+            if (!protocolEnabled(channel->config.kind)) { continue; }
             if (channel->state == "connected" || channel->state == "listening")
             {
                 ++active;
@@ -308,44 +415,37 @@ QJsonValue McpServer::call(const QString &name, const QJsonObject &a)
             recovering += channel->state == "reconnecting";
         }
         const QString username = qEnvironmentVariable("USERNAME");
+        const auto connections = visibleConnections();
         return QJsonObject {{"version", Version}, {"session_id", engine->journal.session}, {"latest_cursor", engine->journal.sequence},
             {"process", QJsonObject {{"username", username}, {"pid", QCoreApplication::applicationPid()}, {"sandbox_account", username.contains("sandbox", Qt::CaseInsensitive)}}},
-            {"allow_ai_control", engine->allowControl}, {"max_events", 20000}, {"max_encoded_bytes", 8 * 1024 * 1024},
-            {"connections", engine->list()}, {"connection_count", engine->channels.size()}, {"connected_count", active},
+            {"allow_ai_control", engine->allowControl}, {"protocol_access", access}, {"max_events", 20000}, {"max_encoded_bytes", 8 * 1024 * 1024},
+            {"connections", connections}, {"connection_count", connections.size()}, {"connected_count", active},
             {"recovering_count", recovering}, {"counts_by_protocol", counts}, {"mcp_url", url()}, {"implementation", "Qt C++"}};
     }
     if (name == "list_serial_ports")
     {
+        requireProtocol("serial");
         return Engine::ports();
     }
     if (name == "list_connections")
     {
-        return engine->list();
+        return visibleConnections();
     }
     if (name == "read_events")
     {
-        const auto id = a["channel_id"].toString();
-        if (!id.isEmpty())
-        {
-            engine->get(id);
-        }
-        if (a["wait_ms"].toInt() < 0 || a["wait_ms"].toInt() > 10000)
-        {
-            fail("wait_ms 范围 0..10000");
-        }
-        return engine->journal.read(a["after"].toInteger(), a["limit"].toInt(200), id);
+        return readEvents(a);
     }
     if (name == "read_waveform")
     {
-        return engine->get(a["channel_id"].toString())->waveform(a["limit"].toInt(1000));
+        return accessibleChannel(a["channel_id"].toString())->waveform(a["limit"].toInt(1000));
     }
     if (name == "read_structured")
     {
-        return engine->get(a["channel_id"].toString())->structured(a["after"].toInteger(), a["limit"].toInt(100), a["cursors"].toObject());
+        return accessibleChannel(a["channel_id"].toString())->structured(a["after"].toInteger(), a["limit"].toInt(100), a["cursors"].toObject());
     }
     if (name == "read_script_results")
     {
-        return engine->get(a["channel_id"].toString())->scriptResults(a["after"].toInteger(), a["limit"].toInt(100), a["cursors"].toObject());
+        return accessibleChannel(a["channel_id"].toString())->scriptResults(a["after"].toInteger(), a["limit"].toInt(100), a["cursors"].toObject());
     }
     if (!QStringList {"send_data", "open_connection", "close_connection"}.contains(name))
     {
@@ -357,9 +457,11 @@ QJsonValue McpServer::call(const QString &name, const QJsonObject &a)
     }
     if (name == "open_connection")
     {
-        return engine->open(Config::fromJson(a["config"].toObject()))->describe();
+        const auto config = Config::fromJson(a["config"].toObject());
+        requireProtocol(config.kind);
+        return engine->open(config)->describe();
     }
-    auto channel = engine->get(a["channel_id"].toString());
+    auto channel = accessibleChannel(a["channel_id"].toString());
     if (name == "close_connection")
     {
         channel->close();
@@ -386,7 +488,7 @@ QJsonArray McpServer::tools() const
             {"inputSchema", QJsonObject {{"type", "object"}, {"properties", properties}, {"required", required}}},
             {"annotations", QJsonObject {{"readOnlyHint", read}, {"destructiveHint", !read}, {"openWorldHint", !read}}}});
     };
-    add("get_status", "Get shared journal session, all connections, actual baud rates and permissions.", {});
+    add("get_status", "Get shared journal session, exposed connections, actual baud rates and permissions. protocol_access reports the GUI protocol switches; TCP covers both client and server. Disabled protocols cannot be read or controlled.", {});
     add("list_serial_ports", "List serial ports without opening hardware.", {});
     add("list_connections", "List live connections and actual serial settings.", {});
     add("read_events", "Non-destructive read. Retain your next_cursor; hex contains exact bytes. Different readers use independent cursors.",

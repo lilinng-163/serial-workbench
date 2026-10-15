@@ -5,6 +5,7 @@
 #include <QSize>
 #include <QStringList>
 #include <QTimer>
+#include <QProcessEnvironment>
 #include <memory>
 
 namespace sw
@@ -15,7 +16,8 @@ class SshProcess : public QObject
 public:
     explicit SshProcess(QObject *parent = nullptr);
     ~SshProcess() override;
-    bool start(const QString &program, const QStringList &arguments, const QSize &size);
+    bool start(const QString &program, const QStringList &arguments, const QSize &size,
+        QProcessEnvironment environment = QProcessEnvironment::systemEnvironment());
     qint64 write(const QByteArray &data);
     void resize(const QSize &size);
     void stop();

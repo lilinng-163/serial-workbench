@@ -26,6 +26,7 @@ Section
     IfFileExists "$INSTDIR\.complete" 0 unpack
     IfFileExists "$INSTDIR\SerialWorkbench.exe" 0 unpack
     IfFileExists "$INSTDIR\SerialWorkbenchMCP.exe" 0 unpack
+    IfFileExists "$INSTDIR\SerialWorkbenchSSHAskpass.exe" 0 unpack
     IfFileExists "$INSTDIR\platforms\qwindows.dll" launch unpack
 
 unpack:

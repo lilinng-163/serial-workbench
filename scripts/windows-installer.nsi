@@ -62,7 +62,7 @@ UninstPage custom un.SettingsPage un.SettingsLeave
 Var RemoveSettings
 Var RemoveSettingsCheck
 
-; A running EXE cannot be opened exclusively for write. Check both programs
+; A running EXE cannot be opened exclusively for write. Check all programs
 ; before installing/removing any file rather than silently killing processes.
 !macro VerifyClosed PREFIX
 Function ${PREFIX}VerifyClosed
@@ -79,6 +79,15 @@ Function ${PREFIX}VerifyClosed
         System::Call 'kernel32::CreateFileW(w "$INSTDIR\SerialWorkbenchMCP.exe", i 0xC0000000, i 0, p 0, i 3, i 0, p 0) p.r0'
         ${If} $0 == -1
             MessageBox MB_OK|MB_ICONSTOP "MCP 桥接程序正在运行或文件不可写。请先在 Agent 中断开 MCP，再重试。" /SD IDOK
+            SetErrorLevel 2
+            Quit
+        ${EndIf}
+        System::Call 'kernel32::CloseHandle(p r0)'
+    ${EndIf}
+    ${If} ${FileExists} "$INSTDIR\SerialWorkbenchSSHAskpass.exe"
+        System::Call 'kernel32::CreateFileW(w "$INSTDIR\SerialWorkbenchSSHAskpass.exe", i 0xC0000000, i 0, p 0, i 3, i 0, p 0) p.r0'
+        ${If} $0 == -1
+            MessageBox MB_OK|MB_ICONSTOP "SSH 正在等待认证或文件不可写。请关闭 SSH 认证窗口和工作台，再重试。" /SD IDOK
             SetErrorLevel 2
             Quit
         ${EndIf}
@@ -182,9 +191,9 @@ Function un.SettingsPage
     !insertmacro MUI_HEADER_TEXT "个人设置" "选择是否保留工作台设置。"
     nsDialogs::Create 1018
     Pop $0
-    ${NSD_CreateLabel} 0 0 100% 36u "默认保留连接参数、页面布局和外观设置，以便重新安装后继续使用。"
+    ${NSD_CreateLabel} 0 0 100% 36u "默认保留连接参数、页面布局、外观设置和加密保存的 SSH 密码，以便重新安装后继续使用。"
     Pop $0
-    ${NSD_CreateCheckbox} 0 48u 100% 18u "同时删除当前用户的个人设置"
+    ${NSD_CreateCheckbox} 0 48u 100% 18u "同时删除当前用户的个人设置和保存的 SSH 密码"
     Pop $RemoveSettingsCheck
     nsDialogs::Show
 FunctionEnd
@@ -208,6 +217,9 @@ Section "Uninstall"
     DeleteRegKey HKCU "${REGISTRY_KEY}"
     ${If} $RemoveSettings == ${BST_CHECKED}
         Delete "$LOCALAPPDATA\SerialWorkbench\settings.json"
+        Delete "$LOCALAPPDATA\SerialWorkbench\ssh\*.json"
+        Delete "$LOCALAPPDATA\SerialWorkbench\ssh\*.lock"
+        RMDir "$LOCALAPPDATA\SerialWorkbench\ssh"
         RMDir "$LOCALAPPDATA\SerialWorkbench"
     ${EndIf}
 SectionEnd

@@ -11,7 +11,13 @@ if(WIN32)
 endif()
 target_link_libraries(SerialWorkbench PRIVATE workbench_ui)
 
-install(TARGETS SerialWorkbench
+qt_add_executable(SerialWorkbenchSSHAskpass ssh_askpass.cpp)
+workbench_configure_target(SerialWorkbenchSSHAskpass)
+target_link_libraries(SerialWorkbenchSSHAskpass PRIVATE Qt6::Network)
+add_dependencies(SerialWorkbench SerialWorkbenchSSHAskpass)
+add_dependencies(SerialWorkbench SerialWorkbenchSSHAskpass)
+
+install(TARGETS SerialWorkbench SerialWorkbenchSSHAskpass
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
     BUNDLE DESTINATION .
 )

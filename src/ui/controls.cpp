@@ -228,9 +228,9 @@ QString Theme::stylesheet() const
         QLabel#brandMark { color: #edaa50; font-family: "Segoe UI"; font-size: 16px; font-weight: 600; }
         QLabel#senderLabel { color: $muted; font-size: 13px; }
         QLabel#connectionHint { color: $muted; padding: 10px 0 0 0; border-top: 1px solid $line; }
-        QLineEdit, QComboBox, QSpinBox { background: $panel; border: 1px solid $line; border-bottom: 2px solid $edge; border-radius: 0; padding: 6px 10px; min-height: 24px; selection-background-color: $accent; selection-color: $onaccent; }
-        QLineEdit:hover, QComboBox:hover, QSpinBox:hover { border-color: $edge; border-bottom-color: $accent; }
-        QLineEdit:focus, QComboBox:focus, QSpinBox:focus { border-color: $accent; border-bottom-width: 2px; }
+        QLineEdit, QComboBox, QAbstractSpinBox { background: $panel; border: 1px solid $line; border-bottom: 2px solid $edge; border-radius: 0; padding: 6px 10px; min-height: 24px; selection-background-color: $accent; selection-color: $onaccent; }
+        QLineEdit:hover, QComboBox:hover, QAbstractSpinBox:hover { border-color: $edge; border-bottom-color: $accent; }
+        QLineEdit:focus, QComboBox:focus, QAbstractSpinBox:focus { border-color: $accent; border-bottom-width: 2px; }
         QComboBox#protocolSelector { background: $hover; border-color: $edge; padding: 8px 28px 8px 10px; }
         QComboBox#protocolSelector:focus { border-color: $accent; }
         QLineEdit#searchBox { padding: 5px 8px; background: $panel; }
@@ -241,10 +241,10 @@ QString Theme::stylesheet() const
         QComboBox QLineEdit, QComboBox QLineEdit:focus, QComboBox QLineEdit:hover { border: none; padding: 0; min-height: 0; background: transparent; }
         QComboBox QAbstractItemView { background: $panel; color: $text; border: none; selection-background-color: $hover; selection-color: $text; outline: none; padding: 4px; }
         QComboBox QAbstractItemView::item { min-height: 30px; padding: 4px 8px; }
-        QSpinBox { padding-right: 26px; }
-        QSpinBox::up-button, QSpinBox::down-button { width: 24px; border: none; border-left: 1px solid $line; }
-        QSpinBox::up-arrow { image: url(:/icons/chevron-up.svg); width: 10px; height: 6px; }
-        QSpinBox::down-arrow { image: url(:/icons/chevron-down.svg); width: 10px; height: 6px; }
+        QAbstractSpinBox { padding-right: 26px; }
+        QAbstractSpinBox::up-button, QAbstractSpinBox::down-button { width: 24px; border: none; border-left: 1px solid $line; }
+        QAbstractSpinBox::up-arrow { image: url(:/icons/chevron-up.svg); width: 10px; height: 6px; }
+        QAbstractSpinBox::down-arrow { image: url(:/icons/chevron-down.svg); width: 10px; height: 6px; }
         QPushButton, QToolButton { outline: none; background: transparent; border: 1px solid transparent; border-radius: 0; padding: 6px 12px; min-height: 24px; }
         QPushButton:hover, QToolButton:hover { color: $accent; }
         QPushButton:checked { color: $accent; font-weight: 600; }
@@ -254,9 +254,9 @@ QString Theme::stylesheet() const
         QPushButton#primary:hover, QPushButton#primary[keyboardFocus="true"]:focus { background: $primaryhover; color: $onaccent; }
         QPushButton#primary:pressed { color: $onaccent; padding-top: 7px; padding-bottom: 5px; }
         QPushButton#primary:disabled { background: $line; color: $muted; border-color: $edge; }
-        QPushButton#outline { color: $text; border: 1px solid $line; border-bottom: 2px solid $edge; background: $panel; }
-        QPushButton#outline[keyboardFocus="true"]:focus { border-color: $accent; color: $accent; }
-        QPushButton#outline:hover { color: $accent; border-bottom-color: $accent; }
+        QPushButton#outline, QPushButton[variant="outline"] { color: $text; border: 1px solid $line; border-bottom: 2px solid $edge; background: $panel; }
+        QPushButton#outline[keyboardFocus="true"]:focus, QPushButton[variant="outline"][keyboardFocus="true"]:focus { border-color: $accent; color: $accent; }
+        QPushButton#outline:hover, QPushButton[variant="outline"]:hover { color: $accent; border-bottom-color: $accent; }
         QPushButton#updateButton { color: $accent; border: none; padding: 1px 5px; min-height: 18px; font-weight: 600; }
         QPushButton#updateButton:hover { color: $text; }
         QPushButton#updateButton:pressed { color: $muted; padding-top: 2px; padding-bottom: 0; }
@@ -265,6 +265,8 @@ QString Theme::stylesheet() const
         QProgressBar#updateDialogProgress { border: 1px solid $edge; background: $panel; min-height: 20px; text-align: center; }
         QProgressBar#updateDialogProgress::chunk { background: $accent; }
         QPushButton:disabled, QToolButton:disabled { color: $muted; }
+        QToolButton[unitPreset="true"] { background: $panel; border: 1px solid $line; padding: 2px 8px; min-height: 22px; }
+        QToolButton[unitPreset="true"]:hover { border-color: $accent; background: $hover; }
         QPlainTextEdit, QTextEdit { border: 1px solid $edge; border-radius: 0; background: $panel; padding: 8px; selection-background-color: $accent; selection-color: $onaccent; }
         QPlainTextEdit:focus { border-color: $accent; }
         QTextEdit#monitor { border: none; padding: 16px 18px; }
@@ -289,6 +291,7 @@ QString Theme::stylesheet() const
         QMenu { background: $panel; border: 1px solid $edge; padding: 4px; }
         QMenu::item { padding: 10px 28px 10px 16px; border-left: 2px solid transparent; }
         QMenu::item:selected { background: $hover; border-left-color: $accent; color: $text; }
+        QMenu::icon { subcontrol-origin: padding; subcontrol-position: center left; left: 10px; }
         QMenu::separator { height: 1px; background: $line; margin: 5px 8px; }
         QMenu::indicator { width: 18px; height: 18px; margin-left: 8px; subcontrol-origin: padding; subcontrol-position: center left; image: none; background: transparent; }
         QMenu::indicator:checked { image: url(:/icons/check.svg); background: $accent; }

@@ -254,7 +254,9 @@ private slots:
         config.kind = "ssh";
         config.sshHost = "pty-wait";
         auto channel = engine.open(config);
+        QVERIFY2(channel->error.isEmpty(), qPrintable(channel->error));
         QTRY_VERIFY(channel->rx > 0);
+        QVERIFY2(channel->state != "error", qPrintable(channel->error));
         QCOMPARE(channel->state, QString("connecting"));
         QCOMPARE(channel->ssh->write("!"), qint64(1));
         QTRY_COMPARE(channel->state, QString("connected"));
@@ -614,7 +616,7 @@ private slots:
         sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
         window.show();
         auto wave = engine.waveformDemo();
-        auto page = window.newInstrument("structured");
+        auto page = window.newInstrument("json");
         auto picker = page->instrument->source;
         const auto key = sw::Config::structuredDemo().key();
         QVERIFY(picker->findData(sw::Config::waveformDemo().key()) < 0);
@@ -655,11 +657,11 @@ private slots:
         QVERIFY(wave->sources["default"]->count >= 500);
         const qint64 before = source->parsedCount;
         QTRY_VERIFY(source->parsedCount > before);
-        QTRY_VERIFY(page->instrument->table->topLevelItemCount() >= 6);
+        QTRY_VERIFY(page->instrument->table->topLevelItemCount() >= 3);
         QVERIFY_EXCEPTION_THROWN(channel->send("test"), std::runtime_error);
         const auto capture = qEnvironmentVariable("SW_DEMO_CAPTURE_DIR");
         if (!capture.isEmpty()) { QVERIFY(window.grab().save(capture + "/structured-demo.png")); }
-        auto fromWave = window.newInstrument("structured", wave);
+        auto fromWave = window.newInstrument("json", wave);
         QCOMPARE(fromWave->channel, channel);
         auto backToWave = window.newInstrument("waveform", channel);
         QCOMPARE(backToWave->channel, wave);
@@ -689,7 +691,7 @@ private slots:
             bool found = false;
             for (auto page : window.panes)
             {
-                if (page->instrument && page->instrument->kind == "structured")
+                if (page->instrument && page->instrument->kind == "json")
                 {
                     QCOMPARE(page->channel, channel);
                     QCOMPARE(page->sourceKey, sw::Config::structuredDemo().key());
@@ -1022,7 +1024,9 @@ private slots:
         engine.sshExecutable = QCoreApplication::applicationDirPath() + "/fake_ssh.exe";
         QVERIFY(QFile::exists(engine.sshExecutable));
         auto channel = engine.open(config);
-        QTRY_COMPARE(channel->state, QString("connected"));
+        QVERIFY2(channel->error.isEmpty(), qPrintable(channel->error));
+        QTRY_VERIFY(channel->state == "connected" || channel->state == "error");
+        QVERIFY2(channel->state == "connected", qPrintable(channel->error));
         QTRY_VERIFY(channel->rx >= 6);
 #ifdef Q_OS_WIN
         channel->resizeTerminal(QSize(57, 18));
@@ -1944,7 +1948,7 @@ private slots:
             QCOMPARE(window.active->channel->appliedBaud, 1200);
             auto source = window.active->channel;
             window.newInstrument("waveform", source, false);
-            window.newInstrument("structured", source, false);
+            window.newInstrument("json", source, false);
             window.active->setTerminal(true);
             window.active->setTerminal(false);
             QVERIFY(!window.active->modeButton->isChecked());
@@ -1963,7 +1967,7 @@ private slots:
             QVERIFY(window.theme.dark);
             QCOMPARE(window.panes.size(), 3);
             QCOMPARE(window.panes[1]->instrument->kind, "waveform");
-            QCOMPARE(window.panes[2]->instrument->kind, "structured");
+            QCOMPARE(window.panes[2]->instrument->kind, "json");
             QCOMPARE(window.panes[1]->sourceKey, "serial:loop://");
             QVERIFY(!window.panes[1]->channel);
             QVERIFY(engine.channels.isEmpty());
@@ -2258,7 +2262,7 @@ private slots:
         const auto id = channel->id;
         pane->payload->setPlainText("preserved draft");
         auto wavePage = window.newInstrument("waveform", channel, false);
-        auto parsePage = window.newInstrument("structured", channel, false);
+        auto parsePage = window.newInstrument("json", channel, false);
         auto wave = wavePage->instrument;
         auto structured = parsePage->instrument;
         auto detached = window.detachConnection(pageIndex(&window, pane), QPoint(180, 160));
@@ -2481,12 +2485,11 @@ private slots:
         window.connectionAction();
         auto receive = window.active;
         auto channel = receive->channel;
-        auto json = window.newInstrument("structured", channel);
-        json->instrument->parser->setCurrentIndex(1);
+        auto json = window.newInstrument("json", channel);
+
         json->instrument->freeze->setChecked(true);
         auto detached = window.detachConnection(pageIndex(&window, json), QPoint(200, 180));
-        auto xml = window.newInstrument("structured", channel);
-        xml->instrument->parser->setCurrentIndex(2);
+        auto xml = window.newInstrument("xml", channel);
         QVERIFY(json->pageTitle != xml->pageTitle);
         QCOMPARE(channel->parserMode, "auto");
         channel->receive("{\"temperature\":24}\n<device><voltage>3.3</voltage></device>\n");
@@ -2539,10 +2542,11 @@ private slots:
         QCOMPARE(window.panes[1]->instrument->points->value(), 1500);
         QCOMPARE(window.panes[2]->instrument->points->value(), 2000);
         QVERIFY(window.panes[1]->pageTitle != window.panes[2]->pageTitle);
-        QCOMPARE(window.panes[3]->instrument->parser->currentIndex(), 2);
+        QCOMPARE(window.panes[3]->instrument->kind, "xml");
         QCOMPARE(window.panes[1]->sourceKey, "serial:com77");
         QCOMPARE(window.panes[4]->sourceKey, "serial:com88");
-        QCOMPARE(window.panes[4]->instrument->kind, "values");
+        QCOMPARE(window.panes[4]->instrument->kind, "waveform");
+        QVERIFY(window.panes[4]->instrument->valuesToggle->isChecked());
         QVERIFY(window.panes[4]->instrument->freeze->isChecked());
         QVERIFY(engine.channels.isEmpty());
         window.saveSettings();
@@ -2593,7 +2597,7 @@ private slots:
         window.protocol->setCurrentIndex(3);
         window.bindPort->setValue(0);
         window.connectionAction();
-        auto page = window.newInstrument("structured", first->channel);
+        auto page = window.newInstrument("json", first->channel);
         QCOMPARE(window.parameterPane, first);
         QCOMPARE(window.protocol->currentIndex(), 0);
         QCOMPARE(window.port->currentText(), QString("loop://"));

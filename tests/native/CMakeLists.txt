@@ -6,6 +6,11 @@ target_link_libraries(wave_benchmark PRIVATE workbench_ui Qt6::Test)
 
 qt_add_executable(native_tests tests.cpp)
 add_executable(fake_ssh fake_ssh.cpp)
+if(MINGW)
+    # A ConPTY fixture must also launch without SDK runtime DLL lookup.
+    target_link_options(fake_ssh PRIVATE -static)
+endif()
+add_dependencies(native_tests SerialWorkbenchSSHAskpass fake_ssh)
 workbench_configure_target(native_tests)
 target_link_libraries(native_tests PRIVATE workbench_ui Qt6::Test)
 
@@ -54,7 +59,59 @@ add_test(NAME serial_transfer_tests COMMAND "${CMAKE_COMMAND}" -E env
 )
 set_tests_properties(serial_transfer_tests PROPERTIES TIMEOUT 60)
 
+qt_add_executable(mcp_protocol_tests mcp_protocol_tests.cpp)
+workbench_configure_target(mcp_protocol_tests)
+target_link_libraries(mcp_protocol_tests PRIVATE workbench_ui Qt6::Test)
+add_test(NAME mcp_protocol_tests COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=${workbench_test_path}"
+    $<TARGET_FILE:mcp_protocol_tests>
+    -platform offscreen
+    -o "${PROJECT_BINARY_DIR}/mcp-protocol-tests.txt,txt"
+)
+set_tests_properties(mcp_protocol_tests PROPERTIES TIMEOUT 30)
+
+qt_add_executable(ssh_auth_tests ssh_auth_tests.cpp)
+workbench_configure_target(ssh_auth_tests)
+target_link_libraries(ssh_auth_tests PRIVATE workbench_ui Qt6::Test)
+add_dependencies(ssh_auth_tests SerialWorkbenchSSHAskpass fake_ssh)
+add_test(NAME ssh_auth_tests COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=${workbench_test_path}"
+    $<TARGET_FILE:ssh_auth_tests>
+    -platform offscreen
+    -o "${PROJECT_BINARY_DIR}/ssh-auth-tests.txt,txt"
+)
+set_tests_properties(ssh_auth_tests PROPERTIES TIMEOUT 30)
+
 # Deliberately no install() rule: the virtual wire belongs only to test/demo builds.
 qt_add_executable(FileTransferDemo file_transfer_demo.cpp)
 workbench_configure_target(FileTransferDemo)
 target_link_libraries(FileTransferDemo PRIVATE workbench_ui)
+
+# Internal SSH device simulator: build on request, never install or release.
+qt_add_executable(SshNewDeviceDemo WIN32 ssh_new_device_demo.cpp)
+workbench_configure_target(SshNewDeviceDemo)
+target_compile_definitions(SshNewDeviceDemo PRIVATE WORKBENCH_DEMO_ROOT="${PROJECT_SOURCE_DIR}")
+target_link_libraries(SshNewDeviceDemo PRIVATE workbench_ui)
+add_dependencies(SshNewDeviceDemo SerialWorkbenchSSHAskpass)
+
+qt_add_executable(wave_settings_tests wave_settings_tests.cpp)
+workbench_configure_target(wave_settings_tests)
+target_link_libraries(wave_settings_tests PRIVATE workbench_ui Qt6::Test)
+add_test(NAME wave_settings_tests COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=${workbench_test_path}"
+    $<TARGET_FILE:wave_settings_tests>
+    -platform offscreen
+    -o "${PROJECT_BINARY_DIR}/wave-settings-tests.txt,txt"
+)
+set_tests_properties(wave_settings_tests PROPERTIES TIMEOUT 30)
+
+qt_add_executable(json_tools_tests json_tools_tests.cpp)
+workbench_configure_target(json_tools_tests)
+target_link_libraries(json_tools_tests PRIVATE workbench_ui Qt6::Test)
+add_test(NAME json_tools_tests COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=${workbench_test_path}"
+    $<TARGET_FILE:json_tools_tests>
+    -platform offscreen
+    -o "${PROJECT_BINARY_DIR}/json-tools-tests.txt,txt"
+)
+set_tests_properties(json_tools_tests PROPERTIES TIMEOUT 30)

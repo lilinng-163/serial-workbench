@@ -7,6 +7,8 @@ add_library(workbench_core STATIC
     ssh_profiles.h
     ssh_process.cpp
     ssh_process.h
+    ssh_auth.cpp
+    ssh_auth.h
     frame_script.cpp
     frame_script.h
     script_worker.cpp
@@ -23,3 +25,6 @@ target_link_libraries(workbench_core PUBLIC
     Qt6::SerialPort
     Qt6::Core5Compat
 )
+if(WIN32)
+    target_link_libraries(workbench_core PRIVATE crypt32)
+endif()

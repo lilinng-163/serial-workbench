@@ -89,7 +89,7 @@ WavePlot::WavePlot(QWidget *parent) : QWidget(parent)
     setMinimumSize(200, 180);
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
-    setToolTip("移动鼠标查看原始采样值；点击通道显示或隐藏；滚轮缩放双轴；Shift 仅横轴，Ctrl 仅纵轴；左键自由平移；双击恢复跟随");
+    setToolTip("移动鼠标查看原始采样值；点击通道显示或隐藏，右键设置样式；滚轮缩放双轴；Shift 仅横轴，Ctrl 仅纵轴；左键自由平移；双击恢复跟随");
 
     legendScroll = new QScrollArea(this);
     legendScroll->setObjectName("waveLegend");
@@ -211,13 +211,16 @@ QRectF WavePlot::plotArea() const
     {
         labels = qMax(labels, metrics.horizontalAdvance(QLocale::c().toString(value, 'g', 7)));
     }
-    const int left = showY ? qBound(64, labels + 16, qMax(64, width() / 3)) : 12;
+    const int titleSpace = showY && !yAxisLabel().isEmpty() ? metrics.height() + 8 : 0;
+    const int left = showY ? qBound(64, labels + 16, qMax(64, width() / 3)) + titleSpace : 12;
     const int top = metrics.height() * 2 + 32;
     return QRectF(left, top, qMax(1, width() - left - 24), qMax(1, height() - top - (showX ? 60 : 12)));
 }
 
 QColor WavePlot::curveColor(const QString &name) const
 {
+    const auto style = curveStyle(name);
+    if (style.color.isValid()) { return style.color; }
     const QList<QColor> colors {theme.accent, theme.green, QColor("#6c92a0"), QColor("#b0839a"), theme.red, QColor("#9e9a52")};
     return colors[colorSlots.value(name, 0) % colors.size()];
 }
@@ -236,6 +239,7 @@ void WavePlot::setCurveVisible(const QString &name, bool visible)
     hovering = false;
     updateLegend();
     invalidatePlot();
+    emit presentationChanged();
 }
 
 void WavePlot::setXAxisVisible(bool visible)
@@ -390,6 +394,11 @@ void WavePlot::updateLegend()
             button->setCheckable(true);
             button->setFocusPolicy(Qt::TabFocus);
             button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+            button->setContextMenuPolicy(Qt::CustomContextMenu);
+            connect(button, &QWidget::customContextMenuRequested, this, [this, button, name = curve.key()](const QPoint &position)
+            {
+                curveMenu(name, button->mapToGlobal(position));
+            });
             legendLayout->insertWidget(legendLayout->count() - 1, button);
             legendButtons[curve.key()] = button;
             connect(button, &QToolButton::clicked, this, [this, name = curve.key()](bool checked)
@@ -397,26 +406,36 @@ void WavePlot::updateLegend()
                 setCurveVisible(name, checked);
             });
         }
-        const QString value = curve.value().isEmpty() ? "—" : exactValue(curve.value().last().y());
-        const QString text = curve.key() + "\n" + value;
+        const QString value = curve.value().isEmpty() ? "—" : exactValue(curve.value().last().y())
+            + (yUnit.isEmpty() ? QString() : " " + yUnit);
+        const QString text = curveLabel(curve.key()) + "\n" + value;
         if (button->text() != text) { button->setText(text); }
         button->setFont(font());
         button->setMinimumWidth(button->sizeHint().width());
         button->setChecked(isCurveVisible(curve.key()));
-        button->setToolTip(curve.key() + " = " + value + "\n点击显示或隐藏曲线");
+        button->setToolTip(curveLabel(curve.key()) + " = " + value + "\n点击显示或隐藏曲线；右键设置颜色、线宽和线型");
         const QString style = QString("QToolButton { border: none; padding: 2px 8px; background: transparent; color: %1; } QToolButton:hover { color: %2; }")
             .arg(isCurveVisible(curve.key()) ? theme.text.name() : theme.muted.name(), theme.accent.name());
         if (button->styleSheet() != style) { button->setStyleSheet(style); }
         const QColor color = isCurveVisible(curve.key()) ? curveColor(curve.key()) : theme.line;
-        if (button->property("curveColor").value<QColor>() != color)
+        const auto appearance = curveStyle(curve.key());
+        if (button->property("curveColor").value<QColor>() != color
+            || button->property("curveWidth").toDouble() != appearance.width
+            || button->property("curveLine").toInt() != int(appearance.line))
         {
-            QPixmap marker(16, 16);
+            const qreal ratio = devicePixelRatioF();
+            QPixmap marker(qCeil(24 * ratio), qCeil(16 * ratio));
+            marker.setDevicePixelRatio(ratio);
             marker.fill(Qt::transparent);
             QPainter painter(&marker);
-            painter.setPen(QPen(color, 3));
-            painter.drawLine(1, 8, 15, 8);
+            painter.setRenderHint(QPainter::Antialiasing);
+            painter.setPen(QPen(color, qMax(1.5, appearance.width), appearance.line));
+            painter.drawLine(1, 8, 23, 8);
             button->setIcon(QIcon(marker));
+            button->setIconSize(QSize(24, 16));
             button->setProperty("curveColor", color);
+            button->setProperty("curveWidth", appearance.width);
+            button->setProperty("curveLine", int(appearance.line));
         }
     }
     auto palette = legendBody->palette();
@@ -447,10 +466,11 @@ void WavePlot::rebuildImage()
     const double left = horizontal.first;
     const QFontMetrics metrics(font());
     const auto yGrid = axisGrid(range, area.height(), qMax(60, metrics.height() * 3), false);
-    const int xLabelWidth = qMax(metrics.horizontalAdvance(QString::number(horizontal.first, 'f', 0)),
-        metrics.horizontalAdvance(QString::number(horizontal.second, 'f', 0)));
+    const QPair<double, double> displayRange {xAxisValue(horizontal.first), xAxisValue(horizontal.second)};
+    const int xLabelWidth = qMax(metrics.horizontalAdvance(QLocale::c().toString(displayRange.first, 'g', 7)),
+        metrics.horizontalAdvance(QLocale::c().toString(displayRange.second, 'g', 7)));
     const qreal labelSpacing = qMax(88, xLabelWidth + 20);
-    const auto xGrid = axisGrid(horizontal, area.width(), labelSpacing, true);
+    const auto xGrid = axisGrid(displayRange, area.width(), labelSpacing, xIncrement == 1);
 
     // 主、次网格分别控制明度；数字只标在主刻度，保持密度与可读性。
     QColor minorColor = theme.line;
@@ -469,7 +489,7 @@ void WavePlot::rebuildImage()
     }
     for (double sample : xGrid.minor)
     {
-        const qreal x = qRound(area.left() + (sample - left) / span * area.width()) + 0.5;
+        const qreal x = qRound(area.left() + (sample / xIncrement - left) / span * area.width()) + 0.5;
         painter.drawLine(QPointF(x, area.top()), QPointF(x, area.bottom()));
     }
     for (double value : yGrid.major)
@@ -481,14 +501,15 @@ void WavePlot::rebuildImage()
         painter.setPen(theme.muted);
         painter.drawLine(QPointF(area.left() - 4, y), QPointF(area.left(), y));
         painter.setPen(theme.text);
-        painter.drawText(QRectF(2, qRound(y) - 11, area.left() - 12, 22), Qt::AlignRight | Qt::AlignVCenter,
+        const int labelLeft = yAxisLabel().isEmpty() ? 2 : metrics.height() + 10;
+        painter.drawText(QRectF(labelLeft, qRound(y) - 11, area.left() - labelLeft - 10, 22), Qt::AlignRight | Qt::AlignVCenter,
             QLocale::c().toString(value, 'g', 7));
     }
     QRectF lastLabel;
     const qreal labelWidth = qMax(24, xLabelWidth + 8);
     for (double sample : xGrid.major)
     {
-        const qreal x = qRound(area.left() + (sample - left) / span * area.width()) + 0.5;
+        const qreal x = qRound(area.left() + (sample / xIncrement - left) / span * area.width()) + 0.5;
         painter.setPen(majorPen);
         painter.drawLine(QPointF(x, area.top()), QPointF(x, area.bottom()));
         if (!showX) { continue; }
@@ -499,7 +520,7 @@ void WavePlot::rebuildImage()
         if (lastLabel.isEmpty() || label.left() >= lastLabel.right() + 8)
         {
             painter.setPen(theme.text);
-            painter.drawText(label, Qt::AlignCenter, QString::number(sample, 'f', 0));
+            painter.drawText(label, Qt::AlignCenter, QLocale::c().toString(sample, 'g', 7));
             lastLabel = label;
         }
     }
@@ -508,7 +529,18 @@ void WavePlot::rebuildImage()
         painter.setPen(theme.muted);
         painter.drawLine(QPointF(area.left(), area.bottom()), QPointF(area.right(), area.bottom()));
         painter.setPen(theme.text);
-        painter.drawText(QRectF(area.left(), height() - 22, area.width(), 20), Qt::AlignCenter, "采样序号");
+        painter.drawText(QRectF(area.left(), height() - 22, area.width(), 20), Qt::AlignCenter,
+            metrics.elidedText(xAxisLabel(), Qt::ElideRight, qFloor(area.width())));
+    }
+    if (showY && !yAxisLabel().isEmpty())
+    {
+        painter.save();
+        painter.setPen(theme.text);
+        painter.translate(2, area.center().y());
+        painter.rotate(-90);
+        painter.drawText(QRectF(-area.height() / 2, 0, area.height(), metrics.height() + 4), Qt::AlignCenter,
+            metrics.elidedText(yAxisLabel(), Qt::ElideRight, qFloor(area.height())));
+        painter.restore();
     }
     painter.setPen(theme.text);
     if (series.isEmpty())
@@ -553,7 +585,8 @@ void WavePlot::rebuildImage()
         }
         renderedPoints += vertices.size();
         // Cosmetic 细线使用 Qt 的快速抗锯齿线段路径，避免通用多边形描边。
-        QPen pen(curveColor(curve.key()), 1);
+        const auto appearance = curveStyle(curve.key());
+        QPen pen(curveColor(curve.key()), appearance.width, appearance.line);
         pen.setCosmetic(true);
         painter.setPen(pen);
         painter.drawPolyline(vertices);
@@ -618,8 +651,12 @@ void WavePlot::drawInspection(QPainter &painter)
     painter.setBrush(theme.panel);
     painter.drawEllipse(QPointF(x, y), 4, 4);
 
-    const QStringList lines {name, "值  " + exactValue(hit["value"].toDouble()),
+    QStringList lines {curveLabel(name), "值  " + exactValue(hit["value"].toDouble()) + (yUnit.isEmpty() ? QString() : " " + yUnit),
         "采样  #" + QString::number(hit["sample"].toInteger())};
+    if (xIncrement != 1 || !xUnit.isEmpty())
+    {
+        lines.append("X  " + exactValue(xAxisValue(hit["sample"].toDouble())) + " " + xUnit);
+    }
     const QFontMetrics metrics(font());
     int textWidth = 0;
     for (const auto &line : lines) { textWidth = qMax(textWidth, metrics.horizontalAdvance(line)); }
@@ -770,6 +807,15 @@ void WavePlot::resizeEvent(QResizeEvent *event)
 void WavePlot::contextMenuEvent(QContextMenuEvent *event)
 {
     QMenu menu(this);
+    auto settings = menu.addAction("波形设置…");
+    connect(settings, &QAction::triggered, this, &WavePlot::openPlotSettings);
+    const auto hit = inspect(event->pos());
+    if (!hit.isEmpty())
+    {
+        auto curve = menu.addAction("曲线设置 · " + curveLabel(hit["channel"].toString()) + "…");
+        connect(curve, &QAction::triggered, this, [this, name = hit["channel"].toString()] { openCurveSettings(name); });
+    }
+    menu.addSeparator();
     auto copy = findChild<QAction *>("copyWaveReadout");
     copy->setEnabled(hovering && !inspect(hoverPosition).isEmpty());
     menu.addAction(copy);

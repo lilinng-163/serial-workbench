@@ -21,11 +21,20 @@ public:
     QString url() const;
     QJsonValue call(const QString &name, const QJsonObject &arguments);
     QJsonArray tools() const;
+    QJsonObject protocolAccess() const;
+    bool protocolEnabled(const QString &kind) const;
+    void setProtocolEnabled(const QString &kind, bool enabled);
 
 signals:
     void portChanged(quint16 port);
+    void protocolAccessChanged();
 
 private:
+    QJsonObject access {{"serial", true}, {"tcp", true}, {"udp", true}, {"ssh", true}};
+    void requireProtocol(const QString &kind) const;
+    Channel *accessibleChannel(const QString &id) const;
+    QJsonArray visibleConnections() const;
+    QJsonObject readEvents(const QJsonObject &arguments, int limitOverride = 0) const;
     void acceptRequest(QTcpSocket *socket, const QByteArray &request);
     void respond(QTcpSocket *socket, int code, const QJsonObject &body = {}, const QString &session = {});
     void finishCall(QTcpSocket *socket, const QJsonObject &rpc, const QString &session);

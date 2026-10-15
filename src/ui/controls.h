@@ -121,6 +121,13 @@ class Splitter : public QSplitter
     QSplitterHandle *createHandle() override;
 };
 
+struct WaveCurveStyle
+{
+    QColor color;
+    qreal width = 1;
+    Qt::PenStyle line = Qt::SolidLine;
+};
+
 class WavePlot : public QWidget
 {
     Q_OBJECT
@@ -145,6 +152,20 @@ class WavePlot : public QWidget
     int renderedPointCount() const { return renderedPoints; }
     bool isCurveVisible(const QString &name) const;
     void setCurveVisible(const QString &name, bool visible);
+    WaveCurveStyle curveStyle(const QString &name) const;
+    QColor curveColor(const QString &name) const;
+    QString curveLabel(const QString &name) const;
+    void setCurveStyle(const QString &name, const WaveCurveStyle &style);
+    void resetCurveStyle(const QString &name);
+    QJsonObject presentationSettings() const;
+    void restorePresentation(const QJsonObject &settings);
+    void openCurveSettings(const QString &name);
+    void openPlotSettings();
+    QString xAxisLabel() const;
+    QString yAxisLabel() const;
+    double xAxisValue(double sample) const { return sample * xIncrement; }
+    QString xAxisUnit() const { return xUnit; }
+    QString yAxisUnit() const { return yUnit; }
     void invalidatePlot();
     void paintEvent(QPaintEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
@@ -158,11 +179,22 @@ class WavePlot : public QWidget
 
   signals:
     void followLatestChanged(bool enabled);
+    void presentationChanged();
 
   private:
     QPair<double, double> sampleBounds() const;
     QPair<double, double> valueRange() const;
-    QColor curveColor(const QString &name) const;
+    void curveMenu(const QString &name, const QPoint &position);
+    WaveCurveStyle defaultStyle;
+    QMap<QString, WaveCurveStyle> curveStyles;
+    QString xTitle = "采样序号";
+    QString yTitle;
+    QString xUnit;
+    QString yUnit;
+    double xIncrement = 1;
+    QByteArray curveDialogGeometry;
+    QByteArray plotDialogGeometry;
+    int plotSettingsTab = 0;
     void dataChanged();
     void updateLegend();
     void rebuildImage();
