@@ -16,6 +16,8 @@
 #include <QProcess>
 #include <QProgressBar>
 #include <QTextCodec>
+#include <QGuiApplication>
+#include <QScreen>
 #include <numeric>
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -1592,7 +1594,8 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     setWindowIcon(QIcon(":/brand/lightning.svg"));
     setFont(Theme::interfaceFont());
     setMinimumSize(480, 320);
-    resize(1400, 900);
+    const QScreen *screen = QGuiApplication::primaryScreen();
+    resize(1400, qMin(960, screen ? screen->availableGeometry().height() : 960));
     QFile settingsFile(path);
     if (settingsFile.open(QIODevice::ReadOnly))
     {
