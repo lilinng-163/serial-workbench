@@ -1157,7 +1157,14 @@ void Pane::tick()
     const bool ssh = (channel ? channel->config.kind : draft.kind) == "ssh";
     terminal->keyboardSelectionEnabled = ssh;
     modeButton->setVisible(!ssh);
-    if (ssh && !terminalMode) { setTerminal(true); }
+    if (ssh)
+    {
+        if (!terminalMode) { setTerminal(true); }
+    }
+    else if (terminalMode != userTerminalMode)
+    {
+        setTerminal(userTerminalMode);
+    }
     transferButton->setVisible((channel ? channel->config.kind : draft.kind) == "serial");
     transferButton->setEnabled(available && channel->serial);
     exportButton->setEnabled(channel);
@@ -1239,6 +1246,7 @@ void Pane::setTerminal(bool enabled)
     if (instrument) { return; }
     const bool ssh = (channel ? channel->config.kind : draft.kind) == "ssh";
     if (ssh) { enabled = true; }
+    if (!ssh) { userTerminalMode = enabled; }
     modeButton->setVisible(!ssh);
     if (enabled && !sender->isHidden())
     {
@@ -1534,7 +1542,9 @@ void Pane::restore(const QJsonObject &settings)
         senderSizes = {sizes[0].toInt(), sizes[1].toInt()};
         QTimer::singleShot(0, this, [this] { splitter->setSizes(senderSizes); });
     }
-    setTerminal((channel && channel->config.kind == "ssh") || settings["terminal_mode"].toBool());
+    const bool ssh = (channel ? channel->config.kind : draft.kind) == "ssh";
+    userTerminalMode = channel && !ssh && settings.value("terminal_mode").toBool();
+    setTerminal(ssh || userTerminalMode);
     if (!supportsScript()) { scriptRequested = false; }
     else if (settings.contains("script_code"))
     {

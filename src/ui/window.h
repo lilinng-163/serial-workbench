@@ -101,6 +101,7 @@ public:
     IconButton *transferButton = nullptr;
     QLineEdit *filter = nullptr;
     bool terminalMode = false;
+    bool userTerminalMode = false;
     QString scriptCode = FrameScriptProgram::example();
     bool scriptRequested = false;
     QPointer<QDialog> scriptDialog;
