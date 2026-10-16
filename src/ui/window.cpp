@@ -3215,8 +3215,17 @@ void Window::beginTabRename(int index)
     // Use the style's text area so icon sizes, padding and close buttons stay clear.
     auto textRect = tabs->style()->subElementRect(QStyle::SE_TabBarTabText, &option, tabs);
     const auto tabRect = tabs->tabRect(index);
-    textRect.setTop(tabRect.top() + 8);
-    textRect.setBottom(tabRect.bottom() - 7);
+    // Grow the editor across the free space up to the close button so the title
+    // is not clipped by the field frame, while still clearing the tab icon.
+    if (auto *closeButton = tabs->tabButton(index, QTabBar::RightSide))
+    {
+        if (closeButton->geometry().left() > textRect.left())
+        {
+            textRect.setRight(closeButton->geometry().left() - 4);
+        }
+    }
+    textRect.setTop(tabRect.top() + 4);
+    textRect.setBottom(tabRect.bottom() - 4);
     editor->setGeometry(textRect);
     QPointer<Pane> selected = pane;
     editor->onFinish = [this, editor, selected](bool accept)
