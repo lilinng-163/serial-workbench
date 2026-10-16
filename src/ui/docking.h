@@ -8,8 +8,11 @@ namespace sw
 class TearTabBar : public QTabBar
 {
     Q_OBJECT
+    Q_PROPERTY(QColor pageColor MEMBER pageColor)
   public:
     explicit TearTabBar(QWidget *parent = nullptr);
+    QColor pageColor;
+    void paintEvent(QPaintEvent *event) override;
     QPoint pressPosition;
     QPointer<QObject> pressedPage;
     bool middleClickCloses = false;
@@ -17,6 +20,7 @@ class TearTabBar : public QTabBar
     QObject *identity(int index) const;
     void initStyleOption(QStyleOptionTab *option, int index) const override;
     void mousePressEvent(QMouseEvent *event) override;
+    void mouseDoubleClickEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
   signals:

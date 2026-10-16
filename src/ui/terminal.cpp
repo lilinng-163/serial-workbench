@@ -140,6 +140,13 @@ void LogView::paintEvent(QPaintEvent *event)
     painter.drawText(QRect(8, top + 124, viewport()->width() - 16, 24), Qt::AlignCenter, "建立连接后，收发内容会显示在这里");
 }
 
+void LogView::scrollContentsBy(int dx, int dy)
+{
+    QTextEdit::scrollContentsBy(dx, dy);
+    // The wallpaper stays attached to the viewport while the text scrolls.
+    if (transparentBackground) { viewport()->update(); }
+}
+
 void LogView::reset()
 {
     clear();
@@ -301,6 +308,11 @@ TerminalView::TerminalView(QWidget *parent) : QWidget(parent)
     setFocusPolicy(Qt::StrongFocus);
     setAttribute(Qt::WA_InputMethodEnabled);
     setMinimumHeight(90);
+    scrollBar = new QScrollBar(Qt::Vertical, this);
+    scrollBar->setObjectName("terminalHistoryScroll");
+    scrollBar->setFocusPolicy(Qt::NoFocus);
+    connect(scrollBar, &QScrollBar::valueChanged, this, [this] { update(); });
+    setToolTip("滚轮查看历史 · Ctrl + 滚轮调整字号");
     blink.setInterval(500);
     connect(&blink, &QTimer::timeout, this, [this]
     {
@@ -319,6 +331,10 @@ void TerminalView::reset(const QString &encoding)
     auto codec = QTextCodec::codecForName(encoding.toLatin1());
     decoder.reset((codec ? codec : QTextCodec::codecForName("UTF-8"))->makeDecoder());
     ansi = {};
+    history.clear();
+    primaryGrid.clear();
+    alternateScreen = false;
+    savedX = savedY = 0;
     x = y = 0;
     wrapPending = false;
     autoWrap = true;
@@ -329,6 +345,7 @@ void TerminalView::reset(const QString &encoding)
     keyboardSelection = false;
     selectionCanEdit = false;
     grid = QVector<QVector<Cell>>(rows, QVector<Cell>(columns));
+    updateScrollBar(true);
     update();
 }
 
@@ -337,10 +354,79 @@ void TerminalView::newline()
     ++y;
     if (y >= rows)
     {
+        if (!alternateScreen) { appendHistory(grid.first()); }
         grid.removeFirst();
         grid.append(QVector<Cell>(columns));
         y = rows - 1;
     }
+}
+
+void TerminalView::appendHistory(QVector<Cell> line)
+{
+    history.push_back(std::move(line));
+    if (history.size() > historyLimit)
+    {
+        history.pop_front();
+        scrollBar->setValue(qMax(0, scrollBar->value() - 1));
+        if (hasSelection())
+        {
+            if (selectionAnchor.y() == 0 || selectionCursor.y() == 0) { clearSelection(); }
+            else
+            {
+                selectionAnchor.ry() -= 1;
+                selectionCursor.ry() -= 1;
+            }
+        }
+    }
+}
+
+void TerminalView::updateScrollBar(bool followLatest)
+{
+    scrollBar->setGeometry(width() - 14, 0, 14, height());
+    scrollBar->setRange(0, alternateScreen ? 0 : historyLineCount());
+    scrollBar->setPageStep(rows);
+    scrollBar->setSingleStep(1);
+    scrollBar->setVisible(scrollBar->maximum() > 0);
+    if (followLatest) { scrollBar->setValue(scrollBar->maximum()); }
+}
+
+const TerminalView::Cell &TerminalView::documentCell(int row, int column) const
+{
+    static const Cell blank;
+    const int offset = alternateScreen ? 0 : historyLineCount();
+    const auto &line = row < offset ? history[row] : grid[row - offset];
+    return column < line.size() ? line[column] : blank;
+}
+
+void TerminalView::setAlternateScreen(bool enabled)
+{
+    if (alternateScreen == enabled) { return; }
+    clearSelection();
+    if (enabled)
+    {
+        primaryGrid = std::move(grid);
+        primaryCursor = QPoint(x, y);
+        primarySavedCursor = QPoint(savedX, savedY);
+        primaryWrapPending = wrapPending;
+        primaryScroll = scrollBar->value();
+        grid = QVector<QVector<Cell>>(rows, QVector<Cell>(columns));
+        x = y = 0;
+        wrapPending = false;
+        alternateScreen = true;
+    }
+    else
+    {
+        alternateScreen = false;
+        grid = std::move(primaryGrid);
+        x = primaryCursor.x();
+        y = primaryCursor.y();
+        savedX = primarySavedCursor.x();
+        savedY = primarySavedCursor.y();
+        wrapPending = primaryWrapPending;
+        resizeGrid();
+    }
+    updateScrollBar(false);
+    scrollBar->setValue(enabled ? 0 : primaryScroll);
 }
 
 void TerminalView::csi(QChar command, const QString &parameters)
@@ -349,6 +435,10 @@ void TerminalView::csi(QChar command, const QString &parameters)
     {
         for (const auto &value : parameters.mid(1).split(';'))
         {
+            if (value.toInt() == 1049 || value.toInt() == 1047 || value.toInt() == 47)
+            {
+                setAlternateScreen(command == 'h');
+            }
             if (value.toInt() == 7) { autoWrap = command == 'h'; }
             if (value.toInt() == 25) { cursorVisible = command == 'h'; }
         }
@@ -425,6 +515,7 @@ void TerminalView::csi(QChar command, const QString &parameters)
             }
             else
             {
+                if (command == 'S' && !alternateScreen) { appendHistory(grid.first()); }
                 grid.removeAt(begin);
                 grid.append(QVector<Cell>(columns));
             }
@@ -433,11 +524,18 @@ void TerminalView::csi(QChar command, const QString &parameters)
     else if (command == 'J')
     {
         const int mode = codes.value(0);
+        if (mode == 3)
+        {
+            history.clear();
+            clearSelection();
+            updateScrollBar(true);
+            return;
+        }
         for (int row = 0; row < rows; ++row)
         {
             for (int col = 0; col < columns; ++col)
             {
-                if (mode == 2 || mode == 3 || (mode == 0 && (row > y || (row == y && col >= x))) || (mode == 1 && (row < y || (row == y && col <= x))))
+                if (mode == 2 || (mode == 0 && (row > y || (row == y && col >= x))) || (mode == 1 && (row < y || (row == y && col <= x))))
                 {
                     grid[row][col] = {};
                 }
@@ -469,6 +567,8 @@ void TerminalView::csi(QChar command, const QString &parameters)
 
 void TerminalView::feed(const QByteArray &data)
 {
+    const bool followLatest = scrollBar->value() == scrollBar->maximum();
+    const bool wasAlternate = alternateScreen;
     // Output can redraw the command line without moving the cursor. Keep it copyable,
     // but do not apply an old selection to the new remote input.
     if (!data.isEmpty()) { selectionCanEdit = false; }
@@ -583,6 +683,7 @@ void TerminalView::feed(const QByteArray &data)
             else { x += cellWidth; }
         }
     }
+    updateScrollBar(alternateScreen == wasAlternate && followLatest);
     update();
     if (hasFocus())
     {
@@ -605,22 +706,42 @@ QString TerminalView::text() const
     return lines.join('\n');
 }
 
+QString TerminalView::visibleText() const
+{
+    QStringList lines;
+    const int top = scrollBar->value();
+    for (int row = 0; row < rows; ++row)
+    {
+        QString line;
+        for (int col = 0; col < columns; ++col)
+        {
+            const auto &cell = documentCell(top + row, col);
+            if (!cell.continuation) { line += cell.character; }
+        }
+        while (line.endsWith(' ')) { line.chop(1); }
+        lines.append(line);
+    }
+    return lines.join('\n');
+}
+
 void TerminalView::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
-    p.fillRect(rect(), theme.panel);
+    if (!transparentBackground) { p.fillRect(rect(), theme.panel); }
     const QFontMetricsF metrics(font());
     const qreal width = metrics.horizontalAdvance('M');
     const qreal height = metrics.height() * 1.15;
+    const int top = scrollBar->value();
+    const bool atLiveScreen = alternateScreen || top == historyLineCount();
     const auto [selectionStart, selectionEnd] = selectionRange();
     const bool highlightSelection = hasSelection();
     for (int row = 0; row < rows; ++row)
     {
         for (int col = 0; col < columns; ++col)
         {
-            const auto &cell = grid[row][col];
+            const auto &cell = documentCell(top + row, col);
             const QRectF box(16 + col * width, 12 + row * height, width, height);
-            const int position = row * columns + col;
+            const int position = (top + row) * columns + col;
             const bool selected = highlightSelection && selectionStart <= position && position < selectionEnd;
             if (cell.background.isValid())
             {
@@ -634,9 +755,9 @@ void TerminalView::paintEvent(QPaintEvent *)
         // Paint all cell backgrounds first so a wide glyph's second cell cannot erase it.
         for (int col = 0; col < columns; ++col)
         {
-            const auto &cell = grid[row][col];
+            const auto &cell = documentCell(top + row, col);
             if (cell.continuation) { continue; }
-            const int position = row * columns + col;
+            const int position = (top + row) * columns + col;
             const bool selected = highlightSelection && selectionStart <= position && position < selectionEnd;
             const QRectF box(16 + col * width, 12 + row * height, width, height);
             p.setPen(selected ? theme.onAccent : cell.foreground.isValid() ? cell.foreground : theme.text);
@@ -646,14 +767,14 @@ void TerminalView::paintEvent(QPaintEvent *)
             p.drawText(box.topLeft() + QPointF(0, metrics.ascent()), QString(cell.character));
         }
     }
-    if (caret && cursorVisible && hasFocus() && enabledInput)
+    if (atLiveScreen && caret && cursorVisible && hasFocus() && enabledInput)
     {
         QColor color = theme.accent;
         color.setAlpha(150);
         p.fillRect(QRectF(16 + std::min(columns - 1, x) * width, 12 + y * height,
             blockCursor ? width : 2, height), color);
     }
-    if (!preeditText.isEmpty())
+    if (atLiveScreen && !preeditText.isEmpty())
     {
         const qreal left = 16 + std::min(columns - 1, x) * width;
         const qreal top = 12 + y * height;
@@ -682,13 +803,19 @@ void TerminalView::changeEvent(QEvent *event)
 
 void TerminalView::resizeGrid()
 {
+    const bool followLatest = scrollBar->value() == scrollBar->maximum();
     const QFontMetricsF metrics(font());
-    const int newColumns = qBound(2, int((width() - 32) / metrics.horizontalAdvance('M')), 500);
+    // Reserve the scrollbar gutter even before history exists, avoiding PTY resize loops.
+    const int newColumns = qBound(2, int((width() - 46) / metrics.horizontalAdvance('M')), 500);
     const int newRows = qBound(1, int((height() - 24) / (metrics.height() * 1.15)), 200);
     const bool changed = columns != newColumns || rows != newRows;
-    for (auto &row : grid)
+    const int remove = qMin(qMax(0, int(grid.size()) - newRows), qMax(0, y - newRows + 1));
+    for (int line = 0; line < remove; ++line)
     {
-        row.resize(newColumns);
+        if (!alternateScreen) { appendHistory(grid.first()); }
+        grid.removeFirst();
+        --y;
+        savedY = qMax(0, savedY - 1);
     }
     grid.resize(newRows);
     for (auto &row : grid)
@@ -702,13 +829,15 @@ void TerminalView::resizeGrid()
         wrapPending = false;
         selectionCanEdit = false;
     }
+    const int selectionColumns = keyboardSelection ? columns : columns - 1;
+    for (auto point : {&selectionAnchor, &selectionCursor})
+    {
+        point->setX(qBound(0, point->x(), selectionColumns));
+        point->setY(qBound(0, point->y(), documentRows() - 1));
+    }
     x = qBound(0, x, columns - 1);
     y = qBound(0, y, rows - 1);
-    const int selectionColumns = keyboardSelection ? columns : columns - 1;
-    selectionAnchor.setX(qBound(0, selectionAnchor.x(), selectionColumns));
-    selectionAnchor.setY(qBound(0, selectionAnchor.y(), rows - 1));
-    selectionCursor.setX(qBound(0, selectionCursor.x(), selectionColumns));
-    selectionCursor.setY(qBound(0, selectionCursor.y(), rows - 1));
+    updateScrollBar(followLatest);
     if (hasFocus())
     {
         QApplication::inputMethod()->update(Qt::ImCursorRectangle);
@@ -846,6 +975,7 @@ void TerminalView::keyPressEvent(QKeyEvent *event)
     if (!data.isEmpty())
     {
         clearSelection();
+        scrollBar->setValue(scrollBar->maximum());
         emit transmit(data);
     }
     event->accept();
@@ -862,6 +992,7 @@ void TerminalView::inputMethodEvent(QInputMethodEvent *event)
     if (!event->commitString().isEmpty())
     {
         clearSelection();
+        scrollBar->setValue(scrollBar->maximum());
         emit transmit(event->commitString().toUtf8());
     }
     update();
@@ -900,7 +1031,7 @@ QPair<int, int> TerminalView::selectionRange() const
     int last = selectionCursor.y() * columns + selectionCursor.x();
     if (first > last) { std::swap(first, last); }
     if (!keyboardSelection) { ++last; }
-    return {qBound(0, first, rows * columns), qBound(0, last, rows * columns)};
+    return {qBound(0, first, documentRows() * columns), qBound(0, last, documentRows() * columns)};
 }
 
 void TerminalView::clearSelection()
@@ -916,10 +1047,11 @@ QByteArray TerminalView::selectionDeletion() const
 {
     if (!keyboardSelection || !selectionCanEdit) { return {}; }
 
-    const int caretPosition = y * columns + x + (wrapPending ? 1 : 0);
+    const int row = (alternateScreen ? 0 : historyLineCount()) + y;
+    const int caretPosition = row * columns + x + (wrapPending ? 1 : 0);
     const int anchor = selectionAnchor.y() * columns + selectionAnchor.x();
     const auto [start, end] = selectionRange();
-    if (anchor != caretPosition || start < y * columns || end > (y + 1) * columns)
+    if (anchor != caretPosition || start < row * columns || end > (row + 1) * columns)
     {
         return {};
     }
@@ -946,16 +1078,18 @@ bool TerminalView::selectWithKeyboard(QKeyEvent *event)
         return false;
     }
 
-    const int limit = rows * columns;
+    const int totalRows = documentRows();
+    const int limit = totalRows * columns;
     const auto offset = [this](const QPoint &point) { return point.y() * columns + point.x(); };
-    const auto point = [this, limit](int position)
+    const auto point = [this, limit, totalRows](int position)
     {
         position = qBound(0, position, limit);
-        return position == limit ? QPoint(columns, rows - 1) : QPoint(position % columns, position / columns);
+        return position == limit ? QPoint(columns, totalRows - 1) : QPoint(position % columns, position / columns);
     };
     if (!keyboardSelection)
     {
-        selectionCanEdit = !hasSelection() && enabledInput;
+        selectionCanEdit = !hasSelection() && enabledInput
+            && scrollBar->value() == scrollBar->maximum();
         if (hasSelection())
         {
             // Mouse endpoints include the cell under the pointer; keyboard endpoints are gaps.
@@ -970,13 +1104,13 @@ bool TerminalView::selectWithKeyboard(QKeyEvent *event)
         }
         else
         {
-            selectionAnchor = point(y * columns + x + (wrapPending ? 1 : 0));
+            selectionAnchor = point(((alternateScreen ? 0 : historyLineCount()) + y) * columns + x + (wrapPending ? 1 : 0));
             selectionCursor = selectionAnchor;
         }
         keyboardSelection = true;
     }
     int position = offset(selectionCursor);
-    const auto cell = [this](int index) -> const Cell & { return grid[index / columns][index % columns]; };
+    const auto cell = [this](int index) -> const Cell & { return documentCell(index / columns, index % columns); };
     const auto previous = [&](int index)
     {
         if (index <= 0) { return 0; }
@@ -1012,12 +1146,12 @@ bool TerminalView::selectWithKeyboard(QKeyEvent *event)
     const auto lineEnd = [this](int row)
     {
         int end = columns;
-        while (end > 0 && grid[row][end - 1].character.isSpace() && !grid[row][end - 1].continuation) { --end; }
+        while (end > 0 && documentCell(row, end - 1).character.isSpace() && !documentCell(row, end - 1).continuation) { --end; }
         return row * columns + end;
     };
     const auto documentEnd = [&]
     {
-        int row = rows - 1;
+        int row = totalRows - 1;
         while (row > 0 && lineEnd(row) == row * columns) { --row; }
         return lineEnd(row);
     };
@@ -1048,23 +1182,26 @@ bool TerminalView::selectWithKeyboard(QKeyEvent *event)
     }
     else if (key == Qt::Key_Home)
     {
-        position = control ? 0 : qMin(position / columns, rows - 1) * columns;
+        position = control ? 0 : qMin(position / columns, totalRows - 1) * columns;
     }
     else if (key == Qt::Key_End)
     {
-        position = control ? documentEnd() : lineEnd(qMin(position / columns, rows - 1));
+        position = control ? documentEnd() : lineEnd(qMin(position / columns, totalRows - 1));
     }
     else
     {
         const int direction = key == Qt::Key_Up || key == Qt::Key_PageUp ? -1 : 1;
         const int distance = key == Qt::Key_PageUp || key == Qt::Key_PageDown ? rows : 1;
-        const int row = qBound(0, qMin(position / columns, rows - 1) + direction * distance, rows - 1);
+        const int row = qBound(0, qMin(position / columns, totalRows - 1) + direction * distance, totalRows - 1);
         position = row * columns + qMin(position % columns, columns - 1);
         if (cell(position).continuation) { position = previous(position); }
     }
     selectionCursor = point(position);
     selecting = false;
     selectionActive = offset(selectionAnchor) != position;
+    const int visibleRow = qMin(position / columns, totalRows - 1);
+    if (visibleRow < scrollBar->value()) { scrollBar->setValue(visibleRow); }
+    else if (visibleRow >= scrollBar->value() + rows) { scrollBar->setValue(visibleRow - rows + 1); }
     update();
     return true;
 }
@@ -1080,7 +1217,7 @@ QPoint TerminalView::cellAt(const QPointF &position) const
     const qreal width = qMax<qreal>(1, metrics.horizontalAdvance('M'));
     const qreal height = qMax<qreal>(1, metrics.height() * 1.15);
     return QPoint(qBound(0, int((position.x() - 16) / width), columns - 1),
-        qBound(0, int((position.y() - 12) / height), rows - 1));
+        scrollBar->value() + qBound(0, int((position.y() - 12) / height), rows - 1));
 }
 
 QString TerminalView::selectedText() const
@@ -1098,7 +1235,7 @@ QString TerminalView::selectedText() const
         QString line;
         for (int col = firstColumn; col <= lastColumn; ++col)
         {
-            if (!grid[row][col].continuation) { line += grid[row][col].character; }
+            if (!documentCell(row, col).continuation) { line += documentCell(row, col).character; }
         }
         if (!keyboardSelection || row != lastRow)
         {
@@ -1127,6 +1264,7 @@ void TerminalView::pasteClipboard()
         if (!value.isEmpty())
         {
             clearSelection();
+            scrollBar->setValue(scrollBar->maximum());
             emit transmit(value);
         }
     }
@@ -1192,6 +1330,13 @@ void TerminalView::wheelEvent(QWheelEvent *event)
     if (event->modifiers() & Qt::ControlModifier)
     {
         emit zoomRequested(event->angleDelta().y() / 120);
+    }
+    else if (!alternateScreen)
+    {
+        const int pixels = event->pixelDelta().y();
+        const int steps = pixels ? (pixels > 0 ? 1 : -1) * qMax(1, qAbs(pixels) / qMax(1, fontMetrics().height()))
+                                 : event->angleDelta().y() / 120 * 3;
+        scrollBar->setValue(scrollBar->value() - steps);
     }
     event->accept();
 }

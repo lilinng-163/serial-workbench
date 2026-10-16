@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "controls.h"
+#include <algorithm>
 #include <cmath>
 #include <functional>
 
@@ -233,6 +234,112 @@ QString WavePlot::curveLabel(const QString &name) const
     return name;
 }
 
+QStringList WavePlot::readoutChannels() const
+{
+    if (customReadouts) { return selectedReadouts; }
+    auto names = series.keys();
+    QCollator order;
+    order.setNumericMode(true);
+    std::sort(names.begin(), names.end(), [&order](const QString &a, const QString &b)
+    {
+        return order.compare(a, b) < 0;
+    });
+    return names.mid(0, 4);
+}
+
+void WavePlot::setReadoutChannels(const QStringList &names)
+{
+    selectedReadouts.clear();
+    for (const auto &name : names)
+    {
+        if (selectedReadouts.size() >= 4) { break; }
+        if (!name.isEmpty() && !selectedReadouts.contains(name)) { selectedReadouts.append(name); }
+    }
+    customReadouts = true;
+    updateLegend();
+    emit presentationChanged();
+}
+
+void WavePlot::openReadoutChannels()
+{
+    QDialog dialog(this);
+    dialog.setObjectName("waveReadoutDialog");
+    dialog.setWindowTitle("读数通道");
+    auto body = new QVBoxLayout(&dialog);
+    auto note = new QLabel("顶部最多显示四个固定宽度的读数。选择通道替换，或选“不显示”留空。");
+    note->setObjectName("waveReadoutNote");
+    note->setWordWrap(true);
+    note->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    note->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    note->setMinimumHeight(note->fontMetrics().lineSpacing() * 2);
+    body->setSpacing(12);
+    body->addWidget(note);
+    auto form = new QFormLayout();
+    form->setVerticalSpacing(8);
+    body->addLayout(form);
+    QList<Combo *> selectors;
+    const auto selected = readoutChannels();
+    auto available = series.keys();
+    for (const auto &name : selected)
+    {
+        if (!available.contains(name)) { available.append(name); }
+    }
+    for (int slot = 0; slot < 4; ++slot)
+    {
+        auto picker = new Combo();
+        picker->setObjectName(QString("waveReadoutSlot%1").arg(slot));
+        picker->addItem("不显示", QString());
+        for (const auto &name : available) { picker->addItem(curveLabel(name), name); }
+        picker->setCurrentIndex(qMax(0, picker->findData(selected.value(slot))));
+        form->addRow(QString("读数 %1").arg(slot + 1), picker);
+        selectors.append(picker);
+    }
+    auto buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel | QDialogButtonBox::RestoreDefaults);
+    buttons->button(QDialogButtonBox::Save)->setText("保存");
+    buttons->button(QDialogButtonBox::Save)->setObjectName("primary");
+    buttons->button(QDialogButtonBox::Cancel)->setText("取消");
+    buttons->button(QDialogButtonBox::RestoreDefaults)->setText("自动选择前四个");
+    body->addStretch(1);
+    body->addWidget(buttons);
+    const auto validate = [&]
+    {
+        QStringList chosen;
+        bool unique = true;
+        for (auto picker : selectors)
+        {
+            const auto name = picker->currentData().toString();
+            if (name.isEmpty()) { continue; }
+            if (chosen.contains(name)) { unique = false; }
+            chosen.append(name);
+        }
+        buttons->button(QDialogButtonBox::Save)->setEnabled(unique);
+        note->setText(unique ? "顶部最多显示四个固定宽度的读数。选择通道替换，或选“不显示”留空。"
+            : "同一个通道只能选择一次，请替换重复的通道。");
+    };
+    for (auto picker : selectors) { connect(picker, &QComboBox::currentIndexChanged, &dialog, validate); }
+    bool automatic = false;
+    connect(buttons->button(QDialogButtonBox::RestoreDefaults), &QPushButton::clicked, &dialog, [&]
+    {
+        automatic = true;
+        dialog.accept();
+    });
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    dialog.resize(440, dialog.sizeHint().height());
+    if (dialog.exec() != QDialog::Accepted) { return; }
+    if (automatic)
+    {
+        customReadouts = false;
+        selectedReadouts.clear();
+        updateLegend();
+        emit presentationChanged();
+        return;
+    }
+    QStringList chosen;
+    for (auto picker : selectors) { chosen.append(picker->currentData().toString()); }
+    setReadoutChannels(chosen);
+}
+
 QJsonObject WavePlot::presentationSettings() const
 {
     QJsonObject curves;
@@ -243,7 +350,8 @@ QJsonObject WavePlot::presentationSettings() const
     QStringList hidden = hiddenCurves.values();
     hidden.sort();
     return {{"defaults", styleJson(defaultStyle)}, {"curves", curves},
-        {"hidden", QJsonArray::fromStringList(hidden)}, {"x_title", xTitle}, {"y_title", yTitle},
+        {"hidden", QJsonArray::fromStringList(hidden)},
+        {"readouts", customReadouts ? QJsonValue(QJsonArray::fromStringList(selectedReadouts)) : QJsonValue(QJsonValue::Null)}, {"x_title", xTitle}, {"y_title", yTitle},
         {"x_unit", xUnit}, {"y_unit", yUnit}, {"x_increment", xIncrement}};
 }
 
@@ -255,6 +363,14 @@ void WavePlot::restorePresentation(const QJsonObject &settings)
     for (auto style = curves.begin(); style != curves.end(); ++style)
     {
         curveStyles[style.key()] = readStyle(style.value().toObject());
+    }
+    customReadouts = settings["readouts"].isArray();
+    selectedReadouts.clear();
+    for (const auto &value : settings["readouts"].toArray())
+    {
+        const auto name = value.toString();
+        if (selectedReadouts.size() >= 4) { break; }
+        if (!name.isEmpty() && !selectedReadouts.contains(name)) { selectedReadouts.append(name); }
     }
     hiddenCurves.clear();
     for (const auto &name : settings["hidden"].toArray()) { hiddenCurves.insert(name.toString()); }

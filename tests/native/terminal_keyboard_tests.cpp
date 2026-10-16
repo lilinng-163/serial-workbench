@@ -342,6 +342,152 @@ private slots:
         QVERIFY(!terminal.hasSelection());
     }
 
+    void scrollbackRetainsOutputAndKeepsReadingPosition()
+    {
+        sw::TerminalView terminal;
+        prepare(terminal, {});
+        QByteArray output;
+        for (int i = 0; i < 300; ++i)
+        {
+            output += "row-" + QByteArray::number(i).rightJustified(4, '0') + "\r\n";
+        }
+        terminal.feed(output);
+        QVERIFY(terminal.historyLineCount() > 250);
+        auto scroll = terminal.verticalScrollBar();
+        QCOMPARE(scroll->value(), scroll->maximum());
+        QVERIFY(terminal.visibleText().contains("row-0299"));
+        QSignalSpy sent(&terminal, &sw::TerminalView::transmit);
+        const QPoint wheelPosition(80, 80);
+        QWheelEvent wheel(wheelPosition, terminal.mapToGlobal(wheelPosition), {}, QPoint(0, 120),
+            Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+        QApplication::sendEvent(&terminal, &wheel);
+        QCOMPARE(scroll->value(), scroll->maximum() - 3);
+        scroll->setValue(0);
+        QVERIFY(terminal.visibleText().startsWith("row-0000\n"));
+        const auto previous = terminal.visibleText();
+        terminal.feed("more output\r\n");
+        QCOMPARE(scroll->value(), 0);
+        QCOMPARE(terminal.visibleText(), previous);
+        const QFontMetricsF metrics(terminal.font());
+        const auto cell = [&](int column)
+        {
+            return QPoint(int(16 + (column + 0.5) * metrics.horizontalAdvance('M')),
+                int(12 + metrics.height() * 1.15 / 2));
+        };
+        QTest::mousePress(&terminal, Qt::LeftButton, {}, cell(0));
+        QTest::mouseRelease(&terminal, Qt::LeftButton, {}, cell(7));
+        QCOMPARE(terminal.selectedText(), QString("row-0000"));
+        QTest::keyClick(&terminal, Qt::Key_C, Qt::ControlModifier);
+        QCOMPARE(QApplication::clipboard()->text(), QString("row-0000"));
+        QCOMPARE(sent.size(), 0);
+        QTest::keyClicks(&terminal, "x");
+        QCOMPARE(scroll->value(), scroll->maximum());
+        QCOMPARE(sent.takeFirst().first().toByteArray(), QByteArray("x"));
+        terminal.reset();
+        QCOMPARE(terminal.historyLineCount(), 0);
+        QCOMPARE(scroll->maximum(), 0);
+    }
+
+    void scrollbackIsBoundedAndResizingKeepsThePrompt()
+    {
+        sw::TerminalView terminal;
+        prepare(terminal, {});
+        QByteArray output;
+        for (int i = 0; i < 10100; ++i)
+        {
+            output += "line-" + QByteArray::number(i) + "\r\n";
+        }
+        terminal.feed(output + "prompt>");
+        QCOMPARE(terminal.historyLineCount(), 10000);
+        terminal.verticalScrollBar()->setValue(0);
+        const int first = 10101 - terminal.rows - 10000;
+        QVERIFY(terminal.visibleText().startsWith(QString("line-%1\n").arg(first)));
+        terminal.verticalScrollBar()->setValue(100);
+        const auto pinned = terminal.visibleText();
+        terminal.feed("\r\nnext prompt>");
+        QCOMPARE(terminal.visibleText(), pinned);
+        terminal.verticalScrollBar()->setValue(terminal.verticalScrollBar()->maximum());
+        terminal.resize(840, 180);
+        QApplication::processEvents();
+        QVERIFY(terminal.text().contains("prompt>"));
+        QVERIFY(terminal.visibleText().contains("prompt>"));
+        QCOMPARE(terminal.historyLineCount(), 10000);
+    }
+
+    void alternateScreenAndExplicitHistoryClear()
+    {
+        sw::TerminalView terminal;
+        prepare(terminal, {});
+        for (int i = 0; i < 100; ++i) { terminal.feed("shell output\r\n"); }
+        terminal.feed("prompt>");
+        const int history = terminal.historyLineCount();
+        const auto normal = terminal.text();
+        terminal.verticalScrollBar()->setValue(3);
+        const auto reading = terminal.visibleText();
+        terminal.feed("\x1b[?1049h");
+        for (int i = 0; i < 100; ++i) { terminal.feed("full screen output\r\n"); }
+        QCOMPARE(terminal.historyLineCount(), history);
+        QCOMPARE(terminal.verticalScrollBar()->maximum(), 0);
+        QTest::keyClick(&terminal, Qt::Key_Home, SelectWord);
+        QVERIFY(terminal.selectedText().contains("full screen output"));
+        terminal.feed("\x1b[?1049l");
+        QCOMPARE(terminal.text(), normal);
+        QCOMPARE(terminal.historyLineCount(), history);
+        QCOMPARE(terminal.verticalScrollBar()->value(), 3);
+        QCOMPARE(terminal.visibleText(), reading);
+        terminal.feed("\x1b[3J");
+        QCOMPARE(terminal.historyLineCount(), 0);
+        QCOMPARE(terminal.text(), normal);
+        terminal.feed("\x1b[2J\x1b[H");
+        QVERIFY(terminal.text().trimmed().isEmpty());
+    }
+
+    void sshSessionKeepsCommandsInTheTerminal()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        engine.sshExecutable = QCoreApplication::applicationDirPath() + "/fake_ssh.exe";
+        sw::McpServer server(&engine);
+        sw::Window window(&engine, &server, directory.filePath("settings.json"));
+        window.resize(1100, 740);
+        window.show();
+        window.protocol->setCurrentIndex(4);
+        window.sshTarget->setCurrentText("history-test");
+        window.connectionAction();
+        auto pane = window.active;
+        QVERIFY(pane->channel);
+        QTRY_COMPARE(pane->channel->state, QString("connected"));
+        QByteArray output;
+        for (int line = 1; line <= 300; ++line)
+        {
+            output += "output " + QByteArray::number(line) + ": SSH terminal history\r\n";
+        }
+        pane->channel->receive(output + "\x1b[32muser@host:~$ \x1b[0m");
+        pane->tick();
+        QVERIFY(pane->terminalMode);
+        QVERIFY(pane->modeButton->isHidden());
+        QVERIFY(pane->sender->isHidden());
+        QVERIFY(pane->log->toPlainText().isEmpty());
+        QVERIFY(pane->terminal->historyLineCount() > 250);
+        QVERIFY(pane->terminal->visibleText().contains("user@host:~$"));
+        const auto capture = qEnvironmentVariable("SW_TERMINAL_CAPTURE_DIR");
+        if (!capture.isEmpty())
+        {
+            QDir().mkpath(capture);
+            QVERIFY(window.grab().save(capture + "/ssh-terminal-live.png"));
+        }
+        pane->terminal->verticalScrollBar()->setValue(0);
+        QVERIFY(pane->terminal->visibleText().contains("output 1:"));
+        if (!capture.isEmpty())
+        {
+            QVERIFY(window.grab().save(capture + "/ssh-terminal-history.png"));
+        }
+        pane->setTerminal(false);
+        QVERIFY(pane->terminalMode);
+        QVERIFY(pane->sender->isHidden());
+        window.close();
+    }
+
     void sshPaneEnablesLocalSelection()
     {
         QTemporaryDir directory;
@@ -353,9 +499,22 @@ private slots:
         pane->setTerminal(true);
         pane->tick();
         QVERIFY(pane->terminal->keyboardSelectionEnabled);
+        QVERIFY(pane->modeButton->isHidden());
+        QVERIFY(pane->sender->isHidden());
+        pane->setTerminal(false);
+        QVERIFY(pane->terminalMode);
+        QCOMPARE(pane->display->currentWidget(), pane->terminal);
+        QVERIFY(pane->sender->isHidden());
+        QVERIFY(pane->timestamps->isHidden());
+        pane->restore({{"terminal_mode", false}});
+        QVERIFY(pane->terminalMode);
         pane->draft.kind = "serial";
         pane->tick();
         QVERIFY(!pane->terminal->keyboardSelectionEnabled);
+        QVERIFY(!pane->modeButton->isHidden());
+        pane->setTerminal(false);
+        QVERIFY(!pane->terminalMode);
+        QVERIFY(!pane->sender->isHidden());
         window.close();
     }
 };

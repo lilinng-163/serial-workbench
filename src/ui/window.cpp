@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "window.h"
+#include "window_chrome.h"
 #include "instrument_config.h"
+#include "serial_control_panel.h"
 #include "json_tools.h"
 #include "ssh_profiles.h"
 #include "parameter_grip.h"
@@ -21,6 +23,19 @@
 
 namespace sw
 {
+static QString instrumentIconName(const QString &kind)
+{
+    if (kind == "waveform")
+    {
+        return "wave";
+    }
+    if (kind == "json" || kind == "xml")
+    {
+        return kind;
+    }
+    return "widgets";
+}
+
 static QLabel *label(const QString &text, const QString &name = {})
 {
     auto result = new QLabel(text);
@@ -243,10 +258,11 @@ public:
 Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), kind(type == "values" ? "waveform" : type == "structured" ? "json" : type)
 {
     setObjectName("page");
+    setAttribute(Qt::WA_StyledBackground);
     auto body = new QVBoxLayout(this);
     body->setContentsMargins(16, 12, 16, 8);
     auto sourceRow = horizontal();
-    sourceRow->addWidget(label("数据来源", "muted"));
+    sourceRow->addWidget(label(kind == "control" ? "控制目标" : "数据来源", "muted"));
     source = new Combo();
     source->setObjectName("instrumentSource");
     source->setMinimumWidth(180);
@@ -254,6 +270,13 @@ Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), 
     sourceRow->addWidget(source, 1);
     sourceRow->addStretch();
     body->addLayout(sourceRow);
+    if (kind == "control")
+    {
+        controls = new SerialControlPanel(this);
+        body->addWidget(controls, 1);
+        info = controls->status;
+        return;
+    }
     auto tools = horizontal();
     freeze = new IconButton("pause", "暂停显示，后台继续接收");
     freeze->setObjectName("pauseInstrumentDisplay");
@@ -264,6 +287,10 @@ Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), 
         freeze->setAccessibleName(freeze->toolTip());
     });
     tools->addWidget(freeze);
+    auto clear = new IconButton("trash", "清空当前页面，保留共享历史");
+    clear->setObjectName("clearInstrumentDisplay");
+    tools->addWidget(clear);
+    connect(clear, &QAbstractButton::clicked, this, &Instrument::clearDisplay);
     tools->addStretch();
     body->addLayout(tools);
     if (kind == "waveform")
@@ -442,6 +469,7 @@ void Instrument::hideEvent(QHideEvent *event)
 
 QJsonObject Instrument::settings() const
 {
+    if (controls) { return {{"kind", kind}, {"serial_controls", controls->settings()}}; }
     QJsonObject result {{"kind", kind}, {"frozen", freeze->isChecked()}};
     if (points)
     {
@@ -461,7 +489,8 @@ QJsonObject Instrument::settings() const
 
 void Instrument::tick(Channel *channel)
 {
-    if (plot) { waveChannel = channel; }
+    if (controls) { controls->setChannel(channel); return; }
+    waveChannel = channel;
     if (!channel || freeze->isChecked())
     {
         return;
@@ -538,6 +567,7 @@ public:
 Pane::Pane(Window *owner, const QString &instrumentKind) : QWidget(owner), window(owner)
 {
     setObjectName("workspace");
+    setAttribute(Qt::WA_StyledBackground);
     auto body = new QVBoxLayout(this);
     body->setContentsMargins(0, 0, 0, 0);
     body->setSpacing(0);
@@ -545,6 +575,16 @@ Pane::Pane(Window *owner, const QString &instrumentKind) : QWidget(owner), windo
     {
         instrument = new Instrument(instrumentKind, this);
         instrument->helpWindow = window->rootWindow();
+        if (instrument->controls)
+        {
+            connect(instrument->controls, &SerialControlPanel::changed, this, [this] { window->saveSettings(); });
+            connect(instrument->controls, &SerialControlPanel::zoomRequested, this, [this](int steps)
+            {
+                auto font = window->dataFont;
+                font.setPointSize(qBound(8, font.pointSize() + steps, 32));
+                window->setDataFont(font);
+            });
+        }
         if (instrument->plot)
         {
             connect(instrument->plot, &WavePlot::presentationChanged, this, [this] { window->saveSettings(); });
@@ -669,9 +709,15 @@ Pane::Pane(Window *owner, const QString &instrumentKind) : QWidget(owner), windo
     terminal = new TerminalView();
     display->addWidget(log);
     display->addWidget(terminal);
+    receiveSurface = new BackgroundSurface();
+    receiveSurface->setObjectName("receiveBackgroundSurface");
+    auto receiveLayout = new QVBoxLayout(receiveSurface);
+    receiveLayout->setContentsMargins(0, 0, 0, 0);
+    receiveLayout->setSpacing(0);
+    receiveLayout->addWidget(display);
     receiveSplitter = new Splitter(Qt::Vertical);
     receiveSplitter->setObjectName("receiveSplitter");
-    receiveSplitter->addWidget(display);
+    receiveSplitter->addWidget(receiveSurface);
     buildScriptResults();
     splitter->addWidget(receiveSplitter);
     monitor->addWidget(splitter, 1);
@@ -706,7 +752,9 @@ Pane::Pane(Window *owner, const QString &instrumentKind) : QWidget(owner), windo
     {
         newline->setItemData(i, lineNames[i], Qt::ToolTipRole);
     }
-    sendHex = new QCheckBox("HEX");
+    sendHex = new IconButton("hex", "十六进制发送");
+    sendHex->setObjectName("sendHex");
+    sendHex->setCheckable(true);
     sendTools->addWidget(encoding);
     sendTools->addWidget(newline);
     sendTools->addWidget(sendHex);
@@ -882,7 +930,8 @@ void Pane::setChannel(Channel *value)
         instrument->info->setText(value ? "等待设备数据" : "等待数据来源连接");
     }
     channel = value;
-    if (instrument && instrument->plot) { instrument->waveChannel = value; }
+    if (instrument && instrument->controls) { instrument->controls->setChannel(value); }
+    if (instrument) { instrument->waveChannel = value; }
     if (value)
     {
         draft = value->config;
@@ -938,7 +987,7 @@ void Pane::refreshSource()
     auto source = instrument->source;
     const QSignalBlocker blocker(source);
     source->clear();
-    source->addItem("选择数据来源", QString());
+    source->addItem(instrument->controls ? "选择串口连接" : "选择数据来源", QString());
     const bool structured = instrument->isStructured();
     const auto demo = structured ? Config::structuredDemo() : Config::waveformDemo();
     int demoIndex = -1;
@@ -962,6 +1011,7 @@ void Pane::refreshSource()
     };
     for (auto candidate : window->engine->channels)
     {
+        if (instrument->controls && candidate->config.kind != "serial") { continue; }
         if (candidate->config.kind == "serial" && candidate->state != "connected"
             && !serialAvailable(candidate->config.key())) { continue; }
         if ((structured && candidate->config.kind == "demo" && !candidate->config.isStructuredDemo())
@@ -981,7 +1031,8 @@ void Pane::refreshSource()
         }
     }
     const bool missingSerial = sourceKey.startsWith("serial:") && !selected && !serialAvailable(sourceKey);
-    if (!sourceKey.isEmpty() && !selected && !missingSerial && !(demoIndex >= 0 && sourceKey == demo.key()))
+    if (!sourceKey.isEmpty() && !selected && !missingSerial && !(demoIndex >= 0 && sourceKey == demo.key())
+        && (!instrument->controls || sourceKey.startsWith("serial:")))
     {
         const auto name = sourceKey.startsWith("serial:") ? sourceKey.mid(7).toUpper() : sourceKey;
         source->addItem(name + " · 未建立连接", sourceKey);
@@ -1020,6 +1071,11 @@ void Pane::applyAppearance()
         .arg(window->dataFont.italic() ? "italic" : "normal");
     if (instrument)
     {
+        if (instrument->controls)
+        {
+            instrument->controls->setTheme(window->theme);
+            instrument->controls->setDataFont(window->dataFont);
+        }
         for (auto control : instrument->findChildren<IconButton *>())
         {
             control->theme = window->theme;
@@ -1046,12 +1102,27 @@ void Pane::applyAppearance()
     }
     log->theme = window->theme;
     terminal->theme = window->theme;
+    const bool workspaceImage = !window->windowBackgroundImage.isNull();
+    const bool receiveImage = !window->receiveBackgroundImage.isNull();
+    const bool transparent = workspaceImage || receiveImage;
+    const QString logStyle = fontStyle + (transparent ? "background: transparent;" : "");
     log->setFont(window->dataFont);
-    log->setStyleSheet(fontStyle);
+    if (log->styleSheet() != logStyle) { log->setStyleSheet(logStyle); }
     payload->setFont(window->dataFont);
     payload->setStyleSheet(fontStyle);
     terminal->setFont(window->dataFont);
     terminal->setStyleSheet(fontStyle);
+    receiveSurface->background.set(window->receiveBackground, window->receiveBackgroundImage);
+    receiveSurface->base = window->theme.panel;
+    receiveSurface->transparentBase = workspaceImage && !receiveImage;
+    receiveSurface->setAttribute(Qt::WA_OpaquePaintEvent, !receiveSurface->transparentBase);
+    receiveSurface->update();
+    log->transparentBackground = transparent;
+    terminal->transparentBackground = transparent;
+    log->viewport()->setAutoFillBackground(!transparent);
+    auto viewportPalette = log->viewport()->palette();
+    viewportPalette.setColor(QPalette::Base, transparent ? QColor(Qt::transparent) : window->theme.panel);
+    log->viewport()->setPalette(viewportPalette);
     if (scriptTable)
     {
         scriptTable->setFont(window->dataFont);
@@ -1083,7 +1154,10 @@ void Pane::tick()
     sendButton->setEnabled(available && channel->config.kind != "demo");
     repeat->setEnabled(available && channel->config.kind != "demo");
     terminal->enabledInput = available && terminalMode;
-    terminal->keyboardSelectionEnabled = (channel ? channel->config.kind : draft.kind) == "ssh";
+    const bool ssh = (channel ? channel->config.kind : draft.kind) == "ssh";
+    terminal->keyboardSelectionEnabled = ssh;
+    modeButton->setVisible(!ssh);
+    if (ssh && !terminalMode) { setTerminal(true); }
     transferButton->setVisible((channel ? channel->config.kind : draft.kind) == "serial");
     transferButton->setEnabled(available && channel->serial);
     exportButton->setEnabled(channel);
@@ -1129,7 +1203,7 @@ void Pane::tick()
         for (const auto &value : batch["events"].toArray())
         {
             const auto event = value.toObject();
-            log->feed(event);
+            if (!ssh) { log->feed(event); }
             if (event["stream_reset"].toBool())
             {
                 terminal->reset(channel && channel->config.kind == "ssh" ? "utf-8" : encoding->currentText());
@@ -1163,6 +1237,9 @@ void Pane::sendCurrent()
 void Pane::setTerminal(bool enabled)
 {
     if (instrument) { return; }
+    const bool ssh = (channel ? channel->config.kind : draft.kind) == "ssh";
+    if (ssh) { enabled = true; }
+    modeButton->setVisible(!ssh);
     if (enabled && !sender->isHidden())
     {
         const auto sizes = splitter->sizes();
@@ -1391,7 +1468,8 @@ void Pane::restore(const QJsonObject &settings)
 {
     if (instrument)
     {
-        instrument->freeze->setChecked(settings["frozen"].toBool());
+        if (instrument->freeze) { instrument->freeze->setChecked(settings["frozen"].toBool()); }
+        if (instrument->controls) { instrument->controls->restore(settings["serial_controls"].toObject()); }
         if (instrument->points)
         {
             instrument->points->setValue(settings["points"].toInt(1000));
@@ -1409,6 +1487,7 @@ void Pane::restore(const QJsonObject &settings)
             instrument->valuesToggle->setChecked(settings["show_values"].toBool());
         }
         sourceKey = settings["source_key"].toString();
+        if (instrument->controls && !sourceKey.startsWith("serial:")) { sourceKey.clear(); }
         if (instrument->isStructured() && sourceKey.startsWith("demo:")
             && sourceKey != Config::structuredDemo().key())
         {
@@ -1493,6 +1572,7 @@ public:
 Window::Window(Engine *owner, McpServer *service, const QString &path, Window *main)
     : QMainWindow(main, Qt::Window), primary(main), engine(owner), mcp(service), settingsPath(path)
 {
+    installWindowChrome();
     rootWindow()->hosts.append(this);
     if (primary)
     {
@@ -1548,7 +1628,25 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
         parameterWidth = primary->parameterWidth;
     }
 
-    auto root = new QWidget();
+    if (primary)
+    {
+        windowBackground = primary->windowBackground;
+        receiveBackground = primary->receiveBackground;
+        windowBackgroundImage = primary->windowBackgroundImage;
+        receiveBackgroundImage = primary->receiveBackgroundImage;
+    }
+    else
+    {
+        windowBackground = BackgroundSpec::fromJson(appearance["window_background"].toObject());
+        receiveBackground = BackgroundSpec::fromJson(appearance["receive_background"].toObject());
+        const QDir directory(QFileInfo(settingsPath).absolutePath());
+        if (!windowBackground.file.isEmpty()) { windowBackgroundImage = BackgroundImage::read(directory.filePath(windowBackground.file)); }
+        if (!receiveBackground.file.isEmpty()) { receiveBackgroundImage = BackgroundImage::read(directory.filePath(receiveBackground.file)); }
+    }
+
+    auto root = new BackgroundSurface();
+    backgroundSurface = root;
+    root->windowAligned = true;
     root->setObjectName("root");
     auto layout = horizontal(root);
     layout->setSpacing(0);
@@ -1593,14 +1691,6 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     auto brandBody = new QVBoxLayout(brand);
     brandBody->setContentsMargins(14, 14, 14, 12);
     brandBody->setSpacing(10);
-    auto brandTop = horizontal();
-    auto emblem = new QLabel();
-    emblem->setPixmap(icon("lightning", QColor("#edaa50"), 32).pixmap(32, 32));
-    emblem->setFixedSize(32, 32);
-    brandTop->addWidget(emblem);
-    brandTop->addStretch();
-    brandTop->addWidget(label("SW", "brandMark"));
-    brandBody->addLayout(brandTop);
     brandBody->addWidget(label("Serial\nWorkbench", "brandTitle"));
     brandBody->addWidget(label("串口 / 网络 / SSH", "brandSubtitle"));
     side->addWidget(brand);
@@ -1645,19 +1735,26 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     parity = combo({"N", "E", "O", "M", "S"});
     stopbits = combo({"1", "1.5", "2"});
     flow = combo({"none", "rtscts", "xonxoff"});
+    bits->setMinimumContentsLength(1);
+    parity->setMinimumContentsLength(1);
+    stopbits->setMinimumContentsLength(3);
+    flow->setMinimumContentsLength(7);
+    flow->setMinimumWidth(flow->fontMetrics().horizontalAdvance("xonxoff") + 48);
     parity->setToolTip("N: None · 无校验\nE: Even · 偶校验\nO: Odd · 奇校验\nM: Mark\nS: Space");
     flow->setToolTip("none: 无流控\nrtscts: 硬件流控\nxonxoff: 软件流控");
     auto serialGrid = new QGridLayout();
-    serialGrid->setHorizontalSpacing(10);
+    serialGrid->setColumnStretch(0, 2);
+    serialGrid->setColumnStretch(1, 3);
+    serialGrid->setHorizontalSpacing(8);
     serialGrid->setVerticalSpacing(7);
     serialGrid->addWidget(label("数据位", "muted"), 0, 0);
     serialGrid->addWidget(label("校验", "muted"), 0, 1);
     serialGrid->addWidget(bits, 1, 0);
     serialGrid->addWidget(parity, 1, 1);
-    serialGrid->addWidget(label("停止位", "muted"), 2, 0);
-    serialGrid->addWidget(label("流控", "muted"), 2, 1);
-    serialGrid->addWidget(stopbits, 3, 0);
-    serialGrid->addWidget(flow, 3, 1);
+    serialGrid->addWidget(label("停止位", "muted"), 2, 0, 1, 2);
+    serialGrid->addWidget(stopbits, 3, 0, 1, 2);
+    serialGrid->addWidget(label("流控", "muted"), 4, 0, 1, 2);
+    serialGrid->addWidget(flow, 5, 0, 1, 2);
     serialBody->addSpacing(6);
     serialBody->addLayout(serialGrid);
     dtr = new QCheckBox("DTR");
@@ -1812,6 +1909,8 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     sideScroll->setWidgetResizable(true);
     sideScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     sideScroll->setWidget(sidebar);
+    sidebar->setAutoFillBackground(false);
+    sideScroll->viewport()->setAutoFillBackground(false);
     sideScroll->setFixedWidth(qMin(parameterWidth, qMax(220, width() - 54 - 8 - 320)));
     sideScroll->setMinimumHeight(0);
     sideScroll->setObjectName("parameterScroll");
@@ -1824,23 +1923,21 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     rightBody->setSpacing(0);
     tabHeader = new QWidget();
     tabHeader->setObjectName("tabHeader");
-    tabHeader->setFixedHeight(54);
+    tabHeader->setFixedHeight(49);
     auto header = horizontal(tabHeader);
-    header->setContentsMargins(12, 0, 12, 0);
+    header->setContentsMargins(6, 4, 12, 0);
     header->setSpacing(0);
     tabs = new ConnectionBar();
     tabs->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(tabs, &QWidget::customContextMenuRequested, this, &Window::tabMenu);
-    connect(tabs, &QTabBar::tabBarDoubleClicked, this, [this](int index)
+    auto renameTabShortcut = new QShortcut(QKeySequence(Qt::Key_F2), this);
+    renameTabShortcut->setObjectName("renameCurrentTab");
+    connect(renameTabShortcut, &QShortcut::activated, this, [this]
     {
-        QPointer<Pane> selected = tabPane(tabs, index);
-        QTimer::singleShot(0, this, [this, selected]
+        if (!tabs->findChild<QLineEdit *>("tabTitleEditor"))
         {
-            if (selected)
-            {
-                beginTabRename(paneIndex(tabs, selected));
-            }
-        });
+            beginTabRename(tabs->currentIndex());
+        }
     });
     connect(tabs, &QTabBar::currentChanged, this, &Window::activate);
     connect(tabs, &QTabBar::tabCloseRequested, this, &Window::closeTab);
@@ -1849,7 +1946,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     {
         detachConnection(index, position, true);
     });
-    header->addWidget(tabs);
+    header->addWidget(tabs, 0, Qt::AlignBottom);
     plus = new IconButton("plus", "新建页面");
     plus->setObjectName("newPage");
     plus->setFixedSize(30, 36);
@@ -2148,10 +2245,11 @@ Pane *Window::newConnection()
 Pane *Window::newInstrument(const QString &kind, Channel *source, bool activatePage, const QString &pendingKey)
 {
     const QString canonical = kind == "values" ? "waveform" : kind == "structured" ? "json" : kind;
-    if (!QStringList {"waveform", "json", "xml"}.contains(canonical))
+    if (!QStringList {"waveform", "json", "xml", "control"}.contains(canonical))
     {
         return nullptr;
     }
+    if (canonical == "control" && source && source->config.kind != "serial") { source = nullptr; }
     if (source && source->config.kind == "demo")
     {
         try
@@ -2167,7 +2265,7 @@ Pane *Window::newInstrument(const QString &kind, Channel *source, bool activateP
     }
     auto previous = active;
     auto page = new Pane(this, kind);
-    const QString baseTitle = canonical == "waveform" ? "数值波形" : canonical.toUpper();
+    const QString baseTitle = canonical == "waveform" ? "数值波形" : canonical == "control" ? "串口控制" : canonical.toUpper();
     QStringList titles;
     for (auto host : rootWindow()->hosts)
     {
@@ -2183,7 +2281,7 @@ Pane *Window::newInstrument(const QString &kind, Channel *source, bool activateP
     {
         page->pageTitle = baseTitle + " " + QString::number(number++);
     }
-    page->sourceKey = source ? source->config.key() : pendingKey;
+    page->sourceKey = source ? source->config.key() : (canonical != "control" || pendingKey.startsWith("serial:") ? pendingKey : QString());
     attachPane(page);
     if (!activatePage && previous && panes.contains(previous))
     {
@@ -2202,12 +2300,12 @@ QMenu *Window::newPageMenu()
     menu->addSeparator();
     auto widgets = menu->addMenu(icon("widgets", theme.text), "新建控件页面");
     widgets->setObjectName("newWidgetPage");
-    const QStringList kinds {"waveform", "json", "xml"};
-    const QStringList titles {"数值波形", "JSON", "XML"};
+    const QStringList kinds {"waveform", "json", "xml", "control"};
+    const QStringList titles {"数值波形", "JSON", "XML", "串口控制"};
     for (int i = 0; i < kinds.size(); ++i)
     {
         const auto kind = kinds[i];
-        auto action = widgets->addAction(titles[i], this, [this, kind]
+        auto action = widgets->addAction(icon(instrumentIconName(kind), theme.muted), titles[i], this, [this, kind]
         {
             newInstrument(kind, active ? active->channel.data() : nullptr);
         });
@@ -2277,7 +2375,7 @@ void Window::attachPane(Pane *pane)
     const int index = tabs->addTab(title);
     if (pane->instrument)
     {
-        tabs->setTabIcon(index, icon(pane->instrument->plot ? "wave" : "widgets", theme.muted));
+        tabs->setTabIcon(index, icon(instrumentIconName(pane->instrument->kind), theme.muted));
         pane->refreshSource();
     }
     tabs->setTabData(index, QVariant::fromValue(static_cast<QObject *>(pane)));
@@ -2756,7 +2854,7 @@ void Window::syncConnections()
         {
             pane->refreshSource();
             const int index = paneIndex(tabs, pane);
-            tabs->setTabIcon(index, icon(pane->instrument->plot ? "wave" : "widgets", theme.muted));
+            tabs->setTabIcon(index, icon(instrumentIconName(pane->instrument->kind), theme.muted));
             tabs->setTabToolTip(index, pane->sourceKey.isEmpty() ? "控件页面 · 请选择数据来源" : "数据来源：" + pane->sourceKey);
         }
     }
@@ -2970,7 +3068,11 @@ void Window::applyLocalTheme(bool dark)
     theme = Theme::make(dark);
     connectionLed->theme = theme;
     connectionLed->update();
-    setStyleSheet(theme.stylesheet());
+    setStyleSheet(workspaceStyle());
+    backgroundSurface->base = theme.background;
+    backgroundSurface->background.set(windowBackground, windowBackgroundImage);
+    backgroundSurface->update();
+    if (!primary) { updateWindowChrome(theme, windowBackground, windowBackgroundImage); }
     QPalette palette;
     palette.setColor(QPalette::Window, theme.background);
     palette.setColor(QPalette::Base, theme.panel);
@@ -3029,7 +3131,7 @@ void Window::tabMenu(const QPoint &point)
         return;
     }
     QMenu menu(this);
-    auto renameTab = menu.addAction("重命名标签", this, [this, pane]
+    auto renameTab = menu.addAction("重命名标签\tF2", this, [this, pane]
     {
         QPointer<Pane> selected = pane;
         QTimer::singleShot(0, this, [this, selected]
@@ -3089,14 +3191,20 @@ void Window::beginTabRename(int index)
     {
         previous->finish(false);
     }
+    tabs->setCurrentIndex(index);
     auto editor = new TabTitleEditor(tabs);
     editor->setObjectName("tabTitleEditor");
+    editor->setFrame(false);
     editor->setMaxLength(80);
     editor->setText(tabs->tabText(index));
-    const auto close = tabs->tabButton(index, QTabBar::RightSide);
-    const int left = tabs->tabIcon(index).isNull() ? 10 : 30;
-    const int right = close ? close->width() + 8 : 10;
-    editor->setGeometry(tabs->tabRect(index).adjusted(left, 5, -right, -5));
+    QStyleOptionTab option;
+    tabs->initStyleOption(&option, index);
+    // Use the style's text area so icon sizes, padding and close buttons stay clear.
+    auto textRect = tabs->style()->subElementRect(QStyle::SE_TabBarTabText, &option, tabs);
+    const auto tabRect = tabs->tabRect(index);
+    textRect.setTop(tabRect.top() + 8);
+    textRect.setBottom(tabRect.bottom() - 7);
+    editor->setGeometry(textRect);
     QPointer<Pane> selected = pane;
     editor->onFinish = [this, editor, selected](bool accept)
     {
@@ -3163,6 +3271,8 @@ void Window::saveSettings()
     appearance["font_family"] = dataFont.family();
     appearance["font_size"] = dataFont.pointSize();
     appearance["parameter_width"] = parameterWidth;
+    appearance["window_background"] = windowBackground.json();
+    appearance["receive_background"] = receiveBackground.json();
     QJsonObject connection = saved["connection"].toObject();
     try
     {
@@ -3450,6 +3560,7 @@ void Window::openSettings()
     auto fontHint = label("界面使用清晰中文字体。数据区可自选字体，Ctrl + 滚轮调整字号。", "muted");
     fontHint->setWordWrap(true);
     appearanceBody->addWidget(fontHint);
+    appearanceBody->addWidget(backgroundSettingsPanel());
     appearanceBody->addStretch();
     pages->addTab(scrollPanel(appearance, "appearanceScroll"), "外观");
 

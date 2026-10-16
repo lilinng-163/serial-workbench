@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(SerialWorkbench
-    VERSION 0.15.15
+    VERSION 0.15.29
     DESCRIPTION "Native serial and network workbench with shared MCP access"
     LANGUAGES CXX
 )
@@ -16,9 +16,9 @@ include(CTest)
 include(GNUInstallDirs)
 include(cmake/ProjectOptions.cmake)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Widgets Network SerialPort Core5Compat Svg)
+find_package(Qt6 6.9 REQUIRED COMPONENTS Widgets Network SerialPort Core5Compat Svg)
 if(BUILD_TESTING)
-    find_package(Qt6 6.5 REQUIRED COMPONENTS Test)
+    find_package(Qt6 6.9 REQUIRED COMPONENTS Test)
 endif()
 
 configure_file(cmake/workbench_version.h.in generated/workbench_version.h @ONLY)

@@ -41,6 +41,43 @@ void TearTabBar::initStyleOption(QStyleOptionTab *option, int index) const
     option->position = QStyleOptionTab::Moving;
 }
 
+void TearTabBar::paintEvent(QPaintEvent *event)
+{
+    QTabBar::paintEvent(event);
+    if (currentIndex() < 0 || !pageColor.isValid() || pressedPage) { return; }
+
+    // QRectF's bottom is already exclusive. Keep the full arc inside the bar
+    // and place each foot against the styled tab body, excluding its margins.
+    const QRectF bounds = tabRect(currentIndex());
+    const qreal bottom = qMin(bounds.bottom(), qreal(height()));
+    const bool embedded = qobject_cast<QTabWidget *>(parentWidget());
+    const qreal radius = embedded ? 8 : 6;
+    const qreal left = bounds.left() + (embedded ? 0 : 6);
+    const qreal right = bounds.right() - (embedded ? 12 : 6);
+    constexpr qreal circleControl = 0.5522847498;
+    QPainterPath feet;
+    // The leading tab joins the pane's straight left edge without an overhang.
+    const bool outerCorner = currentIndex() == 0 && embedded;
+    if (!outerCorner)
+    {
+        feet.moveTo(left - radius, bottom);
+        feet.cubicTo(left - radius + circleControl * radius, bottom,
+                     left, bottom - radius + circleControl * radius,
+                     left, bottom - radius);
+        feet.lineTo(left, bottom);
+        feet.closeSubpath();
+    }
+    feet.moveTo(right, bottom - radius);
+    feet.cubicTo(right, bottom - radius + circleControl * radius,
+                 right + radius - circleControl * radius, bottom,
+                 right + radius, bottom);
+    feet.lineTo(right, bottom);
+    feet.closeSubpath();
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.fillPath(feet, pageColor);
+}
+
 QObject *TearTabBar::identity(int index) const
 {
     if (index < 0)
@@ -70,6 +107,17 @@ void TearTabBar::mousePressEvent(QMouseEvent *event)
         pressedPage = identity(tabAt(pressPosition));
     }
     QTabBar::mousePressEvent(event);
+}
+
+void TearTabBar::mouseDoubleClickEvent(QMouseEvent *event)
+{
+    if (middleClickCloses && event->button() == Qt::MiddleButton)
+    {
+        middlePressedPage.clear();
+        event->accept();
+        return;
+    }
+    QTabBar::mouseDoubleClickEvent(event);
 }
 
 void TearTabBar::mouseMoveEvent(QMouseEvent *event)
@@ -120,6 +168,13 @@ DetachableTabs::DetachableTabs(QWidget *parent) : QTabWidget(parent)
 {
     auto bar = new TearTabBar();
     setTabBar(bar);
+    connect(this, &QTabWidget::currentChanged, this, [this](int index) {
+        // Only the leading active tab joins the pane's left edge directly.
+        setProperty("leadingTabSelected", index == 0);
+        style()->unpolish(this);
+        style()->polish(this);
+        update();
+    });
     connect(bar, &TearTabBar::tearRequested, this,
             [this](int index, const QPoint &position) { detachPage(index, position, true); });
     bar->setContextMenuPolicy(Qt::CustomContextMenu);

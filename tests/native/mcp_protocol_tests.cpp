@@ -20,6 +20,115 @@ class McpProtocolTests : public QObject
     Q_OBJECT
 
 private slots:
+    void explicitConnectionDoesNotReadHistoricalSsh()
+    {
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        auto ssh = makeChannel(engine, "ssh");
+        ssh->receive("OLD_SSH_OUTPUT\n");
+        ssh->status("closed");
+        auto serial = makeChannel(engine, "serial");
+        serial->config.port = "COM8";
+        serial->receive("ESP32 tick\n");
+        const auto page = mcp.call("read_events", {{"channel_id", serial->id}}).toObject();
+        QCOMPARE(page["scope"].toString(), QString("channel"));
+        QCOMPARE(page["channel_id"].toString(), serial->id);
+        QCOMPARE(page["protocol"].toString(), QString("serial"));
+        QCOMPARE(page["connection_state"].toString(), QString("connected"));
+        QVERIFY(!page["events"].toArray().isEmpty());
+        for (const auto &event : page["events"].toArray())
+        {
+            QCOMPARE(event.toObject()["channel_id"].toString(), serial->id);
+        }
+        QVERIFY(!QJsonDocument(page).toJson().contains("OLD_SSH_OUTPUT"));
+
+        // Previous successful reads must not bind an implicit default for a later call.
+        const QList<QJsonObject> invalid {
+            {}, {{"channel_id", ""}}, {{"channel_id", "  "}}, {{"channel_id", QJsonValue::Null}},
+            {{"channel_id", 123}}, {{"channel_id", "COM8"}}, {{"channel_id", "*"}}, {{"channel_id", "missing-id"}}
+        };
+        for (const auto &args : invalid)
+        {
+            QVERIFY_EXCEPTION_THROWN(mcp.call("read_events", args), std::runtime_error);
+        }
+        for (const auto &tool : {"read_waveform", "read_structured", "read_script_results"})
+        {
+            QVERIFY_EXCEPTION_THROWN(mcp.call(tool, {}), std::runtime_error);
+        }
+        const auto history = mcp.call("read_events", {{"channel_id", ssh->id}}).toObject();
+        QCOMPARE(history["connection_state"].toString(), QString("closed"));
+        QVERIFY(QJsonDocument(history).toJson().contains("OLD_SSH_OUTPUT"));
+        const auto all = mcp.call("read_all_events", {}).toObject();
+        QCOMPARE(all["scope"].toString(), QString("all_channels"));
+        QVERIFY(QJsonDocument(all).toJson().contains("OLD_SSH_OUTPUT"));
+        QVERIFY_EXCEPTION_THROWN(mcp.call("read_all_events", {{"channel_id", serial->id}}), std::runtime_error);
+        // Independent GUI/AI reads retain the same records.
+        QCOMPARE(mcp.call("read_events", {{"channel_id", serial->id}}).toObject(), page);
+        QCOMPARE(engine.journal.read(0, 200, serial->id)["events"], page["events"]);
+        mcp.setProtocolEnabled("serial", false);
+        QVERIFY_EXCEPTION_THROWN(mcp.call("read_events", {{"channel_id", serial->id}}), std::runtime_error);
+    }
+
+    void perConnectionCursorsAndFreshData()
+    {
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        auto serial = makeChannel(engine, "serial");
+        auto ssh = makeChannel(engine, "ssh");
+        serial->receive("old serial\n");
+        const auto start = mcp.call("get_status", {}).toObject()["latest_cursor"].toInteger();
+        ssh->receive("ssh after snapshot\n");
+        serial->receive("new ESP32\n");
+        const QJsonObject args {{"channel_id", serial->id}, {"after", start}, {"limit", 1}};
+        const auto page = mcp.call("read_events", args).toObject();
+        QCOMPARE(page["events"].toArray().size(), 1);
+        QVERIFY(page["events"].toArray().first().toObject()["text"].toString().contains("new ESP32"));
+        QVERIFY(!page["has_more"].toBool());
+        QCOMPARE(page["next_cursor"].toInteger(), engine.journal.sequence);
+        QVERIFY(mcp.call("read_events", {{"channel_id", serial->id}, {"after", page["next_cursor"]}})
+            .toObject()["events"].toArray().isEmpty());
+    }
+
+    void guideAndToolDiscovery()
+    {
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        const auto guide = mcp.call("read_usage_guide", {}).toObject();
+        QVERIFY(!guide["guide"].toString().isEmpty());
+        QCOMPARE(guide["skill_path_scope"].toString(), QString("server_host"));
+        QVERIFY(!guide["skill_auto_installed"].toBool());
+        const auto script = mcp.call("read_usage_guide", {{"topic", "frame_script"}}).toObject()["guide"].toString();
+        const QRegularExpression example("```c\\n(.*?)\\n```", QRegularExpression::DotMatchesEverythingOption);
+        const auto match = example.match(script);
+        QVERIFY(match.hasMatch());
+        sw::FrameScriptRuntime runtime(sw::FrameScriptProgram::compile(match.captured(1)));
+        const auto frame = QByteArray::fromHex("AA55C409E40CBC0D");
+        QVERIFY(runtime.feed("ESP32 log\n" + frame.left(3)).isEmpty());
+        auto output = runtime.feed(frame.mid(3) + frame);
+        QCOMPARE(output.size(), 2);
+        QCOMPARE(output.first().toObject()["温度"].toDouble(), 25.0);
+        QCOMPARE(output.first().toObject()["电压"].toDouble(), 3.3);
+        auto bad = frame;
+        bad[6] = 0;
+        QCOMPARE(runtime.feed(bad + "noise\n" + frame).size(), 1);
+        bad = frame;
+        bad[7] = 0;
+        QCOMPARE(runtime.feed(bad + frame).size(), 1);
+        QVERIFY_EXCEPTION_THROWN(mcp.call("read_usage_guide", {{"topic", "unknown"}}), std::runtime_error);
+        for (const auto &tool : mcp.tools())
+        {
+            const auto value = tool.toObject();
+            if (value["name"] == "read_events")
+            {
+                QVERIFY(value["inputSchema"].toObject()["required"].toArray().contains("channel_id"));
+            }
+        }
+        // Guides remain readable with every transport closed to AI and no write permission.
+        for (const auto &kind : {"serial", "tcp", "udp", "ssh"}) { mcp.setProtocolEnabled(kind, false); }
+        QCOMPARE(mcp.call("read_usage_guide", {}).toObject(), guide);
+        QVERIFY(!engine.allowControl);
+    }
+
     void protocolGates_data()
     {
         QTest::addColumn<QString>("kind");
@@ -53,7 +162,7 @@ private slots:
         QCOMPARE(status["connected_count"].toInt(), 1);
         QCOMPARE(status["counts_by_protocol"].toObject()[kind].toInt(), 0);
         QCOMPARE(status["protocol_access"].toObject()[group].toBool(), false);
-        for (const auto &event : mcp.call("read_events", {}).toObject()["events"].toArray())
+        for (const auto &event : mcp.call("read_all_events", {}).toObject()["events"].toArray())
         {
             QCOMPARE(event.toObject()["channel_id"].toString(), demo->id);
         }
@@ -107,7 +216,7 @@ private slots:
         bool more = true;
         while (more)
         {
-            const auto page = mcp.call("read_events", {{"after", cursor}, {"limit", 1}}).toObject();
+            const auto page = mcp.call("read_all_events", {{"after", cursor}, {"limit", 1}}).toObject();
             const auto events = page["events"].toArray();
             QCOMPARE(events.size(), 1);
             QCOMPARE(events.first().toObject()["channel_id"].toString(), udp->id);
@@ -120,15 +229,15 @@ private slots:
         QCOMPARE(cursor, engine.journal.sequence);
         mcp.setProtocolEnabled("serial", true);
         bool foundRemoved = false;
-        for (const auto &event : mcp.call("read_events", {}).toObject()["events"].toArray())
+        for (const auto &event : mcp.call("read_all_events", {}).toObject()["events"].toArray())
         {
             foundRemoved = foundRemoved || event.toObject()["channel_id"].toString() == serialId;
         }
         QVERIFY(foundRemoved);
         mcp.setProtocolEnabled("serial", false);
         mcp.setProtocolEnabled("udp", false);
-        QVERIFY(mcp.call("read_events", {}).toObject()["events"].toArray().isEmpty());
-        QVERIFY(!mcp.call("read_events", {}).toObject()["has_more"].toBool());
+        QVERIFY(mcp.call("read_all_events", {}).toObject()["events"].toArray().isEmpty());
+        QVERIFY(!mcp.call("read_all_events", {}).toObject()["has_more"].toBool());
     }
 
     void settingsPersistAndSyncControls()
@@ -172,6 +281,60 @@ private slots:
         QVERIFY(!engine.allowControl);
     }
 
+    void longPollPinsConnectionAndRejectsMissingId()
+    {
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        QVERIFY(mcp.start(0));
+        mcp.sessions["source-test"] = "test";
+        auto serial = makeChannel(engine, "serial");
+        auto ssh = makeChannel(engine, "ssh");
+        QNetworkAccessManager network;
+        const auto request = [&](const QJsonObject &args)
+        {
+            QNetworkRequest http(QUrl(mcp.url()));
+            http.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+            http.setRawHeader("Mcp-Session-Id", "source-test");
+            const QJsonObject rpc {{"jsonrpc", "2.0"}, {"id", 1}, {"method", "tools/call"},
+                {"params", QJsonObject {{"name", "read_events"}, {"arguments", args}}}};
+            return network.post(http, QJsonDocument(rpc).toJson(QJsonDocument::Compact));
+        };
+        auto missing = request({{"wait_ms", 5000}});
+        QSignalSpy rejected(missing, &QNetworkReply::finished);
+        QVERIFY(rejected.wait(1000));
+        const auto error = QJsonDocument::fromJson(missing->readAll()).object()["result"].toObject();
+        QVERIFY(error["isError"].toBool());
+        QVERIFY(!error.contains("structuredContent"));
+        QVERIFY(QJsonDocument(error).toJson().contains("channel_id"));
+        missing->deleteLater();
+
+        const auto start = engine.journal.sequence;
+        auto pending = request({{"after", start}, {"channel_id", serial->id}, {"wait_ms", 5000}});
+        QSignalSpy received(pending, &QNetworkReply::finished);
+        ssh->receive("unrelated SSH\n");
+        QTest::qWait(120);
+        QVERIFY(!pending->isFinished());
+        serial->receive("target ESP32\n");
+        QVERIFY(received.wait(1000));
+        const auto page = QJsonDocument::fromJson(pending->readAll()).object()["result"].toObject()["structuredContent"].toObject();
+        QCOMPARE(page["channel_id"].toString(), serial->id);
+        QCOMPARE(page["events"].toArray().size(), 1);
+        QCOMPARE(page["events"].toArray().first().toObject()["channel_id"].toString(), serial->id);
+        pending->deleteLater();
+
+        auto removed = request({{"after", engine.journal.sequence}, {"channel_id", serial->id}, {"wait_ms", 5000}});
+        QSignalSpy stopped(removed, &QNetworkReply::finished);
+        QTest::qWait(80);
+        QVERIFY(!removed->isFinished());
+        engine.remove(serial->id);
+        ssh->receive("do not switch to SSH\n");
+        QVERIFY(stopped.wait(1000));
+        const auto result = QJsonDocument::fromJson(removed->readAll()).object()["result"].toObject();
+        QVERIFY(result["isError"].toBool());
+        QVERIFY(!result.contains("structuredContent"));
+        removed->deleteLater();
+    }
+
     void longPollHonorsLivePermissions()
     {
         sw::Engine engine;
@@ -182,17 +345,17 @@ private slots:
         auto udp = makeChannel(engine, "udp");
         mcp.setProtocolEnabled("serial", false);
         QNetworkAccessManager network;
-        const auto request = [&](const QJsonObject &arguments)
+        const auto request = [&](const QJsonObject &arguments, const QString &tool = "read_events")
         {
             QNetworkRequest http(QUrl(mcp.url()));
             http.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
             http.setRawHeader("Mcp-Session-Id", "protocol-test");
             const QJsonObject rpc {{"jsonrpc", "2.0"}, {"id", 1}, {"method", "tools/call"},
-                {"params", QJsonObject {{"name", "read_events"}, {"arguments", arguments}}}};
+                {"params", QJsonObject {{"name", tool}, {"arguments", arguments}}}};
             return network.post(http, QJsonDocument(rpc).toJson(QJsonDocument::Compact));
         };
         const auto after = engine.journal.sequence;
-        auto reply = request({{"after", after}, {"wait_ms", 1000}});
+        auto reply = request({{"after", after}, {"wait_ms", 1000}}, "read_all_events");
         QSignalSpy finished(reply, &QNetworkReply::finished);
         QTimer::singleShot(40, serial, [serial] { serial->receive("private\n"); });
         QTest::qWait(160);

@@ -34,7 +34,7 @@ private:
     void requireProtocol(const QString &kind) const;
     Channel *accessibleChannel(const QString &id) const;
     QJsonArray visibleConnections() const;
-    QJsonObject readEvents(const QJsonObject &arguments, int limitOverride = 0) const;
+    QJsonObject readEvents(const QJsonObject &arguments, int limitOverride = 0, bool allChannels = false) const;
     void acceptRequest(QTcpSocket *socket, const QByteArray &request);
     void respond(QTcpSocket *socket, int code, const QJsonObject &body = {}, const QString &session = {});
     void finishCall(QTcpSocket *socket, const QJsonObject &rpc, const QString &session);

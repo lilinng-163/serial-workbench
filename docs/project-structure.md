@@ -6,6 +6,7 @@ serial/
 ├── CMakePresets.json        # Windows Release / Debug 预设
 ├── LICENSE                 # Apache-2.0 项目许可证
 ├── cmake/                  # 编译规则及版本头模板
+├── docker/                 # Dockerfile、构建上下文排除规则与开发说明
 ├── src/
 │   ├── app/                # 桌面程序入口
 │   ├── core/               # 串口、TCP、UDP、SSH、历史与数据解析
@@ -39,6 +40,7 @@ serial/
 | `native_tests` | BUILD_TESTING 开启时构建，依赖 ui / Qt Test |
 | `wave_benchmark` | 非 CTest 的波形性能诊断程序，测量 16 通道 × 5000 点的同步与绘制耗时 |
 | `serial_transfer_tests` | 文件传输协议、原始字节、CRC 校验、重传、取消、隔离与中键关页测试 |
+| `serial_control_tests` | 控件模板、字节序、手动/自动发送、连接隔离与配置恢复测试 |
 | `FileTransferDemo` | 独立虚拟串口 Demo，仅 BUILD_TESTING 构建，无安装规则 |
 | `frame_script_tests` | 脚本语法、分帧、执行限制、后台处理与编辑器联动测试 |
 
@@ -90,3 +92,7 @@ cmake --install build/custom --prefix dist/install
 品牌源文件为 `resources/brand/lightning.svg`，透明双折闪电顺时针旋转 45°。`scripts/generate-icon.py` 使用构建环境的 PySide6 生成九种分辨率的 Windows ICO 和安装器 BMP。`cmake/app.rc.in` 为主程序嵌入图标及版本信息；部署程序不依赖 Python。
 
 文件传输协议位于 `src/core/serial_transfer.*`，异步处理文件读写、分块和确认；`src/ui/file_transfer_dialog.*` 管理进度界面和当前串口的独占绑定。`tests/native/file_transfer_demo.cpp` 提供独立虚拟串口测试，正式安装仅包含桌面程序和 MCP 桥。
+
+串口控制的拖动与边缘缩放位于 `src/ui/control_card.*`，界面与发送调度位于 `src/ui/serial_control_panel.*`，常用控件组定义位于 `src/ui/serial_control_presets.cpp`，文本和 HEX 模板编码位于 `src/ui/serial_control_packet.cpp`，可缩放的独立收发小窗位于 `src/ui/serial_monitor_dialog.*`。发送复用 `Channel::send`，原连接保留历史，控件页配置随 `widget_pages` 保存。
+
+按钮的通用悬停、按压与选中动画位于 `src/ui/button_motion.*`，由主题统一接入；反馈层不接收鼠标事件，不改变控件几何尺寸或原有点击逻辑。外侧轮廓绘制在所属窗口的独立透明层上，避免被卡片标题等内层容器裁切，并跟随祖先容器的位置变化。

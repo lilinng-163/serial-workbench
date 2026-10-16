@@ -1,0 +1,16 @@
+# Allow only build inputs; never send local settings or release artifacts.
+**
+!docker/
+!docker/Dockerfile
+!CMakeLists.txt
+!cmake/
+!cmake/**
+!src/
+!src/**
+!resources/
+!resources/**
+!third_party/
+!third_party/**
+!skills/
+!skills/**
+!LICENSE

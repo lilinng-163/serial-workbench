@@ -138,3 +138,47 @@ add_test(NAME terminal_keyboard_tests COMMAND "${CMAKE_COMMAND}" -E env
     -o "${PROJECT_BINARY_DIR}/terminal-keyboard-tests.txt,txt"
 )
 set_tests_properties(terminal_keyboard_tests PROPERTIES TIMEOUT 30)
+
+qt_add_executable(background_tests background_tests.cpp)
+workbench_configure_target(background_tests)
+target_link_libraries(background_tests PRIVATE workbench_ui Qt6::Test)
+add_test(NAME background_tests COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=${workbench_test_path}"
+    $<TARGET_FILE:background_tests>
+    -platform offscreen
+    -o "${PROJECT_BINARY_DIR}/background-tests.txt,txt"
+)
+set_tests_properties(background_tests PROPERTIES TIMEOUT 30)
+
+qt_add_executable(window_chrome_tests window_chrome_tests.cpp)
+workbench_configure_target(window_chrome_tests)
+target_link_libraries(window_chrome_tests PRIVATE workbench_ui Qt6::Test)
+add_test(NAME window_chrome_tests COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=${workbench_test_path}"
+    $<TARGET_FILE:window_chrome_tests>
+    -platform offscreen
+    -o "${PROJECT_BINARY_DIR}/window-chrome-tests.txt,txt"
+)
+set_tests_properties(window_chrome_tests PROPERTIES TIMEOUT 30)
+
+qt_add_executable(serial_control_tests serial_control_tests.cpp)
+workbench_configure_target(serial_control_tests)
+target_link_libraries(serial_control_tests PRIVATE workbench_ui Qt6::Test)
+add_test(NAME serial_control_tests COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=${workbench_test_path}"
+    $<TARGET_FILE:serial_control_tests>
+    -platform offscreen
+    -o "${PROJECT_BINARY_DIR}/serial-control-tests.txt,txt"
+)
+set_tests_properties(serial_control_tests PROPERTIES TIMEOUT 45)
+
+qt_add_executable(button_motion_tests button_motion_tests.cpp)
+workbench_configure_target(button_motion_tests)
+target_link_libraries(button_motion_tests PRIVATE workbench_ui Qt6::Test)
+add_test(NAME button_motion_tests COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=${workbench_test_path}"
+    $<TARGET_FILE:button_motion_tests>
+    -platform offscreen
+    -o "${PROJECT_BINARY_DIR}/button-motion-tests.txt,txt"
+)
+set_tests_properties(button_motion_tests PROPERTIES TIMEOUT 30)

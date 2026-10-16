@@ -16,6 +16,7 @@ import sys
 import tempfile
 import time
 import winreg
+import zlib
 
 ROOT = Path(__file__).resolve().parents[2]
 PRODUCT = "Serial Workbench Installer Test"
@@ -131,7 +132,30 @@ def main():
         profile = directory / "profile"
         settings = profile / "SerialWorkbench/settings.json"
         settings.parent.mkdir(parents=True)
-        settings.write_text(json.dumps({"appearance": {"theme": "dark"}, "mcp_port": 8765}), encoding="utf-8")
+        background = settings.parent / "backgrounds/preserved.png"
+        background.parent.mkdir()
+        def png_chunk(kind, data):
+            return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+        image = (b"\x89PNG\r\n\x1a\n"
+                 + png_chunk(b"IHDR", struct.pack(">IIBBBBB", 2, 2, 8, 6, 0, 0, 0))
+                 + png_chunk(b"IDAT", zlib.compress((b"\x00" + b"\x20\x80\x40\xff" * 2) * 2))
+                 + png_chunk(b"IEND", b""))
+        background.write_bytes(image)
+        control_page = {"kind": "control", "title": "串口控制", "source_key": "serial:loop://",
+                        "serial_controls": {"auto_send": False, "controls": [{
+                            "type": "number", "title": "目标转速", "key": "speed",
+                            "minimum": 0, "maximum": 3000, "step": 10, "decimals": 0,
+                            "value": "1200", "format": "text", "pattern": "SET {key} {value}",
+                            "encoding": "utf-8", "newline": "crlf", "options": "低=0\n高=1"}]}}
+        canvas_page = {"kind": "control", "title": "自由布局测试", "source_key": "serial:loop://",
+                       "serial_controls": {"layout_version": 2, "columns": 0, "active_group": "canvas-test",
+                           "groups": [{"id": "canvas-test", "name": "电机参数", "controls": [{
+                               **control_page["serial_controls"]["controls"][0], "auto_send": False,
+                               "rect": {"x": 87, "y": 64, "width": 420, "height": 170}}]}]}}
+        settings.write_text(json.dumps({"appearance": {"theme": "dark", "window_background": {
+            "file": "backgrounds/preserved.png", "opacity": 25, "fit": "cover",
+            "position_x": 20, "position_y": 80,
+        }}, "mcp_port": 8765, "widget_pages": [control_page, canvas_page]}), encoding="utf-8")
         env = os.environ.copy()
         env["LOCALAPPDATA"] = str(profile)
         windows = Path(os.environ["SystemRoot"])
@@ -168,6 +192,12 @@ def main():
             assert json.loads((destination / "installation.json").read_text(encoding="utf-8"))["version"] == args.expected_version
             assert note.read_text(encoding="utf-8") == "user data"
             assert json.loads(settings.read_text(encoding="utf-8"))["appearance"]["theme"] == "dark"
+            assert json.loads(settings.read_text(encoding="utf-8"))["mcp_port"] == 8765
+            assert json.loads(settings.read_text(encoding="utf-8"))["appearance"]["window_background"]["file"] == "backgrounds/preserved.png"
+            assert json.loads(settings.read_text(encoding="utf-8"))["appearance"]["window_background"]["position_x"] == 20
+            assert json.loads(settings.read_text(encoding="utf-8"))["appearance"]["window_background"]["position_y"] == 80
+            assert json.loads(settings.read_text(encoding="utf-8"))["widget_pages"] == [control_page, canvas_page]
+            assert background.read_bytes() == image
             assert not (destination / "FileTransferDemo.exe").exists()
             print("PASS upgrade discovers custom path without /D and preserves settings/user files; test demo excluded", flush=True)
 
@@ -184,6 +214,12 @@ def main():
             assert blocked.returncode == 2, "Running application must block install before changing files"
             app.wait(timeout=12)
             assert json.loads(settings.read_text(encoding="utf-8"))["appearance"]["theme"] == "dark"
+            assert json.loads(settings.read_text(encoding="utf-8"))["appearance"]["window_background"]["position_x"] == 20
+            assert json.loads(settings.read_text(encoding="utf-8"))["appearance"]["window_background"]["position_y"] == 80
+            assert json.loads(settings.read_text(encoding="utf-8"))["widget_pages"][0]["serial_controls"]["groups"][0]["controls"][0]["value"] == "1200"
+            canvas = json.loads(settings.read_text(encoding="utf-8"))["widget_pages"][1]["serial_controls"]
+            assert canvas["columns"] == 0 and canvas["active_group"] == "canvas-test"
+            assert canvas["groups"][0]["controls"][0]["rect"] == {"x": 87, "y": 64, "width": 420, "height": 170}
             print("PASS installed launch without SDK, per-user settings and running-app protection", flush=True)
 
             subprocess.run([sys.executable, str(ROOT / "tests/integration/smoke_native.py"),
@@ -195,6 +231,7 @@ def main():
             wait_for(lambda: registration() is None and not (destination / "SerialWorkbench.exe").exists())
             wait_for(lambda: not (destination / "Uninstall.exe").exists())
             assert settings.exists(), "Personal settings must be retained by default"
+            assert background.read_bytes() == image, "Personal background images must be retained by default"
             assert note.read_text(encoding="utf-8") == "user data"
             assert plugin_note.read_text(encoding="utf-8") == "user data"
             remaining = sorted(p.relative_to(destination).as_posix() for p in destination.rglob("*") if p.is_file())

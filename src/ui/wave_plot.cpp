@@ -101,7 +101,14 @@ WavePlot::WavePlot(QWidget *parent) : QWidget(parent)
     legendLayout = new QHBoxLayout(legendBody);
     legendLayout->setContentsMargins(0, 0, 0, 0);
     legendLayout->setSpacing(6);
+    legendLayout->setAlignment(Qt::AlignLeft | Qt::AlignTop);
     legendLayout->setSizeConstraint(QLayout::SetMinimumSize);
+    readoutPicker = new QToolButton(legendBody);
+    readoutPicker->setObjectName("waveReadoutPicker");
+    readoutPicker->setText("读数通道…");
+    readoutPicker->setToolTip("选择顶部显示的读数通道，最多四个");
+    connect(readoutPicker, &QToolButton::clicked, this, &WavePlot::openReadoutChannels);
+    legendLayout->addWidget(readoutPicker);
     legendLayout->addStretch();
     legendScroll->setWidget(legendBody);
 
@@ -279,6 +286,7 @@ void WavePlot::dataChanged()
 void WavePlot::setSamples(const QJsonObject &data)
 {
     boundChannel.clear();
+    clearedSamples.clear();
     sourceCursors.clear();
     sourceCurves.clear();
     series.clear();
@@ -303,7 +311,11 @@ void WavePlot::setSamples(const QJsonObject &data)
 
 bool WavePlot::updateChannel(Channel *channel, int limit)
 {
-    if (boundChannel != channel) { resetView(); }
+    if (boundChannel != channel)
+    {
+        clearedSamples.clear();
+        resetView();
+    }
     bool changed = boundChannel != channel || boundLimit != limit;
     if (changed)
     {
@@ -330,10 +342,11 @@ bool WavePlot::updateChannel(Channel *channel, int limit)
     for (auto source = channel->sources.constBegin(); source != channel->sources.constEnd(); ++source)
     {
         const auto &buffer = *source.value();
-        qint64 cursor = sourceCursors.value(source.key(), -1);
+        qint64 cursor = sourceCursors.value(source.key(), clearedSamples.value(source.key(), -1));
         if (cursor == buffer.count) { continue; }
         if (cursor > buffer.count)
         {
+            clearedSamples.remove(source.key());
             for (const auto &name : sourceCurves.take(source.key())) { series.remove(name); }
             cursor = -1;
         }
@@ -377,48 +390,87 @@ bool WavePlot::updateChannel(Channel *channel, int limit)
     return changed;
 }
 
+void WavePlot::clearSamples(Channel *channel, int limit)
+{
+    boundChannel = channel;
+    boundLimit = limit;
+    series.clear();
+    sourceCursors.clear();
+    sourceCurves.clear();
+    clearedSamples.clear();
+    if (channel)
+    {
+        for (auto source = channel->sources.cbegin(); source != channel->sources.cend(); ++source)
+        {
+            clearedSamples[source.key()] = source.value()->count;
+            sourceCursors[source.key()] = source.value()->count;
+        }
+    }
+    resetView();
+    dataChanged();
+}
+
+bool WavePlot::sampleIsCurrent(const QString &source, qint64 index) const
+{
+    return index > clearedSamples.value(source, -1);
+}
+
 void WavePlot::updateLegend()
 {
+    const auto channels = readoutChannels();
     for (const auto &name : legendButtons.keys())
     {
-        if (!series.contains(name)) { delete legendButtons.take(name); }
+        if (!channels.contains(name)) { delete legendButtons.take(name); }
     }
-    for (auto curve = series.cbegin(); curve != series.cend(); ++curve)
+    const QFontMetrics metrics(font());
+    const int cardWidth = qMax(144, metrics.horizontalAdvance("-0.0000000e+000") + 48);
+    for (const auto &name : channels)
     {
-        auto button = legendButtons.value(curve.key());
+        auto button = legendButtons.value(name);
         if (!button)
         {
             button = new QToolButton(legendBody);
             button->setObjectName("waveChannel");
-            button->setProperty("channelName", curve.key());
+            button->setProperty("channelName", name);
             button->setCheckable(true);
             button->setFocusPolicy(Qt::TabFocus);
             button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
             button->setContextMenuPolicy(Qt::CustomContextMenu);
-            connect(button, &QWidget::customContextMenuRequested, this, [this, button, name = curve.key()](const QPoint &position)
+            connect(button, &QWidget::customContextMenuRequested, this, [this, button, name](const QPoint &position)
             {
                 curveMenu(name, button->mapToGlobal(position));
             });
-            legendLayout->insertWidget(legendLayout->count() - 1, button);
-            legendButtons[curve.key()] = button;
-            connect(button, &QToolButton::clicked, this, [this, name = curve.key()](bool checked)
+            legendLayout->insertWidget(channels.indexOf(name), button, 0, Qt::AlignTop);
+            legendButtons[name] = button;
+            connect(button, &QToolButton::clicked, this, [this, name](bool checked)
             {
                 setCurveVisible(name, checked);
             });
         }
-        const QString value = curve.value().isEmpty() ? "—" : exactValue(curve.value().last().y())
-            + (yUnit.isEmpty() ? QString() : " " + yUnit);
-        const QString text = curveLabel(curve.key()) + "\n" + value;
+        if (legendLayout->indexOf(button) != channels.indexOf(name))
+        {
+            legendLayout->insertWidget(channels.indexOf(name), button, 0, Qt::AlignTop);
+        }
+        static const QVector<QPointF> empty;
+        const auto curve = series.constFind(name);
+        const auto &samples = curve == series.cend() ? empty : curve.value();
+        const QString suffix = yUnit.isEmpty() ? QString() : " " + yUnit;
+        const QString value = samples.isEmpty() ? "—" : exactValue(samples.last().y()) + suffix;
+        const int textWidth = cardWidth - 48;
+        const QString compact = metrics.horizontalAdvance(value) <= textWidth || samples.isEmpty() ? value
+            : QLocale::c().toString(samples.last().y(), 'g', 8) + suffix;
+        const QString text = metrics.elidedText(curveLabel(name), Qt::ElideRight, textWidth)
+            + "\n" + metrics.elidedText(compact, Qt::ElideRight, textWidth);
         if (button->text() != text) { button->setText(text); }
         button->setFont(font());
-        button->setMinimumWidth(button->sizeHint().width());
-        button->setChecked(isCurveVisible(curve.key()));
-        button->setToolTip(curveLabel(curve.key()) + " = " + value + "\n点击显示或隐藏曲线；右键设置颜色、线宽和线型");
+        button->setFixedSize(cardWidth, metrics.height() * 2 + 8);
+        button->setChecked(isCurveVisible(name));
+        button->setToolTip(curveLabel(name) + " = " + value + "\n点击显示或隐藏曲线；右键设置颜色、线宽和线型");
         const QString style = QString("QToolButton { border: none; padding: 2px 8px; background: transparent; color: %1; } QToolButton:hover { color: %2; }")
-            .arg(isCurveVisible(curve.key()) ? theme.text.name() : theme.muted.name(), theme.accent.name());
+            .arg(isCurveVisible(name) ? theme.text.name() : theme.muted.name(), theme.accent.name());
         if (button->styleSheet() != style) { button->setStyleSheet(style); }
-        const QColor color = isCurveVisible(curve.key()) ? curveColor(curve.key()) : theme.line;
-        const auto appearance = curveStyle(curve.key());
+        const QColor color = isCurveVisible(name) ? curveColor(name) : theme.line;
+        const auto appearance = curveStyle(name);
         if (button->property("curveColor").value<QColor>() != color
             || button->property("curveWidth").toDouble() != appearance.width
             || button->property("curveLine").toInt() != int(appearance.line))
@@ -438,6 +490,7 @@ void WavePlot::updateLegend()
             button->setProperty("curveLine", int(appearance.line));
         }
     }
+    readoutPicker->setVisible(!series.isEmpty() || customReadouts);
     auto palette = legendBody->palette();
     palette.setColor(QPalette::Window, theme.panel);
     legendBody->setPalette(palette);

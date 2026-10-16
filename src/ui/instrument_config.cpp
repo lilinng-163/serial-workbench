@@ -5,6 +5,22 @@
 
 namespace sw
 {
+void Instrument::clearDisplay()
+{
+    if (plot) { plot->clearSamples(waveChannel, points->value()); }
+    if (waveChannel && isStructured())
+    {
+        for (auto source = waveChannel->sources.cbegin(); source != waveChannel->sources.cend(); ++source)
+        {
+            cursors[source.key()] = source.value()->parsedCount;
+        }
+    }
+    valuesSnapshot = {};
+    if (table) { table->clear(); }
+    if (detail) { detail->clear(); }
+    info->setText("已清空，等待新数据");
+}
+
 void Instrument::refreshValues(Channel *channel)
 {
     const auto snapshot = channel ? channel->waveform(1)["sources"].toObject() : QJsonObject();
@@ -16,6 +32,7 @@ void Instrument::refreshValues(Channel *channel)
         const auto samples = source.value().toObject()["samples"].toArray();
         if (samples.isEmpty()) { continue; }
         const auto sample = samples.last().toObject();
+        if (!plot->sampleIsCurrent(source.key(), sample["index"].toInteger())) { continue; }
         const auto values = sample["values"].toObject();
         for (auto field = values.begin(); field != values.end(); ++field)
         {
@@ -66,7 +83,7 @@ QJsonArray migrateInstrumentPages(const QJsonArray &pages)
                 result.append(separate);
             }
         }
-        else if (kind == "waveform" || kind == "json" || kind == "xml")
+        else if (kind == "waveform" || kind == "json" || kind == "xml" || kind == "control")
         {
             result.append(page);
         }

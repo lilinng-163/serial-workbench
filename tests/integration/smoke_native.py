@@ -47,20 +47,28 @@ async def check(url, bridge, allow, expected_version=None):
             initialized = await client.initialize()
             if expected_version:
                 assert initialized.serverInfo.version == expected_version
-            assert len((await client.list_tools()).tools) == 10
+            assert len((await client.list_tools()).tools) == 12
+            assert "read_usage_guide" in initialized.instructions
+            guide = unpack(await client.call_tool("read_usage_guide", {}))
+            assert guide["guide"] and guide["skill_path_scope"] == "server_host"
+            assert guide["skill_path"] and Path(guide["skill_path"]).is_file()
+            parser_guide = unpack(await client.call_tool("read_usage_guide", {"topic": "frame_script"}))
+            assert "void main(const uint8_t data[], int length)" in parser_guide["guide"]
+            missing = await client.call_tool("read_events", {})
+            assert missing.isError and "channel_id" in missing.content[0].text
             status = unpack(await client.call_tool("get_status"))
             assert status["version"] == initialized.serverInfo.version
             assert status["implementation"] == "Qt C++"
             assert status["allow_ai_control"] is allow
             assert status["process"]["username"]
-            events = unpack(await client.call_tool("read_events", {}))
+            events = unpack(await client.call_tool("read_all_events", {}))
             assert any(e["direction"] == "rx" for e in events["events"])
             params = StdioServerParameters(command=str(bridge), args=["--url", url])
             async with stdio_client(params) as (sr, sw):
                 async with ClientSession(sr, sw) as second:
                     await second.initialize()
-                    assert len((await second.list_tools()).tools) == 10
-                    other = unpack(await second.call_tool("read_events", {}))
+                    assert len((await second.list_tools()).tools) == 12
+                    other = unpack(await second.call_tool("read_all_events", {}))
                     assert other["session_id"] == events["session_id"]
                     assert other["events"][:len(events["events"])] == events["events"]
                     config = {"config": {"kind": "serial", "port": "loop://", "baudrate": 115200}}
@@ -76,7 +84,7 @@ async def check(url, bridge, allow, expected_version=None):
                     updated = unpack(await second.call_tool("open_connection", config))
                     assert updated["id"] == channel_id
                     assert updated["applied_baudrate"] == 1200
-                    start = unpack(await client.call_tool("read_events", {}))["next_cursor"]
+                    start = unpack(await client.call_tool("read_all_events", {}))["next_cursor"]
                     # Unrelated events advance the global cursor but must not end a channel-filtered wait.
                     unrelated = unpack(await second.call_tool("open_connection", {"config": {
                         "kind": "udp", "host": "127.0.0.1", "network_port": 9,
@@ -117,11 +125,11 @@ async def check(url, bridge, allow, expected_version=None):
                     assert reopened["rx_bytes"] > 0
                     denied = await client.call_tool("send_data", {"channel_id": channel_id, "payload": "GG", "hex_mode": True})
                     assert denied.isError
-                    invalid = await client.call_tool("read_events", {"after": -1})
+                    invalid = await client.call_tool("read_events", {"channel_id": channel_id, "after": -1})
                     assert invalid.isError
                     status = unpack(await client.call_tool("get_status"))
                     assert status["session_id"] == events["session_id"]
-                    print("PASS HTTP/stdio, 10 tools, shared history, baud reconfiguration, long poll, loopback, strict wave/1, integer/double values, reconnect, validation")
+                    print("PASS HTTP/stdio, 12 tools, shared history, baud reconfiguration, long poll, loopback, strict wave/1, integer/double values, reconnect, validation")
 
 
 def main():

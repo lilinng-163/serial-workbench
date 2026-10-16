@@ -420,10 +420,12 @@ public:
         auto compact = new QPushButton("压缩输入");
         compact->setObjectName("compactJson");
         auto example = new QPushButton("示例");
+        auto clear = new QPushButton("清空");
+        clear->setObjectName("clearJson");
         auto copy = new QPushButton("复制当前结果");
         copy->setObjectName("copyJsonResult");
         copy->setProperty("variant", "outline");
-        for (auto button : {paste, expand, compact, example}) { tools->addWidget(button); }
+        for (auto button : {paste, expand, compact, example, clear}) { tools->addWidget(button); }
         tools->addStretch();
         tools->addWidget(copy);
         body->addLayout(tools);
@@ -489,6 +491,13 @@ public:
         connect(input, &QPlainTextEdit::textChanged, &debounce, qOverload<>(&QTimer::start));
         connect(&debounce, &QTimer::timeout, this, [this] { refresh(); });
         connect(paste, &QPushButton::clicked, input, [this] { input->setPlainText(QApplication::clipboard()->text()); });
+        connect(clear, &QPushButton::clicked, this, [this]
+        {
+            input->clear();
+            debounce.stop();
+            refresh();
+            input->setFocus();
+        });
         connect(example, &QPushButton::clicked, input, [this]
         {
             input->setPlainText(R"({"device":"sensor","temperature":25.5,"online":true,"samples":[1,2,3],"config":{"period_ms":20}})");

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "window.h"
+#include "window_chrome.h"
 
 int main(int argc, char *argv[])
 {
@@ -12,6 +13,7 @@ int main(int argc, char *argv[])
     app.setStyle("Fusion");
     app.setFont(sw::Theme::interfaceFont());
     app.setWindowIcon(QIcon(":/brand/lightning.svg"));
+    sw::installWindowChrome();
     auto defaultSettings = QCoreApplication::applicationDirPath() + "/settings.json";
     QFile installation(QCoreApplication::applicationDirPath() + "/installation.json");
     if (installation.open(QIODevice::ReadOnly)

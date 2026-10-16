@@ -2,7 +2,9 @@
 
 #pragma once
 #include "controls.h"
+#include "background_image.h"
 #include <QTextCodec>
+#include <deque>
 
 namespace sw
 {
@@ -22,6 +24,7 @@ class LogView : public QTextEdit
 public:
     explicit LogView(QWidget *parent = nullptr);
     Theme theme;
+    bool transparentBackground = false;
     bool timestamps = true;
     bool hex = false;
     bool follow = true;
@@ -39,6 +42,7 @@ public:
     void feed(const QJsonObject &event);
     void reset();
     void paintEvent(QPaintEvent *event) override;
+    void scrollContentsBy(int dx, int dy) override;
     void wheelEvent(QWheelEvent *event) override;
 signals:
     void zoomRequested(int steps);
@@ -58,6 +62,7 @@ public:
         bool continuation = false;
     };
     Theme theme;
+    bool transparentBackground = false;
     QVector<QVector<Cell>> grid;
     AnsiState ansi;
     std::unique_ptr<QTextDecoder> decoder;
@@ -87,6 +92,9 @@ public:
     void feed(const QByteArray &data);
     void reset(const QString &encoding = "utf-8");
     QString text() const;
+    QString visibleText() const;
+    int historyLineCount() const { return int(history.size()); }
+    QScrollBar *verticalScrollBar() const { return scrollBar; }
     void paintEvent(QPaintEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     void changeEvent(QEvent *event) override;
@@ -111,6 +119,20 @@ signals:
     void cursorShapeChanged(bool block);
     void gridSizeChanged(const QSize &size);
 private:
+    static constexpr int historyLimit = 10000;
+    std::deque<QVector<Cell>> history;
+    QScrollBar *scrollBar;
+    bool alternateScreen = false;
+    QVector<QVector<Cell>> primaryGrid;
+    QPoint primaryCursor;
+    QPoint primarySavedCursor;
+    bool primaryWrapPending = false;
+    int primaryScroll = 0;
+    void appendHistory(QVector<Cell> line);
+    void updateScrollBar(bool followLatest);
+    void setAlternateScreen(bool enabled);
+    int documentRows() const { return (alternateScreen ? 0 : historyLineCount()) + rows; }
+    const Cell &documentCell(int row, int column) const;
     bool copyHeld = false;
     bool selectionCanEdit = false;
     void csi(QChar command, const QString &parameters);

@@ -5,6 +5,19 @@
 add_library(workbench_ui OBJECT
     window.cpp
     window.h
+    background_image.cpp
+    background_image.h
+    background_settings.cpp
+    window_chrome.cpp
+    window_chrome.h
+    control_card.cpp
+    control_card.h
+    serial_monitor_dialog.cpp
+    serial_monitor_dialog.h
+    serial_control_panel.cpp
+    serial_control_panel.h
+    serial_control_presets.cpp
+    serial_control_packet.cpp
     instrument_config.cpp
     instrument_config.h
     json_tools.cpp
@@ -21,6 +34,8 @@ add_library(workbench_ui OBJECT
     agent_config.h
     agent_panel.cpp
     agent_panel.h
+    button_motion.cpp
+    button_motion.h
     controls.cpp
     wave_plot.cpp
     wave_settings.cpp

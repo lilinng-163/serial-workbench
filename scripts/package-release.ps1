@@ -30,7 +30,7 @@ foreach ($name in 'SerialWorkbench.exe', 'SerialWorkbenchMCP.exe', 'SerialWorkbe
 Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE') -Destination $payload
 Get-ChildItem -LiteralPath $packagePath -File -Filter '*.dll' | Copy-Item -Destination $payload
 
-foreach ($name in 'generic', 'iconengines', 'imageformats', 'licenses', 'networkinformation', 'platforms', 'styles', 'tls')
+foreach ($name in 'generic', 'iconengines', 'imageformats', 'licenses', 'networkinformation', 'platforms', 'skills', 'styles', 'tls')
 {
     $source = Join-Path $packagePath $name
     if (Test-Path -LiteralPath $source)
@@ -46,7 +46,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $payload 'platforms/qwindows.dll')))
 # Retain license texts and original attribution notices for the bundled Qt modules.
 $qtNotices = Join-Path $payload 'licenses/Qt'
 New-Item -ItemType Directory -Path $qtNotices -Force | Out-Null
-foreach ($module in 'qtbase', 'qt5compat', 'qtsvg', 'qttranslations')
+foreach ($module in 'qtbase', 'qt5compat', 'qtsvg', 'qttranslations', 'qtimageformats')
 {
     $moduleRoot = Join-Path $qtSources $module
     if (-not (Test-Path -LiteralPath (Join-Path $moduleRoot 'LICENSES')))
@@ -56,7 +56,7 @@ foreach ($module in 'qtbase', 'qt5compat', 'qtsvg', 'qttranslations')
     $notices = Get-ChildItem -LiteralPath $moduleRoot -File -Recurse | Where-Object {
         $_.FullName.StartsWith((Join-Path $moduleRoot 'LICENSES') + [IO.Path]::DirectorySeparatorChar,
             [StringComparison]::OrdinalIgnoreCase) -or
-        $_.Name -match '^(LICENSE|COPYING|NOTICE)' -or $_.Name -eq 'qt_attributions.json'
+        $_.Name -match '^(LICENSE|COPYING|COPYRIGHT|NOTICE|PATENTS)' -or $_.Name -in 'qt_attributions.json', 'qt_attribution.json'
     }
     foreach ($notice in $notices)
     {
@@ -70,6 +70,15 @@ foreach ($module in 'qtbase', 'qt5compat', 'qtsvg', 'qttranslations')
 $instructions = @"
 Serial Workbench $version (Windows x64)
 
+English
+Installer (setup.exe): choose an installation directory and create shortcuts.
+Portable ZIP: extract the complete folder and run SerialWorkbench.exe.
+Single-file EXE: extracts its runtime once and reuses the local cache.
+No Python or Qt installation is required. SSH uses Windows OpenSSH.
+SerialWorkbenchMCP.exe bridges STDIO clients to the running desktop application.
+Documentation: https://github.com/lilinng-163/serial-workbench/blob/main/README.md
+
+简体中文
 安装包 setup.exe：可选择安装目录，并注册 Windows 卸载入口。
 安装版个人设置保存在 %LOCALAPPDATA%\SerialWorkbench\settings.json。
 
@@ -85,7 +94,7 @@ SerialWorkbenchMCP.exe 是供 AI 客户端调用的 STDIO 桥。
 首次启动默认端口 NULL，不会自动连接硬件。
 
 项目源码与许可证：https://github.com/lilinng-163/serial-workbench
-Qt 来源：https://code.qt.io/ （qtbase、qt5compat、qtsvg、qttranslations）
+Qt 来源：https://code.qt.io/ （qtbase、qt5compat、qtsvg、qttranslations、qtimageformats）
 项目采用 Apache-2.0；第三方许可证保留在 licenses 目录。
 "@
 [IO.File]::WriteAllText((Join-Path $payload 'README.txt'), $instructions, [Text.UTF8Encoding]::new($false))

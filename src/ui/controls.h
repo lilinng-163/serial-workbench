@@ -163,6 +163,11 @@ class WavePlot : public QWidget
     void restorePresentation(const QJsonObject &settings);
     void openCurveSettings(const QString &name);
     void openPlotSettings();
+    QStringList readoutChannels() const;
+    void setReadoutChannels(const QStringList &names);
+    void openReadoutChannels();
+    void clearSamples(Channel *channel, int limit);
+    bool sampleIsCurrent(const QString &source, qint64 index) const;
     QString xAxisLabel() const;
     QString yAxisLabel() const;
     double xAxisValue(double sample) const { return sample * xIncrement; }
@@ -205,6 +210,10 @@ class WavePlot : public QWidget
     QWidget *legendBody;
     QHBoxLayout *legendLayout;
     QMap<QString, QToolButton *> legendButtons;
+    QToolButton *readoutPicker;
+    QStringList selectedReadouts;
+    bool customReadouts = false;
+    QMap<QString, qint64> clearedSamples;
     QMap<QString, int> colorSlots;
     QSet<QString> hiddenCurves;
     QPointer<Channel> boundChannel;

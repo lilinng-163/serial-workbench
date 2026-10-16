@@ -198,7 +198,7 @@ private slots:
         auto channel = engine.open(config);
         QTRY_COMPARE_WITH_TIMEOUT(channel->state, QString("connected"), 4000);
         sw::McpServer mcp(&engine);
-        const auto events = mcp.call("read_events", {}).toObject()["events"].toArray();
+        const auto events = mcp.call("read_events", {{"channel_id", channel->id}}).toObject()["events"].toArray();
         QVERIFY(!events.isEmpty());
         const auto serialized = QJsonDocument(events).toJson();
         QVERIFY(!serialized.contains("test-secret-42"));

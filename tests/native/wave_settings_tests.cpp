@@ -38,6 +38,135 @@ private slots:
         QApplication::setFont(sw::Theme::interfaceFont());
     }
 
+    void readoutsStayFixedAndLimitToFour()
+    {
+        sw::WavePlot plot;
+        plot.setStyleSheet(plot.theme.stylesheet());
+        plot.resize(1100, 500);
+        plot.show();
+        const auto samples = [&](double value)
+        {
+            QJsonObject values;
+            for (int index = 1; index <= 12; ++index) { values[QString("ch%1").arg(index)] = value; }
+            return QJsonObject {{"sources", QJsonObject {{"default", QJsonObject {{"samples", QJsonArray {
+                QJsonObject {{"index", 1}, {"values", values}}
+            }}}}}}};
+        };
+        plot.setSamples(samples(9));
+        QApplication::processEvents();
+        QCOMPARE(plot.readoutChannels(), QStringList({"ch1", "ch2", "ch3", "ch4"}));
+        QCOMPARE(plot.series.size(), 12);
+        QMap<QString, QRect> geometry;
+        for (auto button : plot.findChildren<QToolButton *>("waveChannel"))
+        {
+            geometry[button->property("channelName").toString()] = button->geometry();
+        }
+        QCOMPARE(geometry.size(), 4);
+        for (double value : {-123456789.12345, 1e-200, 1e200, 0.0, 999.0})
+        {
+            plot.setSamples(samples(value));
+            QApplication::processEvents();
+            for (auto button : plot.findChildren<QToolButton *>("waveChannel"))
+            {
+                QCOMPARE(button->geometry(), geometry[button->property("channelName").toString()]);
+            }
+        }
+        plot.setReadoutChannels({"ch6", "ch2", "ch12", "ch8", "ch9"});
+        QCOMPARE(plot.readoutChannels(), QStringList({"ch6", "ch2", "ch12", "ch8"}));
+        QCOMPARE(plot.findChildren<QToolButton *>("waveChannel").size(), 4);
+        capture(&plot, "fixed-four-readouts");
+        sw::WavePlot restored;
+        restored.restorePresentation(plot.presentationSettings());
+        restored.setSamples(samples(7));
+        QCOMPARE(restored.readoutChannels(), plot.readoutChannels());
+        plot.setReadoutChannels({});
+        QVERIFY(plot.findChildren<QToolButton *>("waveChannel").isEmpty());
+    }
+
+    void readoutPickerSaveCancelAndDuplicates()
+    {
+        sw::WavePlot plot;
+        sample(plot);
+        const auto initial = plot.presentationSettings();
+        QTimer::singleShot(0, &plot, [&]
+        {
+            auto dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            QVERIFY(dialog);
+            QTimer::singleShot(1000, dialog, &QDialog::reject);
+            auto first = dialog->findChild<QComboBox *>("waveReadoutSlot0");
+            first->setCurrentIndex(first->findData("voltage"));
+            auto buttons = dialog->findChild<QDialogButtonBox *>();
+            QVERIFY(!buttons->button(QDialogButtonBox::Save)->isEnabled());
+            first->setCurrentIndex(0);
+            QVERIFY(buttons->button(QDialogButtonBox::Save)->isEnabled());
+            capture(dialog, "readout-picker");
+            buttons->button(QDialogButtonBox::Save)->click();
+        });
+        plot.openReadoutChannels();
+        QCOMPARE(plot.readoutChannels(), QStringList({"voltage"}));
+        const auto saved = plot.presentationSettings();
+        QTimer::singleShot(0, &plot, []
+        {
+            auto dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            QVERIFY(dialog);
+            dialog->findChild<QComboBox *>("waveReadoutSlot0")->setCurrentIndex(0);
+            dialog->reject();
+        });
+        plot.openReadoutChannels();
+        QCOMPARE(plot.presentationSettings(), saved);
+        QTimer::singleShot(0, &plot, []
+        {
+            auto dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            QVERIFY(dialog);
+            dialog->findChild<QDialogButtonBox *>()->button(QDialogButtonBox::RestoreDefaults)->click();
+        });
+        plot.openReadoutChannels();
+        QCOMPARE(plot.presentationSettings(), initial);
+    }
+
+    void readoutDialogGrowthKeepsHeaderAndRows()
+    {
+        sw::WavePlot plot;
+        sample(plot);
+        plot.setStyleSheet(plot.theme.stylesheet());
+        QTimer::singleShot(0, &plot, [&]
+        {
+            auto dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            QVERIFY(dialog);
+            QTimer::singleShot(3000, dialog, &QDialog::reject);
+            QApplication::processEvents();
+            const auto note = dialog->findChild<QLabel *>("waveReadoutNote");
+            QVERIFY(note);
+            const auto noteRect = note->geometry();
+            QList<QRect> rows;
+            for (int slot = 0; slot < 4; ++slot)
+            {
+                rows.append(dialog->findChild<QComboBox *>(QString("waveReadoutSlot%1").arg(slot))->geometry());
+            }
+            auto buttons = dialog->findChild<QDialogButtonBox *>();
+            const int bottomGap = dialog->height() - buttons->geometry().bottom();
+            dialog->resize(dialog->width(), dialog->height() + 260);
+            QApplication::processEvents();
+            QCOMPARE(note->geometry(), noteRect);
+            for (int slot = 0; slot < 4; ++slot)
+            {
+                QCOMPARE(dialog->findChild<QComboBox *>(QString("waveReadoutSlot%1").arg(slot))->geometry(), rows[slot]);
+            }
+            QCOMPARE(dialog->height() - buttons->geometry().bottom(), bottomGap);
+            auto fourth = dialog->findChild<QComboBox *>("waveReadoutSlot3");
+            fourth->setCurrentIndex(fourth->findData("temperature"));
+            QApplication::processEvents();
+            QVERIFY(!buttons->button(QDialogButtonBox::Save)->isEnabled());
+            for (int slot = 0; slot < 4; ++slot)
+            {
+                QCOMPARE(dialog->findChild<QComboBox *>(QString("waveReadoutSlot%1").arg(slot))->geometry(), rows[slot]);
+            }
+            capture(dialog, "readout-picker-tall-error");
+            dialog->reject();
+        });
+        plot.openReadoutChannels();
+    }
+
     void stylesUnitsAndRawInspection()
     {
         sw::WavePlot plot;

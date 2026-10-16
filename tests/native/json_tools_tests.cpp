@@ -206,6 +206,64 @@ private slots:
         window.close();
     }
 
+    void clearPagesKeepsHistoryAndOnlyShowsNewData()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        auto channel = engine.open(sw::Config::fromJson(QJsonObject {{"port", "loop://"}}));
+        auto wave = window.newInstrument("waveform", channel)->instrument;
+        auto other = window.newInstrument("waveform", channel)->instrument;
+        auto json = window.newInstrument("json", channel)->instrument;
+        auto xml = window.newInstrument("xml", channel)->instrument;
+        wave->valuesToggle->setChecked(true);
+        channel->receive("@wave value=9\n{\"value\":9}\n<root><value>9</value></root>\n");
+        for (auto page : {wave, other, json, xml}) { page->tick(channel); }
+        QVERIFY(!wave->plot->series.isEmpty());
+        QVERIFY(json->table->topLevelItemCount() > 0);
+        QVERIFY(xml->table->topLevelItemCount() > 0);
+        const auto history = channel->structured();
+        const auto samples = channel->waveform();
+        for (auto page : {wave, json, xml})
+        {
+            page->freeze->setChecked(true);
+            auto clear = page->findChild<sw::IconButton *>("clearInstrumentDisplay");
+            QVERIFY(clear);
+            clear->click();
+            QCOMPARE(page->table->topLevelItemCount(), 0);
+            page->freeze->setChecked(false);
+            page->tick(channel);
+            QCOMPARE(page->table->topLevelItemCount(), 0);
+        }
+        QVERIFY(wave->plot->series.isEmpty());
+        wave->points->setValue(2000);
+        wave->tick(channel);
+        QVERIFY(wave->plot->series.isEmpty());
+        QVERIFY(json->detail->toPlainText().isEmpty());
+        QVERIFY(xml->detail->toPlainText().isEmpty());
+        QCOMPARE(channel->structured(), history);
+        QCOMPARE(channel->waveform(), samples);
+        QVERIFY(!other->plot->series.isEmpty());
+        channel->receive("@wave value=123\n{\"value\":123}\n<root><value>123</value></root>\n");
+        for (auto page : {wave, json, xml}) { page->tick(channel); }
+        QVERIFY(!wave->plot->series.isEmpty());
+        for (const auto &curve : wave->plot->series)
+        {
+            for (const auto &point : curve) { QCOMPARE(point.y(), 123.0); }
+        }
+        QCOMPARE(json->table->topLevelItemCount(), 1);
+        QCOMPARE(xml->table->topLevelItemCount(), 1);
+        auto assistant = sw::showJsonAssistant(&window, "{\"test\":123}");
+        assistant->findChild<QPushButton *>("clearJson")->click();
+        for (const auto &name : {"jsonInput", "jsonFormatted", "cjsonParseCode", "cjsonBuildCode"})
+        {
+            QVERIFY(assistant->findChild<QPlainTextEdit *>(name)->toPlainText().isEmpty());
+        }
+        assistant->close();
+        window.close();
+    }
+
     void legacyMigration()
     {
         const QString key = "serial:com8";

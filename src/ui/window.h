@@ -9,6 +9,7 @@ namespace sw
 {
 class Window;
 class UpdateDialog;
+class SerialControlPanel;
 
 class Instrument : public QWidget
 {
@@ -16,6 +17,7 @@ class Instrument : public QWidget
 public:
     Instrument(const QString &kind, QWidget *parent = nullptr);
     QString kind;
+    SerialControlPanel *controls = nullptr;
     QPointer<Window> helpWindow;
     IconButton *freeze = nullptr;
     QSpinBox *points = nullptr;
@@ -39,6 +41,7 @@ public:
     QTimer frameTimer;
     void tick(Channel *channel);
     void refreshValues(Channel *channel);
+    void clearDisplay();
     QJsonObject settings() const;
     void showEvent(QShowEvent *event) override;
     void hideEvent(QHideEvent *event) override;
@@ -66,6 +69,7 @@ public:
     IconButton *cursorShape = nullptr;
     IconButton *clipboardButton = nullptr;
     QStackedWidget *display = nullptr;
+    BackgroundSurface *receiveSurface = nullptr;
     LogView *log = nullptr;
     TerminalView *terminal = nullptr;
     QPlainTextEdit *payload = nullptr;
@@ -84,7 +88,7 @@ public:
     Combo *encoding = nullptr;
     Combo *newline = nullptr;
     Combo *peer = nullptr;
-    QCheckBox *sendHex = nullptr;
+    IconButton *sendHex = nullptr;
     IconButton *repeat = nullptr;
     QSpinBox *interval = nullptr;
     QTimer repeatTimer;
@@ -141,6 +145,11 @@ public:
     McpServer *mcp;
     Theme theme;
     QFont dataFont;
+    BackgroundSpec windowBackground;
+    BackgroundSpec receiveBackground;
+    QImage windowBackgroundImage;
+    QImage receiveBackgroundImage;
+    BackgroundSurface *backgroundSurface = nullptr;
     QString settingsPath;
     QJsonObject saved;
     QJsonObject viewSettings;
@@ -236,6 +245,10 @@ public:
     void saveSettings();
     void applyTheme(bool dark);
     void applyLocalTheme(bool dark);
+    QString workspaceStyle() const;
+    bool importBackground(bool receive, const QString &path, QString *error = nullptr);
+    void applyBackgrounds();
+    QWidget *backgroundSettingsPanel();
     void arrangeParameters();
     void resizeParameters(int width);
     void setDataFont(const QFont &font);

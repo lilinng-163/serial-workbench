@@ -1,6 +1,33 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # 更新记录
 
+## 0.15.29 — 2026-10-16
+
+### 新增
+
+- SSH 专用交互终端保留一万行滚动历史，支持滚轮回看、历史选择复制、阅读位置保持，以及全屏程序退出后的主屏恢复。
+- 串口控制页支持控件组、自由拖动缩放、常用预设、各控件独立自动发送，以及独立收发小窗。
+- MCP 增加使用指南工具与随附 skill，说明连接选择、增量读取和 C 风格帧脚本；串口、TCP、UDP、SSH 可分别设置 AI 访问范围。
+- 主界面与收发区域支持独立背景图片、位置与透明度设置，窗口标题栏跟随主题和背景。
+- 全新英文与简体中文 README，加入功能概览、实际界面截图、下载说明、快捷操作与 MCP 接入示例。
+
+### 改进与修复
+
+- SSH 固定使用终端，取消日志模式切换按钮和串口式发送栏；旧配置自动进入终端。
+- 波形实时读数采用定宽卡片，默认前四路，可自行更换通道，避免数值位数变化导致布局跳动。
+- 波形、JSON、XML 页面增加本地清空操作，保留连接和 MCP 共享历史。
+- 重命名标签仅使用右键菜单或 F2，输入框避开图标和关闭按钮；JSON、XML、波形使用对应特征图标。
+- 优化按钮与勾选动画、下拉菜单圆角、标签与内容区衔接、设置布局及串口参数可读性。
+
+### English
+
+- Add a dedicated SSH terminal with 10,000 scrollback lines, history selection/copy, stable reading position and alternate-screen restoration.
+- Add grouped serial-control dashboards, presets, free positioning/resizing, per-control automatic sending and a separate receive monitor.
+- Add MCP usage guides and a bundled skill, plus protocol-level AI access controls.
+- Add custom workspace backgrounds and coordinated window chrome.
+- Replace the README with English and Simplified Chinese editions, fresh screenshots and concise setup guides.
+- Improve waveform readouts, per-page clear actions, tab renaming, data-page icons, rounded transitions and input feedback.
+
 ## 0.15.15 — 2026-10-15
 
 - SSH 终端支持按字符、单词和行扩展键盘选区；Ctrl+C 有选区时复制，无选区时发送中断，长按复制不会误发中断。

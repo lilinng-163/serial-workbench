@@ -1029,9 +1029,20 @@ private slots:
         QVERIFY2(channel->state == "connected", qPrintable(channel->error));
         QTRY_VERIFY(channel->rx >= 6);
 #ifdef Q_OS_WIN
+        const auto sizeCursor = engine.journal.sequence;
         channel->resizeTerminal(QSize(57, 18));
         channel->send(QByteArray(1, char(5)));
-        QTRY_VERIFY(engine.journal.read(0)["events"].toArray().last().toObject()["text"].toString().contains("PTY_SIZE 57 18"));
+        const auto resizedReply = [&]
+        {
+            QByteArray reply;
+            for (const auto &entry : engine.journal.read(sizeCursor, 1000, channel->id)["events"].toArray())
+            {
+                const auto event = entry.toObject();
+                if (event["direction"] == "rx") { reply += QByteArray::fromHex(event["hex"].toString().toLatin1()); }
+            }
+            return reply.contains("PTY_SIZE 57 18");
+        };
+        QTRY_VERIFY(resizedReply());
 #endif
 
         const QByteArray input("private-input\n");
@@ -1446,6 +1457,159 @@ private slots:
         window.close();
     }
 
+    void instrumentRenameLeavesIconsVisible()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        window.resize(1100, 740);
+        window.show();
+        for (const auto &kind : QStringList {"json", "xml", "waveform"})
+        {
+            auto page = window.newInstrument(kind);
+            const int index = pageIndex(&window, page);
+            for (int iconSize : {16, 20})
+            {
+                window.tabs->setIconSize(QSize(iconSize, iconSize));
+                QApplication::processEvents();
+                const auto tab = window.tabs->tabRect(index);
+                const QRect iconArea(tab.left() + 17, tab.center().y() - iconSize / 2, iconSize, iconSize);
+                const auto before = window.tabs->grab(iconArea).toImage();
+                window.beginTabRename(index);
+                auto editor = window.tabs->findChild<QLineEdit *>("tabTitleEditor");
+                QVERIFY(editor);
+                QApplication::processEvents();
+                QVERIFY(editor->geometry().left() >= iconArea.right() + 4);
+                const auto close = window.tabs->tabButton(index, QTabBar::RightSide);
+                QVERIFY(editor->geometry().right() < close->geometry().left());
+                QCOMPARE(window.tabs->grab(iconArea).toImage(), before);
+                const auto captureDir = qEnvironmentVariable("SW_TAB_CAPTURE_DIR");
+                if (!captureDir.isEmpty() && iconSize == 16)
+                {
+                    QDir().mkpath(captureDir);
+                    QVERIFY(window.tabs->grab().save(captureDir + "/rename-" + kind + ".png"));
+                    QVERIFY(window.grab().save(captureDir + "/page-" + kind + ".png"));
+                }
+                QTest::keyClick(editor, Qt::Key_Escape);
+                QApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+            }
+        }
+        window.close();
+    }
+
+    void tabsRenameOnlyFromContextMenuAndF2()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        window.show();
+        auto first = window.active;
+        window.newConnection();
+        window.tabs->setCurrentIndex(pageIndex(&window, first));
+        const auto position = window.tabs->tabRect(pageIndex(&window, first)).center();
+        QTest::mouseDClick(window.tabs, Qt::MiddleButton, Qt::NoModifier, position);
+        QTest::qWait(20);
+        QVERIFY(!window.tabs->findChild<QLineEdit *>("tabTitleEditor"));
+        QTest::mouseDClick(window.tabs, Qt::LeftButton, Qt::NoModifier, position);
+        QTest::qWait(20);
+        QVERIFY(!window.tabs->findChild<QLineEdit *>("tabTitleEditor"));
+        first->payload->setFocus();
+        QTest::keyClick(first->payload, Qt::Key_F2);
+        QTRY_VERIFY(window.tabs->findChild<QLineEdit *>("tabTitleEditor"));
+        auto editor = window.tabs->findChild<QLineEdit *>("tabTitleEditor");
+        QTest::keyClicks(editor, "F2 title");
+        QTest::keyClick(editor, Qt::Key_Return);
+        QTRY_COMPARE(first->pageTitle, QString("F2 title"));
+        QTRY_VERIFY(!window.tabs->findChild<QLineEdit *>("tabTitleEditor"));
+        QTimer::singleShot(0, &window, []
+        {
+            auto menu = qobject_cast<QMenu *>(QApplication::activePopupWidget());
+            QVERIFY(menu);
+            auto rename = menu->findChild<QAction *>("renameTab");
+            QVERIFY(rename);
+            rename->trigger();
+            menu->close();
+        });
+        QMetaObject::invokeMethod(window.tabs, "customContextMenuRequested", Q_ARG(QPoint, position));
+        QTRY_VERIFY(window.tabs->findChild<QLineEdit *>("tabTitleEditor"));
+        editor = window.tabs->findChild<QLineEdit *>("tabTitleEditor");
+        QTest::keyClicks(editor, "Context title");
+        QTest::keyClick(editor, Qt::Key_Return);
+        QTRY_COMPARE(first->pageTitle, QString("Context title"));
+        QTRY_VERIFY(!window.tabs->findChild<QLineEdit *>("tabTitleEditor"));
+        auto other = window.newConnection();
+        const int count = window.tabs->count();
+        QTest::mouseClick(window.tabs, Qt::MiddleButton, Qt::NoModifier,
+            window.tabs->tabRect(pageIndex(&window, other)).center());
+        QCOMPARE(window.tabs->count(), count - 1);
+        QVERIFY(!window.tabs->findChild<QLineEdit *>("tabTitleEditor"));
+        QCOMPARE(first->pageTitle, QString("Context title"));
+        window.close();
+    }
+
+    void activeTabAndPageShareSurface_data()
+    {
+        QTest::addColumn<bool>("dark");
+        QTest::newRow("light") << false;
+        QTest::newRow("dark") << true;
+    }
+
+    void activeTabAndPageShareSurface()
+    {
+        QFETCH(bool, dark);
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        window.show();
+        window.applyTheme(dark);
+        auto wave = window.newInstrument("waveform", nullptr, false);
+        QApplication::processEvents();
+        const auto tab = window.tabs->tabRect(window.tabs->currentIndex());
+        const auto tabImage = window.tabs->grab().toImage();
+        const auto pageImage = wave->instrument->grab().toImage();
+        const auto tabColor = tabImage.pixelColor(QPoint(tab.center().x(), tab.top() + 5) * tabImage.devicePixelRatio());
+        const auto pageColor = pageImage.pixelColor(QPoint(wave->instrument->width() - 5, 5) * pageImage.devicePixelRatio());
+        QCOMPARE(tabColor, window.theme.panel);
+        QCOMPARE(pageColor, tabColor);
+        window.openSettings();
+        auto pages = window.settingsDialog->findChild<QTabWidget *>("settingsPages");
+        QVERIFY(pages);
+        QApplication::processEvents();
+        const auto bar = pages->tabBar();
+        const auto settingsImage = pages->grab().toImage();
+        const auto ratio = settingsImage.devicePixelRatio();
+        QCOMPARE(bar->x() + bar->tabRect(0).left(), 0);
+        QCOMPARE(settingsImage.pixelColor(QPoint(0, bar->geometry().center().y()) * ratio), window.theme.panel);
+        QCOMPARE(settingsImage.pixelColor(QPoint(0, bar->geometry().bottom() + 4) * ratio), window.theme.panel);
+        for (int index : {1, 2, 0})
+        {
+            pages->setCurrentIndex(index);
+            QApplication::processEvents();
+            const auto image = pages->grab().toImage();
+            const int top = bar->geometry().bottom() + 1;
+            const auto corner = image.pixelColor(QPoint(0, top) * ratio);
+            QCOMPARE(corner, index == 0 ? window.theme.panel : window.theme.background);
+            QCOMPARE(image.pixelColor(QPoint(9, top + 9) * ratio), window.theme.panel);
+            const auto selected = bar->tabRect(index);
+            const auto barImage = bar->grab().toImage();
+            const qreal barRatio = barImage.devicePixelRatio();
+            const int bottom = bar->height() - 1;
+            const int right = selected.right() + 1 - 12;
+            QCOMPARE(barImage.pixelColor(QPoint(right + 3, bottom) * barRatio), window.theme.panel);
+            QCOMPARE(barImage.pixelColor(QPoint(right + 3, bottom - 7) * barRatio).alpha(), 0);
+            if (index != 0)
+            {
+                QCOMPARE(barImage.pixelColor(QPoint(selected.left() - 4, bottom) * barRatio), window.theme.panel);
+                QCOMPARE(barImage.pixelColor(QPoint(selected.left() - 4, bottom - 7) * barRatio).alpha(), 0);
+            }
+        }
+        window.settingsDialog->hide();
+        window.close();
+    }
+
     void customReceiveTabTitleSurvivesConnectionAndDetach()
     {
         QTemporaryDir directory;
@@ -1457,7 +1621,10 @@ private slots:
             window.show();
             auto receive = window.active;
             const int index = pageIndex(&window, receive);
-            QTest::mouseDClick(window.tabs, Qt::LeftButton, Qt::NoModifier, window.tabs->tabRect(index).center());
+            window.activateWindow();
+            window.tabs->setFocus();
+            QApplication::processEvents();
+            QTest::keyClick(window.tabs, Qt::Key_F2);
             QTRY_VERIFY(window.tabs->findChild<QLineEdit *>("tabTitleEditor") != nullptr);
             auto editor = window.tabs->findChild<QLineEdit *>("tabTitleEditor");
             QVERIFY(editor);
@@ -1510,8 +1677,10 @@ private slots:
             sw::Window window(&engine, &mcp, path);
             window.show();
             auto wave = window.newInstrument("waveform");
-            QTest::mouseDClick(window.tabs, Qt::LeftButton, Qt::NoModifier,
-                window.tabs->tabRect(pageIndex(&window, wave)).center());
+            window.activateWindow();
+            window.tabs->setFocus();
+            QApplication::processEvents();
+            QTest::keyClick(window.tabs, Qt::Key_F2);
             QTRY_VERIFY(window.tabs->findChild<QLineEdit *>("tabTitleEditor") != nullptr);
             auto editor = window.tabs->findChild<QLineEdit *>("tabTitleEditor");
             QVERIFY(editor);
@@ -1757,6 +1926,33 @@ private slots:
         const auto record = channel->structured()["sources"].toObject()["default"].toObject()["records"].toArray().last().toObject();
         QCOMPARE(record["value"].toObject()["gbk"].toString(), "中文");
     }
+    void compactSerialFieldsAndIntegratedTabs()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        window.show();
+        window.resizeParameters(220);
+        QApplication::processEvents();
+        window.flow->setCurrentText("xonxoff");
+        QStyleOptionComboBox option;
+        option.initFrom(window.flow);
+        option.currentText = window.flow->currentText();
+        const auto field = window.flow->style()->subControlRect(QStyle::CC_ComboBox, &option, QStyle::SC_ComboBoxEditField, window.flow);
+        QVERIFY(field.width() >= window.flow->fontMetrics().horizontalAdvance("xonxoff"));
+        QCOMPARE(window.tabs->geometry().bottom(), window.tabHeader->rect().bottom());
+        window.beginTabRename(0);
+        auto editor = window.tabs->findChild<QLineEdit *>("tabTitleEditor");
+        QVERIFY(editor);
+        editor->clear();
+        QApplication::processEvents();
+        const auto shot = editor->grab().toImage();
+        const auto bottom = shot.pixelColor(shot.width() / 2, shot.height() - 1);
+        QVERIFY(bottom != window.theme.accent);
+        window.close();
+    }
+
     void layoutAndTabs()
     {
         QTemporaryDir directory;
@@ -2919,7 +3115,7 @@ private slots:
     {
         sw::Engine engine;
         sw::McpServer mcp(&engine);
-        QCOMPARE(mcp.tools().size(), 10);
+        QCOMPARE(mcp.tools().size(), 12);
         QVERIFY_EXCEPTION_THROWN(mcp.call("open_connection", {{"config", QJsonObject {{"kind", "serial"}, {"port", "loop://"}}}}), std::runtime_error);
         engine.allowControl = true;
         mcp.call("open_connection", {{"config", QJsonObject {{"kind", "serial"}, {"port", "loop://"}}}});
