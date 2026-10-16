@@ -2,6 +2,18 @@
 
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
 
+## 2026-10-16 — 标签重命名改为文字下划线样式
+
+- 执行者：DeepSeek。
+- 分支与起点：`deepseek-dev`，起点 `b80b831`。
+- 用户目标：重命名输入框改为更矮的观感，或直接改成文字下方的横线。
+- 已完成：`src/ui/controls.cpp` 的 `#tabTitleEditor` 样式由圆角方框改为仅底部下划线（`background: $panel` 与选中标签同色、`border: none; border-bottom: 1px solid $edge; border-radius: 0`）；`src/ui/window.cpp` 的 `beginTabRename()` 垂直内缩 `+6/-6`。下划线宽度仍止于关闭按钮左侧，标签图标不受影响。
+- 验证：构建成功；`ctest` 14/14 全过；`instrumentRenameLeavesIconsVisible`、`compactSerialFieldsAndIntegratedTabs`（断言编辑器底部像素非强调色）仍通过。截图 `build/rename-captures/rename-{xml,json,waveform}.png` 显示为文字下横线，无方框、无残影，图标与 ✕ 清晰。
+- 未完成：无。
+- 风险与兼容：仅编辑器观感与 2px 垂直内缩；背景沿用 `$panel` 与选中标签同色，避免原标签文字透出；重命名逻辑、触发方式与标签自适应未改动。
+- 提交与同步：见交接回复中的提交哈希；推送 `deepseek-dev`，未推送 `main`。
+- 下一步：Codex 审查并集成。
+
 ## 2026-10-16 — 标签重命名输入框放大且不挤出图标
 
 - 执行者：DeepSeek。

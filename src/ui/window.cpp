@@ -3224,8 +3224,8 @@ void Window::beginTabRename(int index)
             textRect.setRight(closeButton->geometry().left() - 4);
         }
     }
-    textRect.setTop(tabRect.top() + 4);
-    textRect.setBottom(tabRect.bottom() - 4);
+    textRect.setTop(tabRect.top() + 6);
+    textRect.setBottom(tabRect.bottom() - 6);
     editor->setGeometry(textRect);
     QPointer<Pane> selected = pane;
     editor->onFinish = [this, editor, selected](bool accept)
