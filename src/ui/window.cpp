@@ -3224,8 +3224,11 @@ void Window::beginTabRename(int index)
             textRect.setRight(closeButton->geometry().left() - 4);
         }
     }
-    textRect.setTop(tabRect.top() + 6);
-    textRect.setBottom(tabRect.bottom() - 6);
+    // Anchor the underline just below the title text instead of the tab box.
+    const int textHeight = editor->fontMetrics().height();
+    const int center = tabRect.center().y();
+    textRect.setTop(center - textHeight / 2 - 3);
+    textRect.setBottom(center + textHeight / 2 + 2);
     editor->setGeometry(textRect);
     QPointer<Pane> selected = pane;
     editor->onFinish = [this, editor, selected](bool accept)
