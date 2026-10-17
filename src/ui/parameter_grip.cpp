@@ -9,7 +9,7 @@ ParameterGrip::ParameterGrip(Window *owner, QWidget *parent)
     : QWidget(parent), window(owner)
 {
     setObjectName("parameterGrip");
-    setFixedWidth(8);
+    setFixedWidth(10);
     setCursor(Qt::SplitHCursor);
     setFocusPolicy(Qt::TabFocus);
     setAccessibleName("连接参数栏宽度");
@@ -21,11 +21,13 @@ void ParameterGrip::paintEvent(QPaintEvent *)
     QPainter painter(this);
     auto color = window->theme.muted;
     const bool active = dragging || underMouse() || hasFocus();
-    color.setAlpha(active ? 170 : 65);
+    color.setAlpha(active ? 200 : 120);
     if (active) { color = window->theme.accent; }
     painter.setPen(QPen(color, 1));
-    const int center = width() / 2;
-    painter.drawLine(center, 0, center, height());
+    // Draw the divider against the parameter panel, then a small grip dot
+    // column inside the workspace side so the two never look like one control.
+    painter.drawLine(1, 0, 1, height());
+    const int center = 6;
     for (int offset : {-6, 0, 6})
     {
         painter.fillRect(center - 1, height() / 2 + offset, 2, 2, color);

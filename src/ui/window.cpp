@@ -1739,7 +1739,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     });
     connect(workbench, &QAbstractButton::toggled, this, [this] { QTimer::singleShot(0, this, &Window::adjustTabs); });
     auto side = new QVBoxLayout(sidebar);
-    side->setContentsMargins(16, 16, 16, 16);
+    side->setContentsMargins(16, 16, 24, 16);
     side->setSpacing(12);
     auto brand = new QWidget();
     brand->setObjectName("pixelBrand");
@@ -1966,7 +1966,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     sideScroll->setWidget(sidebar);
     sidebar->setAutoFillBackground(false);
     sideScroll->viewport()->setAutoFillBackground(false);
-    sideScroll->setFixedWidth(qMin(parameterWidth, qMax(220, width() - 54 - 8 - 320)));
+    sideScroll->setFixedWidth(qMin(parameterWidth, qMax(220, width() - 54 - 10 - 320)));
     sideScroll->setMinimumHeight(0);
     sideScroll->setObjectName("parameterScroll");
     layout->addWidget(sideScroll);
@@ -3570,9 +3570,7 @@ void Window::resizeEvent(QResizeEvent *event)
 void Window::resizeParameters(int width)
 {
     if (!centralWidget()) { return; }
-    const int reserve = this->width() < 900 ? 0 : 320;
-    const int maximum = qMax(220, centralWidget()->width() - rail->width() - 8 - reserve);
-    const int preferred = qBound(220, width, maximum);
+    const int preferred = qBound(220, width, 4096);
     for (auto host : rootWindow()->hosts)
     {
         if (!host) { continue; }
@@ -3608,16 +3606,26 @@ void Window::arrangeParameters()
         const QSignalBlocker blocker(parameterToggle);
         parameterToggle->setChecked(parametersVisible);
     }
-    const int maximum = qMax(220, centralWidget()->width() - rail->width() - 8 - (narrow ? 0 : 320));
+    // Reserve the workspace's real minimum width. A fixed 320 px was too small
+    // and let the scroll area overlap the grip; the pane minimum is the real
+    // boundary the layout enforces.
+    const int reserve = workspace ? qMax(320, workspace->minimumSizeHint().width()) : 320;
+    const int maximum = qMax(220, centralWidget()->width() - rail->width() - 10 - (narrow ? 0 : reserve));
     const int visibleWidth = qBound(220, parameterWidth, maximum);
     scroll->setFixedWidth(visibleWidth);
     parameterGrip->setVisible(!scroll->isHidden());
     if (narrow)
     {
         scroll->setGeometry(rail->width(), 0, visibleWidth, centralWidget()->height());
-        parameterGrip->setGeometry(rail->width() + visibleWidth, 0, 8, centralWidget()->height());
+        parameterGrip->setGeometry(rail->width() + visibleWidth, 0, 10, centralWidget()->height());
         scroll->raise();
         parameterGrip->raise();
+    }
+    else
+    {
+        // Keep the grip aligned with the fixed-width scroll area even when the
+        // layout pass is deferred; otherwise it can sit over the form controls.
+        parameterGrip->setGeometry(rail->width() + visibleWidth, 0, 10, centralWidget()->height());
     }
     status->setMaximumWidth(qMax(80, width() - (narrow ? 70 : 210)));
     mcpStatus->setVisible(!narrow);

@@ -2958,6 +2958,46 @@ private slots:
         restored.close();
     }
 
+    void parameterSidebarKeepsControlsClearOfGrip()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        window.resize(1416, 968);
+        window.show();
+        QTest::qWait(100);
+        auto scroll = window.findChild<QScrollArea *>("parameterScroll");
+        auto side = window.sidebar;
+        QVERIFY(scroll && side);
+        for (int width : {220, 400, 692, 700, 900, 1034})
+        {
+            window.resizeParameters(width);
+            window.centralWidget()->layout()->activate();
+            QTest::qWait(80);
+            int maxRight = 0;
+            for (auto combo : side->findChildren<QComboBox *>())
+            {
+                if (!combo->isVisible() || !combo->isVisibleTo(side)) { continue; }
+                maxRight = qMax(maxRight, combo->mapTo(side, QPoint(0, 0)).x() + combo->width());
+            }
+            QVERIFY2(maxRight > 0, qPrintable(QString::number(width)));
+            QVERIFY2(side->width() - maxRight >= 20,
+                qPrintable(QString("width=%1 gap=%2").arg(width).arg(side->width() - maxRight)));
+            QVERIFY(window.parameterGrip->width() >= 10);
+            QTRY_VERIFY_WITH_TIMEOUT(window.parameterGrip->mapTo(window.centralWidget(), QPoint()).x()
+                >= scroll->mapTo(window.centralWidget(), QPoint()).x() + scroll->width() - 4, 1000);
+        }
+        const auto captureDirectory = qEnvironmentVariable("SW_UI_CAPTURE_DIR");
+        if (!captureDirectory.isEmpty())
+        {
+            window.resizeParameters(700);
+            QTest::qWait(80);
+            QVERIFY(window.grab().save(QDir(captureDirectory).filePath("sidebar-wide-boundary.png")));
+        }
+        window.close();
+    }
+
     void settingsResizeAndRestore()
     {
         QTemporaryDir directory;
