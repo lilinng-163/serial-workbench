@@ -220,19 +220,8 @@ void Window::installMcpUi()
     });
     connect(mcp, &McpServer::toolCalled, this, [guard](const QJsonObject &entry)
     {
-        if (!guard || !guard->aiStatus) { return; }
-        const bool ok = entry["status"].toString() == "ok";
-        QString action = entry["summary"].toString();
-        if (action.isEmpty()) { action = entry["tool"].toString(); }
-        const auto elided = guard->aiStatus->fontMetrics().elidedText(action, Qt::ElideMiddle, 240);
-        guard->aiStatus->setText(QString("AI · %1 · %2")
-            .arg(elided, ok ? QStringLiteral("成功") : QStringLiteral("失败")));
-        QString tip = QString("%1\n客户端：%2\n时间：%3\n耗时：%4 ms")
-            .arg(action, entry["client"].toString(), entry["time"].toString())
-            .arg(entry["duration_ms"].toInteger());
-        if (!ok) { tip += "\n错误：" + entry["error"].toString(); }
-        guard->aiStatus->setToolTip(tip);
-        guard->aiStatus->show();
+        if (!guard) { return; }
+        guard->showAiActivity(entry);
     });
     connect(mcp, &McpServer::portChanged, this, [this] { checkAgentEndpoints(); });
 }

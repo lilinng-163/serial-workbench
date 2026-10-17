@@ -329,14 +329,19 @@ private slots:
         QVERIFY(!entry["result"].toString().isEmpty());
         QTRY_VERIFY(window.aiStatus->isVisible());
         QVERIFY(window.aiStatus->text().contains("AI"));
+        QTRY_VERIFY(window.aiToast->isVisible());
+        QVERIFY(window.aiToastText->text().contains("AI"));
 
-        // The audit table exposes the stored detail on double click.
-        window.openSettings();
+        // The toast opens Settings directly on the audit tab.
+        auto toastAll = window.aiToast->findChild<QPushButton *>("aiToastAll");
+        QVERIFY(toastAll);
+        toastAll->click();
+        QVERIFY(window.settingsDialog);
         auto pages = window.settingsDialog->findChild<sw::DetachableTabs *>("settingsPages");
         auto mcpTabs = window.settingsDialog->findChild<sw::DetachableTabs *>("mcpPages");
         QVERIFY(pages && mcpTabs);
-        pages->setCurrentIndex(1);
-        mcpTabs->setCurrentIndex(2);
+        QCOMPARE(pages->currentIndex(), 1);
+        QCOMPARE(mcpTabs->currentIndex(), 2);
         QTRY_COMPARE(window.auditTable->topLevelItemCount(), mcp.audit.size());
         auto row = window.auditTable->topLevelItem(window.auditTable->topLevelItemCount() - 1);
         QVERIFY(row);

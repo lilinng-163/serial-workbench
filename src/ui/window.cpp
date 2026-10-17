@@ -2018,6 +2018,36 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     stack = new QStackedWidget();
     rightBody->addWidget(stack, 1);
     layout->addWidget(right, 1);
+    workspace = right;
+    aiToast = new QFrame(right);
+    aiToast->setObjectName("aiToast");
+    aiToast->setProperty("roundedPopup", true);
+    aiToast->setAttribute(Qt::WA_StyledBackground, true);
+    aiToast->setMaximumWidth(560);
+    auto toastBody = new QHBoxLayout(aiToast);
+    toastBody->setContentsMargins(12, 7, 7, 7);
+    toastBody->setSpacing(8);
+    aiToastText = label("", "aiToastText");
+    toastBody->addWidget(aiToastText, 1);
+    auto toastDetail = button("详情", "outline");
+    toastDetail->setObjectName("aiToastDetail");
+    toastDetail->setFixedHeight(26);
+    connect(toastDetail, &QPushButton::clicked, this, [this] { showAuditDetail(aiToastEntry); });
+    toastBody->addWidget(toastDetail);
+    auto toastAll = button("全部记录", "outline");
+    toastAll->setObjectName("aiToastAll");
+    toastAll->setFixedHeight(26);
+    connect(toastAll, &QPushButton::clicked, this, &Window::openAiAudit);
+    toastBody->addWidget(toastAll);
+    auto toastClose = new IconButton("close", "关闭 AI 活动提示");
+    toastClose->setObjectName("aiToastClose");
+    toastClose->setFixedSize(24, 24);
+    connect(toastClose, &QAbstractButton::clicked, aiToast, &QWidget::hide);
+    toastBody->addWidget(toastClose);
+    aiToast->hide();
+    aiToastTimer.setSingleShot(true);
+    aiToastTimer.setInterval(10000);
+    connect(&aiToastTimer, &QTimer::timeout, aiToast, &QWidget::hide);
     setCentralWidget(root);
     status = label("尚未连接", "muted");
     aiStatus = label("", "muted");
@@ -2274,6 +2304,69 @@ void Window::showAuditDetail(const QJsonObject &entry)
     actions->addWidget(close);
     body->addLayout(actions);
     dialog->show();
+}
+
+void Window::showAiActivity(const QJsonObject &entry)
+{
+    aiToastEntry = entry;
+    const bool ok = entry["status"].toString() == "ok";
+    QString action = entry["summary"].toString();
+    if (action.isEmpty()) { action = entry["tool"].toString(); }
+    const QString status = ok ? QStringLiteral("成功") : QStringLiteral("失败");
+    if (aiToastText)
+    {
+        aiToastText->setText(aiToastText->fontMetrics().elidedText(
+            QString("AI · %1 · %2").arg(action, status), Qt::ElideMiddle, 300));
+        QString tip = QString("%1\n客户端：%2\n时间：%3\n耗时：%4 ms")
+            .arg(action, entry["client"].toString(), entry["time"].toString())
+            .arg(entry["duration_ms"].toInteger());
+        if (!ok) { tip += "\n错误：" + entry["error"].toString(); }
+        aiToastText->setToolTip(tip);
+    }
+    if (aiToast)
+    {
+        aiToast->adjustSize();
+        positionAiToast();
+        aiToast->show();
+        aiToast->raise();
+        aiToastTimer.start();
+    }
+    if (aiStatus)
+    {
+        const auto elided = aiStatus->fontMetrics().elidedText(action, Qt::ElideMiddle, 240);
+        aiStatus->setText(QString("AI · %1 · %2").arg(elided, status));
+        aiStatus->setToolTip(aiToastText ? aiToastText->toolTip() : action);
+        aiStatus->show();
+    }
+}
+
+void Window::positionAiToast()
+{
+    if (!aiToast || !workspace || !tabHeader)
+    {
+        return;
+    }
+    aiToast->adjustSize();
+    aiToast->move(qMax(8, workspace->width() - aiToast->width() - 14), tabHeader->height() + 52);
+}
+
+void Window::openAiAudit()
+{
+    openSettings();
+    if (!settingsDialog)
+    {
+        return;
+    }
+    if (auto pages = settingsDialog->findChild<DetachableTabs *>("settingsPages"))
+    {
+        pages->setCurrentIndex(1);
+    }
+    if (auto tabs = settingsDialog->findChild<DetachableTabs *>("mcpPages"))
+    {
+        tabs->setCurrentIndex(2);
+    }
+    settingsDialog->raise();
+    settingsDialog->activateWindow();
 }
 
 Window *Window::detachConnection(int index, const QPoint &position, bool systemMove)
@@ -3444,6 +3537,7 @@ void Window::resizeEvent(QResizeEvent *event)
     QMainWindow::resizeEvent(event);
     QTimer::singleShot(0, this, &Window::adjustTabs);
     QTimer::singleShot(0, this, &Window::arrangeParameters);
+    positionAiToast();
 }
 
 void Window::resizeParameters(int width)

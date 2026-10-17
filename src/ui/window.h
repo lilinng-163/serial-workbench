@@ -139,6 +139,9 @@ public:
     void installMcpUi();
     void checkAgentEndpoints();
     void showAuditDetail(const QJsonObject &entry);
+    void showAiActivity(const QJsonObject &entry);
+    void positionAiToast();
+    void openAiAudit();
     std::function<AgentEnvironment()> agentEnvironment = AgentEnvironment::current;
     Window(Engine *engine, McpServer *mcp, const QString &settingsPath, Window *primary = nullptr);
     Window *primary;
@@ -209,6 +212,10 @@ public:
     QLabel *status;
     QLabel *mcpStatus;
     QLabel *aiStatus = nullptr;
+    QWidget *workspace = nullptr;
+    QFrame *aiToast = nullptr;
+    QLabel *aiToastText = nullptr;
+    QJsonObject aiToastEntry;
     QPushButton *updateButton = nullptr;
     QProgressBar *updateProgress = nullptr;
     UpdateService *updater = nullptr;
@@ -216,6 +223,7 @@ public:
     QTimer timer;
     QTimer portTimer;
     QTimer sshConfigTimer;
+    QTimer aiToastTimer;
     QString sshConfigFingerprint;
     QJsonArray lastPorts;
     bool portsLoaded = false;
