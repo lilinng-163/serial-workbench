@@ -8,6 +8,7 @@ SetCompressor /SOLID lzma
 !include "LogicLib.nsh"
 !include "FileFunc.nsh"
 !include "nsDialogs.nsh"
+!include "Sections.nsh"
 
 !ifndef PRODUCT_NAME
 !define PRODUCT_NAME "Serial Workbench"
@@ -49,6 +50,7 @@ VIAddVersionKey "LegalCopyright" "Apache-2.0"
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "${PAYLOAD_DIR}\LICENSE"
+!define MUI_COMPONENTSPAGE_TEXT_TOP "已默认勾选检测到的 Agent 使用指南，可取消或手动增选。以后也可在设置 → AI / MCP → Agent 接入 → 配置 skill 中更新。"
 !insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
@@ -101,6 +103,7 @@ FunctionEnd
 Function .onInit
     SetShellVarContext current
     SetRegView 64
+    Call DetectSkillAgents
 FunctionEnd
 
 Section "工作台与 MCP（必需）" Application
@@ -176,15 +179,11 @@ SectionEnd
     ${EndIf}
     ${If} $0 != 0
         DetailPrint "${AGENT} skill 安装失败；主程序安装已完成。"
-        MessageBox MB_OK|MB_ICONEXCLAMATION "${AGENT} skill 未安装完成。请检查用户目录写入权限，稍后可重新运行安装器选择此组件。已有 skill 文件会先备份。" /SD IDOK
+        MessageBox MB_OK|MB_ICONEXCLAMATION "${AGENT} skill 未安装完成。请检查用户目录写入权限，稍后可在设置 → AI / MCP → 配置 skill 中重试。已有 skill 文件会先备份。" /SD IDOK
     ${EndIf}
 !macroend
 
-!ifdef WORKBENCH_TEST_SKILL_CODEX
-Section "Codex 使用指南 skill（当前用户 .codex/skills）" SkillCodex
-!else
 Section /o "Codex 使用指南 skill（当前用户 .codex/skills）" SkillCodex
-!endif
     !insertmacro InstallAgentSkill codex
 SectionEnd
 Section /o "Claude Code 使用指南 skill（当前用户 .claude/skills）" SkillClaude
@@ -195,6 +194,19 @@ Section /o "OpenCode 使用指南 skill（当前用户 .config/opencode/skills�
 SectionEnd
 Section /o "Pi Agent 使用指南 skill（当前用户 .pi/agent/skills）" SkillPi
     !insertmacro InstallAgentSkill pi
+SectionEnd
+
+Section /o "Hermes 使用指南 skill（当前用户）" SkillHermes
+    !insertmacro InstallAgentSkill hermes
+SectionEnd
+Section /o "OpenClaw 使用指南 skill（当前用户）" SkillOpenClaw
+    !insertmacro InstallAgentSkill openclaw
+SectionEnd
+Section /o "Grok Build 使用指南 skill（当前用户）" SkillGrok
+    !insertmacro InstallAgentSkill grok
+SectionEnd
+Section /o "Gemini CLI 使用指南 skill（当前用户）" SkillGemini
+    !insertmacro InstallAgentSkill gemini
 SectionEnd
 
 Section "创建桌面快捷方式" Desktop
@@ -208,7 +220,62 @@ SectionEnd
 !insertmacro MUI_DESCRIPTION_TEXT ${SkillClaude} "可选。遵循 CLAUDE_CONFIG_DIR，保留已有 skill 备份；安装后重载 Agent。"
 !insertmacro MUI_DESCRIPTION_TEXT ${SkillOpenCode} "可选。遵循 OPENCODE_CONFIG_DIR 或 XDG_CONFIG_HOME，安装后重载 Agent。"
 !insertmacro MUI_DESCRIPTION_TEXT ${SkillPi} "可选。遵循 PI_CODING_AGENT_DIR，安装后可使用 /reload。"
+!insertmacro MUI_DESCRIPTION_TEXT ${SkillHermes} "遵循 HERMES_HOME，安装软件/MCP/脚本使用指南，已有内容先备份。"
+!insertmacro MUI_DESCRIPTION_TEXT ${SkillOpenClaw} "遵循 OPENCLAW_STATE_DIR，安装到 managed skills，已有内容先备份。"
+!insertmacro MUI_DESCRIPTION_TEXT ${SkillGrok} "安装到当前用户 .grok/skills，已有内容先备份。"
+!insertmacro MUI_DESCRIPTION_TEXT ${SkillGemini} "安装到当前用户 .gemini/skills，已有内容先备份。"
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
+
+; Reuse the native Agent detector before displaying the component page.
+; These temporary files do not launch the workbench or write user configuration.
+Function DetectSkillAgents
+    InitPluginsDir
+    SetOutPath "$PLUGINSDIR\skill-detection"
+    File "${PAYLOAD_DIR}\*.dll"
+    File /oname=SerialWorkbench.exe "${PAYLOAD_DIR}\SerialWorkbench.exe"
+    SetOutPath "$PLUGINSDIR\skill-detection\platforms"
+    File "${PAYLOAD_DIR}\platforms\qwindows.dll"
+    ClearErrors
+    ExecWait '"$PLUGINSDIR\skill-detection\SerialWorkbench.exe" --detect-skill-agents --skill-report "$PLUGINSDIR\agents.ini"' $0
+    ${If} ${Errors}
+        Return
+    ${EndIf}
+    ${If} $0 != 0
+        Return
+    ${EndIf}
+    ReadINIStr $1 "$PLUGINSDIR\agents.ini" "agents" "codex"
+    ${If} $1 == "1"
+        !insertmacro SelectSection ${SkillCodex}
+    ${EndIf}
+    ReadINIStr $1 "$PLUGINSDIR\agents.ini" "agents" "claude-code"
+    ${If} $1 == "1"
+        !insertmacro SelectSection ${SkillClaude}
+    ${EndIf}
+    ReadINIStr $1 "$PLUGINSDIR\agents.ini" "agents" "opencode"
+    ${If} $1 == "1"
+        !insertmacro SelectSection ${SkillOpenCode}
+    ${EndIf}
+    ReadINIStr $1 "$PLUGINSDIR\agents.ini" "agents" "pi"
+    ${If} $1 == "1"
+        !insertmacro SelectSection ${SkillPi}
+    ${EndIf}
+    ReadINIStr $1 "$PLUGINSDIR\agents.ini" "agents" "hermes"
+    ${If} $1 == "1"
+        !insertmacro SelectSection ${SkillHermes}
+    ${EndIf}
+    ReadINIStr $1 "$PLUGINSDIR\agents.ini" "agents" "openclaw"
+    ${If} $1 == "1"
+        !insertmacro SelectSection ${SkillOpenClaw}
+    ${EndIf}
+    ReadINIStr $1 "$PLUGINSDIR\agents.ini" "agents" "grok"
+    ${If} $1 == "1"
+        !insertmacro SelectSection ${SkillGrok}
+    ${EndIf}
+    ReadINIStr $1 "$PLUGINSDIR\agents.ini" "agents" "gemini"
+    ${If} $1 == "1"
+        !insertmacro SelectSection ${SkillGemini}
+    ${EndIf}
+FunctionEnd
 
 Function un.onInit
     SetShellVarContext current

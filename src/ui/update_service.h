@@ -31,11 +31,18 @@ class UpdateService : public QObject
     Q_OBJECT
 
 public:
-    explicit UpdateService(QObject *parent = nullptr);
+    explicit UpdateService(QObject *parent = nullptr, QNetworkAccessManager *transport = nullptr);
 
     static std::optional<UpdateRelease> parseRelease(const QByteArray &json, const QString &currentVersion);
     static std::optional<UpdateRelease> parseMirrorManifest(const QByteArray &json, const QString &currentVersion);
 
+    static QList<UpdateRelease> parseHistory(const QByteArray &json);
+    static QList<UpdateRelease> bundledHistory();
+
+    void checkHistory();
+    const QList<UpdateRelease> &recentReleases() const { return history; }
+    bool isCheckingHistory() const { return !historyReply.isNull(); }
+    bool downloadRelease(const UpdateRelease &candidate);
     void check();
     void download();
     void cancelDownload();
@@ -45,6 +52,8 @@ public:
     qint64 downloadedBytes() const { return receivedBytes; }
 
 signals:
+    void historyChanged();
+    void historyFailed(const QString &message);
     void updateAvailable(const QString &version);
     void downloadProgress(qint64 received, qint64 total);
     void downloadReady(const QString &installerPath);
@@ -52,7 +61,10 @@ signals:
 
 private:
     QNetworkAccessManager network;
+    QNetworkAccessManager *networkClient;
     QPointer<QNetworkReply> checkReply;
+    QPointer<QNetworkReply> historyReply;
+    QList<UpdateRelease> history;
     QPointer<QNetworkReply> installerReply;
     std::optional<UpdateRelease> release;
     std::unique_ptr<QSaveFile> installerFile;

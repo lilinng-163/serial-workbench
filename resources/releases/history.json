@@ -1,0 +1,53 @@
+[
+  {
+    "assets": [
+      {
+        "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.31/SerialWorkbench-0.15.31-windows-x64-setup.exe",
+        "digest": "sha256:1abc1b811e5339ddc2d6adf469228fad6859bc699059f39949d4bcb3928f6353",
+        "name": "SerialWorkbench-0.15.31-windows-x64-setup.exe",
+        "size": 15439442,
+        "state": "uploaded"
+      }
+    ],
+    "body": "# Serial Workbench 0.15.31\n\nAI 协作与界面同步更新。\n\n- AI 可直接调用收发页、JSON/XML 与已打开小窗的搜索，大小写、全词、正则及逻辑开关与界面同步，无需生成 grep 命令。\n- 新增串口脚本读取、离线分块试解析和应用接口。应用需要 AI 控制权限及最新 revision，保护未保存的界面编辑和正在进行的试解析。\n- AI 打开连接后显示对应收发页，应用脚本后展示代码和启用状态。活动提示可打开调用详情和全部记录，调用日志支持跟随最新记录及回看。\n- 安装时可选 Codex、Claude Code、OpenCode、Pi skill，默认不选；已有不同内容先备份。启动与端口变化时只读检查 Agent 地址，配置更新仍由用户操作。\n\n推荐下载 `SerialWorkbench-0.15.31-windows-x64-setup.exe`。另提供单文件 EXE、便携 ZIP 和 SHA-256 校验文件，无需安装 Qt 或 Python。升级前关闭工作台与 MCP 桥，安装器沿用原安装目录并保留设置。升级后重载 Agent 的 MCP 连接，以获取新增的工具。\n\n## English\n\n- Search the actual GUI display through MCP, sharing case-sensitive, whole-word, regex and logical matching options.\n- Inspect, validate and apply serial frame parsers. Offline chunk tests leave live sessions unchanged; applying requires AI control permission and a current revision, and protects unsaved GUI edits.\n- Display AI-opened connections and applied scripts in the GUI. Activity notices link to call details and audit history; the audit follows new entries while preserving the position and selection when browsing older calls.\n- Optionally install Codex, Claude Code, OpenCode or Pi skills. Startup endpoint checks are read-only; configuration updates remain manual.\n\nUse the Windows x64 setup installer for normal installation. A single-file launcher, portable ZIP and SHA-256 checksums are also available. Close the application and MCP bridge before upgrading; settings are retained. Reload the Agent MCP connection after upgrading to discover the new tools.\n",
+    "draft": false,
+    "name": "Serial Workbench 0.15.31",
+    "prerelease": false,
+    "published_at": "2026-10-17T09:18:15Z",
+    "tag_name": "v0.15.31"
+  },
+  {
+    "assets": [
+      {
+        "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.30/SerialWorkbench-0.15.30-windows-x64-setup.exe",
+        "digest": "sha256:f978a5f95c22e0286494b04b0e7872c4a75755327a4db436e171cd9b34e3a199",
+        "name": "SerialWorkbench-0.15.30-windows-x64-setup.exe",
+        "size": 15398507,
+        "state": "uploaded"
+      }
+    ],
+    "body": "# Serial Workbench 0.15.30\n\n收发搜索与界面修复更新。\n\n- 收发页、收发小窗及 JSON/XML 页新增 Aa（大小写）、ab（全词）、.*（正则）和 &&（逻辑）开关。\n- 支持 `温度 && 报警 || 故障` 等组合条件，`&&` 优先；双引号保护包含运算符的内容，正则与逻辑可组合，设置会保存。\n- 暂停时也可重新筛选现有日志；错误表达式有边框与悬停说明；JSON/XML 详情跟随可见记录。\n- 修复 SSH 草稿切回串口的显示模式，改善默认窗口高度及标签重命名的文字、下划线与图标间距。\n\n推荐下载 `SerialWorkbench-0.15.30-windows-x64-setup.exe` 安装版。另提供单文件 EXE、便携 ZIP 和 SHA-256 校验文件；无需安装 Qt 或 Python。升级前关闭工作台与 MCP 桥，安装器会使用原安装目录并保留设置。\n\n## English\n\n- Add case-sensitive, whole-word, regex and logical search switches to receive logs, serial monitors and JSON/XML records.\n- Support AND/OR precedence, quoted terms and combined regex/logical matching; retain settings and allow filtering while paused.\n- Keep shared MCP history intact, explain invalid expressions and align JSON/XML details with visible rows.\n- Fix SSH-to-serial draft view restoration, improve default window height and refine inline tab renaming.\n\nUse the Windows x64 setup installer for normal installation. A single-file launcher, portable ZIP and SHA-256 checksums are also available. Close the workbench and MCP bridge before upgrading; settings are retained.\n",
+    "draft": false,
+    "name": "Serial Workbench 0.15.30",
+    "prerelease": false,
+    "published_at": "2026-10-17T03:59:25Z",
+    "tag_name": "v0.15.30"
+  },
+  {
+    "assets": [
+      {
+        "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.29/SerialWorkbench-0.15.29-windows-x64-setup.exe",
+        "digest": "sha256:d3a38a23358062dd8ae7d4563f362c62a31e70c9c3ce7a597f79b7200455fcbd",
+        "name": "SerialWorkbench-0.15.29-windows-x64-setup.exe",
+        "size": 15394704,
+        "state": "uploaded"
+      }
+    ],
+    "body": "## Highlights\n\nSerial Workbench 0.15.29 adds a dedicated SSH terminal with scrollback, grouped serial-control dashboards and a refreshed workspace. The project now has complete [English](https://github.com/lilinng-163/serial-workbench/blob/v0.15.29/README.md) and [简体中文](https://github.com/lilinng-163/serial-workbench/blob/v0.15.29/README.zh-CN.md) READMEs with current screenshots and setup examples.\n\n- **SSH terminal:** 10,000 scrollback lines, history selection/copy and stable reading position. SSH always uses the terminal; the log-mode switch and serial send panel are removed for SSH sessions.\n- **Serial controls:** grouped dashboards, freely movable/resizable cards, PID/motor/temperature/PWM presets, per-control automatic sending and a separate receive monitor.\n- **Waveforms:** four fixed-width live readouts with selectable channels; up to 16 plotted curves.\n- **Data pages:** one-click local clearing for waveform, JSON and XML pages, preserving shared connection history.\n- **AI / MCP:** usage guides, a bundled agent skill, connection-scoped reads and independent protocol access controls.\n- **Workspace:** custom backgrounds, coordinated title bars, rounded tab transitions and flatter button/checkbox feedback. Tab renaming uses the context menu or F2 and keeps icons visible.\n\n## Download\n\n| Asset | Description |\n| --- | --- |\n| `SerialWorkbench-0.15.29-windows-x64-setup.exe` | Recommended Windows x64 installer |\n| `SerialWorkbench-0.15.29-windows-x64-portable.zip` | Portable folder; extract all files before launching |\n| `SerialWorkbench-0.15.29-windows-x64.exe` | Single-file launcher with a reusable runtime cache |\n| `SHA256SUMS.txt` | SHA-256 checksums for all three packages |\n\nNo Python or Qt SDK is required to run the packages. SSH uses Windows OpenSSH. Close the application and MCP bridge before upgrading; the installer preserves personal settings. Read the [README](https://github.com/lilinng-163/serial-workbench/blob/v0.15.29/README.md) for installation and MCP setup.\n\n## 中文更新说明\n\n- **SSH 专用终端**：保留一万行滚动历史，支持历史选择复制，回看时新输出不打断阅读。SSH 取消日志模式切换和串口式发送栏。\n- **串口控制面板**：控件分组、自由拖动缩放、PID/电机/温度/PWM 预设、各控件独立自动发送，以及独立收发小窗。\n- **波形与数据页面**：四路定宽实时读数，可自行更换通道；波形、JSON、XML 支持一键清空本地显示，保留连接与共享历史。\n- **AI / MCP**：附带使用指南与 skill，按连接读取数据，支持按协议设置 AI 开放范围。\n- **界面与文档**：自定义背景、统一标题栏、平滑圆角过渡与控件反馈；修复重命名遮挡图标，使用右键或 F2 重命名；重写中英双语 README，加入新版实际截图。\n\nWindows x64 推荐下载 `setup.exe`，也可选择便携 ZIP 或单文件启动器。升级前关闭程序和 MCP 桥；安装版保留个人设置。运行无需安装 Python 或 Qt，SSH 使用系统 OpenSSH。\n\n**Validation / 验证：** Release build, 14 native test groups, portable/single-file package checks and isolated installer upgrade/uninstall checks.\n\n**Full changelog:** https://github.com/lilinng-163/serial-workbench/compare/v0.15.15...v0.15.29\n",
+    "draft": false,
+    "name": "Serial Workbench 0.15.29",
+    "prerelease": false,
+    "published_at": "2026-10-16T14:51:05Z",
+    "tag_name": "v0.15.29"
+  }
+]

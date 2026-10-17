@@ -24,7 +24,7 @@ class ScriptTests : public QObject
 {
     Q_OBJECT
 private slots:
-    void aiPromptUsesCurrentDraftWithoutApplyingIt()
+    void editorSavesTrialInputsWithoutPromptUi()
     {
         QTemporaryDir directory;
         sw::Engine engine;
@@ -32,43 +32,25 @@ private slots:
         sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
         window.show();
         auto pane = window.active;
-        const auto before = pane->scriptCode;
         pane->openScriptEditor();
-        auto editor = pane->scriptDialog->findChild<QPlainTextEdit *>("scriptCode");
-        auto hex = pane->scriptDialog->findChild<QPlainTextEdit *>("scriptTestHex");
-        auto button = pane->scriptDialog->findChild<QPushButton *>("scriptAiPrompt");
-        QVERIFY(editor && hex && button);
-        editor->setPlainText("void main(const uint8_t data[], int length) { emit(\"CUSTOM_DRAFT\", length); }");
-        hex->setPlainText("12 34 AB CD");
-        button->click();
-        auto dialog = pane->scriptDialog->findChild<QDialog *>("scriptAiPromptDialog");
-        QVERIFY(dialog);
-        auto prompt = dialog->findChild<QPlainTextEdit *>("scriptAiPromptText");
-        auto copy = dialog->findChild<QPushButton *>("copyScriptAiPrompt");
-        QVERIFY(prompt && copy);
-        QVERIFY(prompt->toPlainText().contains("CUSTOM_DRAFT"));
-        QVERIFY(prompt->toPlainText().contains("12 34 AB CD"));
-        QVERIFY(prompt->isReadOnly());
-        copy->click();
-        QCOMPARE(QApplication::clipboard()->text(), prompt->toPlainText());
-        QCOMPARE(pane->scriptCode, before);
-        QVERIFY(!pane->scriptRequested);
-        const auto capture = qEnvironmentVariable("SW_UI_CAPTURE_DIR");
-        if (!capture.isEmpty())
+        auto dialog = pane->scriptDialog;
+        QVERIFY(!dialog->findChild<QPushButton *>("scriptAiPrompt"));
+        auto hex = dialog->findChild<QPlainTextEdit *>("scriptTestHex");
+        QVERIFY(hex);
+        hex->setPlainText("10 20\n30");
+        for (auto button : dialog->findChildren<QPushButton *>())
         {
-            QApplication::processEvents();
-            QVERIFY(dialog->grab().save(QDir(capture).filePath("script-ai-prompt.png")));
-            dialog->setStyleSheet(sw::Theme::make(true).stylesheet());
-            QApplication::processEvents();
-            QVERIFY(dialog->grab().save(QDir(capture).filePath("script-ai-prompt-dark.png")));
-            dialog->setStyleSheet(window.theme.stylesheet());
+            if (button->property("action") == "applyScript") { button->click(); break; }
         }
-        dialog->resize(480, 300);
-        QApplication::processEvents();
-        QVERIFY(dialog->rect().contains(QRect(copy->mapTo(dialog, QPoint()), copy->size())));
-        if (!capture.isEmpty()) { QVERIFY(dialog->grab().save(QDir(capture).filePath("script-ai-prompt-compact.png"))); }
-        dialog->reject();
+        QTRY_VERIFY(!pane->scriptDialog);
+        QCOMPARE(pane->scriptTestHex, QString("10 20\n30"));
+        QCOMPARE(pane->settings()["script_test_hex"].toString(), pane->scriptTestHex);
+        pane->openScriptEditor();
+        QCOMPARE(pane->scriptDialog->findChild<QPlainTextEdit *>("scriptTestHex")->toPlainText(), pane->scriptTestHex);
         pane->scriptDialog->reject();
+        auto other = window.newConnection();
+        other->restore(pane->settings());
+        QCOMPARE(other->scriptTestHex, pane->scriptTestHex);
         window.close();
     }
 

@@ -11,6 +11,7 @@
 #include "agent_panel.h"
 #include "file_transfer_dialog.h"
 #include "update_dialog.h"
+#include "release_history_panel.h"
 #include "ssh_dialogs.h"
 #include <QFileInfo>
 #include <QProcess>
@@ -31,6 +32,7 @@ static QString instrumentIconName(const QString &kind)
     {
         return "wave";
     }
+    if (kind == "control") { return "control"; }
     if (kind == "json" || kind == "xml")
     {
         return kind;
@@ -1494,6 +1496,7 @@ QJsonObject Pane::settings() const
     const auto sizes = terminalMode ? senderSizes : splitter->sizes();
     QJsonObject result {{"tab_title", pageTitle}, {"timestamps", log->timestamps}, {"hex_display", log->hex}, {"wrap_lines", wrapLines->isChecked()},
         {"script_code", channel ? channel->scriptCode : scriptCode},
+        {"script_test_hex", scriptTestHex},
         {"script_enabled", channel ? channel->scriptEnabled : scriptRequested},
         {"script_collapsed", scriptCollapsed}, {"script_panel_height", scriptPanelHeight},
         {"block_cursor", terminal->blockCursor}, {"search_filter", filter->settings()},
@@ -1503,6 +1506,7 @@ QJsonObject Pane::settings() const
         {"sender_sizes", QJsonArray {sizes.value(0, 600), sizes.value(1, 150)}}};
     if (!supportsScript())
     {
+        result.remove("script_test_hex");
         result.remove("script_code");
         result.remove("script_enabled");
     }
@@ -1587,6 +1591,7 @@ void Pane::restore(const QJsonObject &settings)
     if (!supportsScript()) { scriptRequested = false; }
     else if (settings.contains("script_code"))
     {
+        scriptTestHex = settings["script_test_hex"].toString(exampleTestHex());
         scriptCode = settings["script_code"].toString();
         scriptRequested = settings["script_enabled"].toBool();
         try
@@ -2084,15 +2089,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
             if (!updateDialog)
             {
                 updateDialog = new UpdateDialog(updater, this);
-                connect(updateDialog, &UpdateDialog::installRequested, this, [this](const QString &path)
-                {
-                    if (!QProcess::startDetached(path, {}, QFileInfo(path).absolutePath()))
-                    {
-                        statusBar()->showMessage("无法启动更新安装程序", 10000);
-                        return;
-                    }
-                    QApplication::closeAllWindows();
-                });
+                connect(updateDialog, &UpdateDialog::installRequested, this, &Window::installUpdate);
             }
             updateDialog->refresh();
             updateDialog->showNormal();
@@ -2125,6 +2122,12 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
             updateButton->setToolTip("安装包已校验，点击打开更新窗口");
         });
     }
+    auto versionStatus = label(QString("v%1").arg(Version), "muted");
+    versionStatus->setObjectName("currentVersionStatus");
+    versionStatus->setContentsMargins(12, 0, 0, 0);
+    versionStatus->setToolTip("当前运行版本：Serial Workbench " + Version);
+    versionStatus->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
+    statusBar()->addPermanentWidget(versionStatus);
     statusBar()->setContentsMargins(12, 2, 12, 2);
     connect(protocol, &QComboBox::currentIndexChanged, this, &Window::protocolChanged);
     connect(baud, &QComboBox::activated, this, [this] { applyBaud(); });
@@ -4001,6 +4004,20 @@ void Window::openSettings()
     aboutBody->addLayout(features);
     aboutBody->addStretch();
     pages->addTab(scrollPanel(about, "aboutScroll"), "关于");
+    auto history = new ReleaseHistoryPanel();
+    auto historyPage = scrollPanel(history, "releaseHistoryScroll");
+    pages->addTab(historyPage, "版本回溯");
+    connect(history, &ReleaseHistoryPanel::installRequested, this, &Window::installUpdate);
+    connect(pages, &QTabWidget::currentChanged, history, [pages, history, historyPage, checked = false](int index) mutable
+    {
+        if (checked || pages->widget(index) != historyPage) { return; }
+        checked = true;
+        if (QGuiApplication::platformName() != "offscreen"
+            && !QCoreApplication::arguments().contains("--screenshot"))
+        {
+            history->refreshHistory();
+        }
+    });
     body->addWidget(pages, 1);
     auto footer = horizontal();
     footer->addStretch();
@@ -4015,6 +4032,16 @@ void Window::openSettings()
         settingsDialog->restoreGeometry(QByteArray::fromBase64(geometry));
     }
     settingsDialog->show();
+}
+
+void Window::installUpdate(const QString &path)
+{
+    if (!QProcess::startDetached(path, {}, QFileInfo(path).absolutePath()))
+    {
+        statusBar()->showMessage("无法启动更新安装程序", 10000);
+        return;
+    }
+    QApplication::closeAllWindows();
 }
 
 void Window::configureClient(int index, QLabel *result)

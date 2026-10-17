@@ -9,6 +9,5 @@ class UsageGuide
 public:
     static QString text(const QString &topic);
     static QJsonObject read(const QString &topic = "overview");
-    static QString scriptPrompt(const QString &code, const QString &hex, const QJsonObject &connection);
 };
 }

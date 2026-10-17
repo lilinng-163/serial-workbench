@@ -617,12 +617,13 @@ QJsonArray McpServer::tools() const
     auto searchTool = result.last().toObject();
     searchTool["annotations"] = QJsonObject {{"readOnlyHint", false}, {"destructiveHint", false}, {"openWorldHint", false}};
     result.last() = searchTool;
-    add("get_frame_script", "Read the current serial parser code, enabled state, error and revision. Use the returned revision for set_frame_script to avoid overwriting concurrent GUI changes.",
+    add("get_frame_script", "Read the current serial parser code, saved GUI HEX sample_chunks, enabled state, error and revision. Use the returned revision for set_frame_script to avoid overwriting concurrent GUI changes.",
         {{"channel_id", property("string")}}, {"channel_id"});
     add("validate_frame_script", "Compile a C-style frame parser and optionally test HEX sample_chunks offline, preserving partial-frame state between chunks. Does not send bytes or change live parser state. Read read_usage_guide(topic=frame_script) first. Returns valid, error/line or decoded frames. Maximum 64 KiB source/input, 128 chunks and 1024 output frames.",
         {{"code", property("string")}, {"sample_chunks", QJsonObject {{"type", "array"}, {"items", property("string")}, {"maxItems", 128}}}}, {"code"});
-    add("set_frame_script", "Save serial parser code and explicitly enable/disable it, synchronizing the GUI. Requires protocol access and GUI AI control permission, the current expected_revision, and no active file transfer or unsaved GUI editor changes. Validate code and sample chunks first. Applies only to newly received bytes; does not send data.",
+    add("set_frame_script", "Save serial parser code and explicitly enable/disable it, synchronizing the GUI. Requires protocol access and GUI AI control permission, the current expected_revision, and no active file transfer or unsaved GUI editor changes. Validate code and sample chunks first. Include sample_chunks (up to 64 HEX chunks, 64 KiB total) to replace and persist GUI trial inputs alongside the code; omit to preserve inputs, [] clears them. Applies only to newly received bytes; does not send data.",
         {{"channel_id", property("string")}, {"code", property("string")}, {"enabled", property("boolean")},
+         {"sample_chunks", QJsonObject {{"type", "array"}, {"items", property("string")}, {"maxItems", 64}}},
          {"expected_revision", property("string")}}, {"channel_id", "code", "enabled", "expected_revision"}, false);
     return result;
 }

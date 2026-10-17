@@ -90,7 +90,7 @@ def compile_fixture(args, target, version=None):
     payload = args.payload.resolve()
     size = sum(p.stat().st_size for p in payload.rglob("*") if p.is_file()) // 1024 + 1
     subprocess.run([
-        args.makensis, "/V2", "/INPUTCHARSET", "UTF8", "/DWORKBENCH_TEST_SKILL_CODEX",
+        args.makensis, "/V2", "/INPUTCHARSET", "UTF8",
         f"/DVERSION={version or args.expected_version}", f"/DPAYLOAD_DIR={payload}",
         f"/DOUTPUT_EXE={target}", f"/DBRAND_DIR={ROOT / 'resources/brand'}",
         f"/DREMOVE_MANIFEST={args.remove_manifest.resolve()}", f"/DSIZE_KB={size}",
@@ -159,19 +159,31 @@ def main():
         env = os.environ.copy()
         env["LOCALAPPDATA"] = str(profile)
         env["CODEX_HOME"] = str(profile / "codex")
+        env["USERPROFILE"] = str(profile)
+        env["HOME"] = str(profile)
+        env["APPDATA"] = str(profile / "roaming")
         windows = Path(os.environ["SystemRoot"])
-        env["PATH"] = os.pathsep.join((str(windows / "System32"), str(windows)))
+        agent_bin = directory / "agent-bin"
+        agent_bin.mkdir()
+        for name in ("codex", "pi"):
+            (agent_bin / f"{name}.cmd").write_text("@echo off\n", encoding="utf-8")
+        env["PI_CODING_AGENT_DIR"] = str(profile / "pi")
+        env["PATH"] = os.pathsep.join((str(agent_bin), str(windows / "System32"), str(windows)))
         app = None
         try:
             baseline_version = "0.15.7"
-            compile_fixture(args, setup, baseline_version)
-            install(setup, destination, env)
+            # A recently executed installer can remain mapped by Windows briefly.
+            # Keep baseline and upgrade binaries separate, as real releases are.
+            baseline_setup = directory / "SerialWorkbenchInstallerBaselineTest.exe"
+            compile_fixture(args, baseline_setup, baseline_version)
+            install(baseline_setup, destination, env)
             skill = profile / "codex/skills/serial-workbench/SKILL.md"
-            assert skill.is_file(), "Selected Codex skill component was not installed"
+            assert skill.is_file(), "Detected Codex skill component was not selected"
+            assert (profile / "pi/skills/serial-workbench/SKILL.md").is_file(), "Detected Pi skill component was not selected"
             assert "search_logs" in skill.read_text(encoding="utf-8")
             assert (skill.parent / "references/frame-script.md").is_file()
             assert not (profile / "codex/config.toml").exists(), "Skill installation must not configure MCP"
-            print("PASS selected skill component installs guide/references without changing MCP config", flush=True)
+            print("PASS detected Agent skill components install guide/references without changing MCP config", flush=True)
             info = registration()
             assert info is not None, f"Registration missing: installed={destination.exists()}, marker={(destination / 'installation.json').exists()}, files={len(list(destination.rglob('*')))}"
             assert info["DisplayVersion"] == baseline_version

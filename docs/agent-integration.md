@@ -27,7 +27,7 @@ OpenCode 已有 `mcp.servers` 时保留 V2 结构；新建配置通过已安装 
 
 ## 安装时选择 skill
 
-安装向导的组件页可单独勾选 Codex、Claude Code、OpenCode、Pi 的使用指南，默认不选。不修改 MCP 配置或密钥；不同内容先备份再替换，相同内容不重复备份，卸载应用时保留 skill。安装失败会提示，主程序仍可使用。
+安装向导在组件页默认勾选检测到的 Agent 使用指南，用户可取消；设置 → AI / MCP → Agent 接入 → 配置 skill 可随时安装或更新。支持 Codex、Claude Code、OpenCode、Pi、Hermes、OpenClaw、Grok Build 和 Gemini CLI。未检测到的 Agent 也可手动勾选。不修改 MCP 配置或密钥；不同内容先备份再替换，相同内容不重复备份，卸载应用时保留 skill。安装失败会提示，主程序仍可使用。
 
 | Agent | 默认 skill 目录 | 环境覆盖 |
 | --- | --- | --- |
@@ -47,3 +47,9 @@ OpenCode 已有 `mcp.servers` 时保留 V2 结构；新建配置通过已安装 
 `get_frame_script(channel_id)` 返回代码、enabled、revision 与错误。`validate_frame_script(code, sample_chunks=[HEX,...])` 离线编译和试解析，支持跨块缓存，不发送数据、不修改在线状态。`set_frame_script(channel_id, code, enabled, expected_revision)` 需要串口开放、AI 控制权限、最新 revision，且没有传文件或 GUI 未保存编辑。应用后 GUI、持久化脚本与编辑器同步，仅处理新收到的数据。原始报文与其他读取者不受试解析影响。
 
 应用每次启动、再次唤起已运行实例及切换 MCP 端口后会检查已检测 Agent 的用户配置。状态栏、Agent 接入卡片及 `get_status.agent_config_checks` 显示结果；自动检查只读，不会自动覆盖地址。用户可通过现有一键更新并重载 Agent。项目级覆盖或 Agent 尚未重载时，仍需在客户端核对实际连接来源。
+
+新增 skill 目录：Hermes 为 `$HERMES_HOME/skills/serial-workbench`（默认 `~/.hermes/skills`），OpenClaw 为 `$OPENCLAW_STATE_DIR/skills/serial-workbench`（默认 `~/.openclaw/skills`），Grok Build 为 `~/.grok/skills/serial-workbench`，Gemini CLI 为 `~/.gemini/skills/serial-workbench`。设置中显示实际目标目录和内容状态，打开设置或安装器检测阶段只读扫描，不写入指南或 MCP 配置；确认安装/更新后才写入。
+
+Claude Desktop 的自定义 skill 在客户端导入；没有将其当作 Claude Code 的目录来安装。它也可通过 MCP 的 read_usage_guide 直接读取本指南。
+
+目录依据：[Hermes](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills)、[OpenClaw](https://docs.openclaw.ai/tools/skills)、[Grok Build](https://github.com/xai-org/grok-build/blob/main/crates/codegen/xai-grok-shell/README.md#skills)、[Gemini CLI](https://geminicli.com/docs/cli/using-agent-skills/)。

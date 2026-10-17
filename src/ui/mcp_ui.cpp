@@ -164,7 +164,12 @@ void Window::installMcpUi()
             {"has_more", offset + page.size() < rows.size()}};
     };
 
-    mcp->scriptHandler = [guard](Channel *channel, const QString &code, bool enabled)
+    mcp->scriptSampleHandler = [guard](Channel *channel)
+    {
+        const auto pane = guard ? guard->findPane(channel) : nullptr;
+        return pane ? pane->scriptTestHex : QString();
+    };
+    mcp->scriptHandler = [guard](Channel *channel, const QString &code, bool enabled, const std::optional<QString> &samples)
     {
         if (!guard) { fail("GUI 窗口已关闭"); }
         auto owner = guard->findPane(channel);
@@ -176,9 +181,11 @@ void Window::installMcpUi()
             {
                 if (pane->channel != channel || !pane->scriptDialog) { continue; }
                 auto editor = pane->scriptDialog->findChild<QPlainTextEdit *>("scriptCode");
+                auto hex = pane->scriptDialog->findChild<QPlainTextEdit *>("scriptTestHex");
                 auto toggle = pane->scriptDialog->findChild<QCheckBox *>("scriptEnabled");
                 if ((editor && editor->toPlainText() != channel->scriptCode)
-                    || (toggle && toggle->isChecked() != channel->scriptEnabled))
+                    || (toggle && toggle->isChecked() != channel->scriptEnabled)
+                    || (hex && hex->toPlainText() != pane->scriptTestHex))
                 {
                     fail("GUI 脚本编辑器有未保存内容，请先保存或关闭编辑器");
                 }
@@ -188,6 +195,7 @@ void Window::installMcpUi()
         }
         owner->applyScript(code, enabled);
         guard->showPane(owner);
+        if (samples) { owner->scriptTestHex = *samples; }
         if (!owner->scriptDialog) { owner->openScriptEditor(true); }
         for (auto host : guard->hosts)
         {
@@ -195,6 +203,7 @@ void Window::installMcpUi()
             for (auto pane : host->panes)
             {
                 if (pane->channel != channel || pane->instrument) { continue; }
+                if (samples) { pane->scriptTestHex = *samples; }
                 pane->scriptCode = code;
                 pane->scriptRequested = enabled;
                 pane->refreshScriptResults();
@@ -202,6 +211,8 @@ void Window::installMcpUi()
                 {
                     auto editor = pane->scriptDialog->findChild<QPlainTextEdit *>("scriptCode");
                     if (editor) { editor->setPlainText(code); }
+                    auto hex = pane->scriptDialog->findChild<QPlainTextEdit *>("scriptTestHex");
+                    if (hex && samples) { hex->setPlainText(*samples); }
                     auto toggle = pane->scriptDialog->findChild<QCheckBox *>("scriptEnabled");
                     if (toggle) { toggle->setChecked(enabled); }
                     auto results = pane->scriptDialog->findChild<QTreeWidget *>("scriptTestResults");
@@ -211,6 +222,7 @@ void Window::installMcpUi()
                 }
             }
         }
+        guard->saveSettings();
     };
     connect(mcp, &McpServer::guiConnectionOpened, this, [guard](Channel *channel)
     {

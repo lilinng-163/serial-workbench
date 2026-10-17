@@ -32,7 +32,6 @@ public:
     explicit WindowChrome(QObject *parent) : QObject(parent)
     {
         setObjectName("workbenchWindowChrome");
-        QApplication::setAttribute(Qt::AA_DontUseNativeDialogs);
         qApp->installEventFilter(this);
     }
 
@@ -76,6 +75,9 @@ public:
     {
         auto host = qobject_cast<QWidget *>(object);
         if (!host || !host->isWindow()) { return false; }
+        // File pickers belong to the platform: changing their flags during
+        // polish interferes with the native Windows common item dialog.
+        if (qobject_cast<QFileDialog *>(host)) { return false; }
         const auto type = host->windowType();
         if (type != Qt::Window && type != Qt::Dialog && type != Qt::Tool) { return false; }
         if (event->type() == QEvent::Polish && !host->property("workbenchChrome").toBool())

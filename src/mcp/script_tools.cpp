@@ -5,17 +5,20 @@ namespace sw
 {
 namespace
 {
-QString revision(Channel *channel)
+QString revision(Channel *channel, const QString &samples)
 {
-    const auto value = channel->scriptCode.toUtf8() + (channel->scriptEnabled ? "1" : "0");
+    const auto value = QJsonDocument(QJsonObject {{"code", channel->scriptCode},
+        {"enabled", channel->scriptEnabled}, {"test_hex", samples}}).toJson(QJsonDocument::Compact);
     return QString::fromLatin1(QCryptographicHash::hash(value, QCryptographicHash::Sha256).toHex());
 }
 
-QJsonObject describeScript(Channel *channel)
+QJsonObject describeScript(Channel *channel, const QString &samples)
 {
-    return {{"channel_id", channel->id}, {"code", channel->scriptCode},
+    QJsonArray chunks;
+    for (const auto &line : samples.split('\n', Qt::SkipEmptyParts)) { chunks.append(line); }
+    return {{"channel_id", channel->id}, {"code", channel->scriptCode}, {"sample_chunks", chunks},
         {"enabled", channel->scriptEnabled}, {"error", channel->scriptError},
-        {"revision", revision(channel)}, {"frames", channel->scriptFrames}};
+        {"revision", revision(channel, samples)}, {"frames", channel->scriptFrames}};
 }
 
 QString sourceCode(const QJsonObject &arguments)
@@ -72,19 +75,39 @@ QJsonObject McpServer::scriptTool(const QString &name, const QJsonObject &a)
 
     auto channel = accessibleChannel(a["channel_id"].toString());
     if (channel->config.kind != "serial") { fail("帧脚本仅适用于串口连接"); }
-    if (name == "get_frame_script") { return describeScript(channel); }
+    const auto currentSamples = scriptSampleHandler ? scriptSampleHandler(channel) : QString();
+    if (name == "get_frame_script") { return describeScript(channel, currentSamples); }
     if (!engine->allowControl) { fail("AI 控制未开启，不能修改或启用脚本"); }
     if (channel->transferOwner) { fail("文件传输期间不能修改帧脚本"); }
     if (!a["enabled"].isBool()) { fail("必须明确指定 enabled 为 true 或 false"); }
     if (a["expected_revision"].toString().isEmpty()
-        || a["expected_revision"].toString() != revision(channel))
+        || a["expected_revision"].toString() != revision(channel, currentSamples))
     {
         fail("脚本已变化或未提供 expected_revision；先 get_frame_script，再基于最新 revision 修改");
     }
+    std::optional<QString> samples;
+    if (a.contains("sample_chunks"))
+    {
+        if (!a["sample_chunks"].isArray()) { fail("sample_chunks 必须是 HEX 字符串数组"); }
+        const auto chunks = a["sample_chunks"].toArray();
+        if (chunks.size() > 64) { fail("界面试解析最多保存 64 个数据块"); }
+        QStringList lines;
+        int bytes = 0;
+        for (const auto &chunk : chunks)
+        {
+            if (!chunk.isString() || chunk.toString().size() > 196608) { fail("试解析数据块必须是有界 HEX 字符串"); }
+            const auto data = Engine::encode(chunk.toString(), true, "utf-8", "none");
+            bytes += data.size();
+            if (bytes > 65536) { fail("试解析输入合计最多 64 KiB"); }
+            if (!data.isEmpty()) { lines.append(QString::fromLatin1(data.toHex(' ')).toUpper()); }
+        }
+        samples = lines.join('\n');
+        if (!scriptHandler) { fail("GUI 试解析服务尚未连接"); }
+    }
     const auto code = sourceCode(a);
     FrameScriptProgram::compile(code);
-    if (scriptHandler) { scriptHandler(channel, code, a["enabled"].toBool()); }
+    if (scriptHandler) { scriptHandler(channel, code, a["enabled"].toBool(), samples); }
     else { channel->configureScript(code, a["enabled"].toBool()); }
-    return describeScript(channel);
+    return describeScript(channel, scriptSampleHandler ? scriptSampleHandler(channel) : QString());
 }
 }

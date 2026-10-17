@@ -123,13 +123,19 @@ SerialControlPanel::SerialControlPanel(QWidget *parent) : QWidget(parent)
     auto groupLabel = new QLabel("控件组");
     groupLabel->setObjectName("controlGroupLabel");
     groupRow->addWidget(groupLabel);
-    groupPicker = new QComboBox();
+    auto groupCombo = new Combo();
+    groupCombo->menuPopup = true;
+    groupPicker = groupCombo;
     groupPicker->setObjectName("controlGroup");
     groupPicker->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     groupPicker->setMinimumContentsLength(6);
     groupRow->addWidget(groupPicker, 1);
     connect(groupPicker, &QComboBox::activated, this, [this](int index)
-    { selectGroup(groupPicker->itemData(index).toString()); });
+    {
+        const auto id = groupPicker->itemData(index).toString();
+        // Let the popup release its mouse grab before rebuilding the controls.
+        QTimer::singleShot(0, this, [this, id] { selectGroup(id); });
+    });
     auto create = new QPushButton("新建组");
     create->setObjectName("addControlGroup");
     groupRow->addWidget(create);
@@ -140,9 +146,6 @@ SerialControlPanel::SerialControlPanel(QWidget *parent) : QWidget(parent)
     {
         groupMenu->addAction(entry.second, this, [this, action = entry.first] { manageGroup(action); });
     }
-    groupMenu->addSeparator();
-    auto clearGroup = groupMenu->addAction("清空当前组控件", this, [this] { clearControls(false); });
-    clearGroup->setObjectName("clearCurrentControlGroup");
     manage->setMenu(groupMenu);
     groupRow->addWidget(manage);
     toolbarBody->addLayout(groupRow);
@@ -178,7 +181,7 @@ SerialControlPanel::SerialControlPanel(QWidget *parent) : QWidget(parent)
     presets->addSeparator();
     presets->addAction("基础控件示例（添加到当前组）", this, &SerialControlPanel::addExamples);
     examples->setMenu(presets);
-    columns = new QComboBox();
+    columns = new Combo();
     columns->setObjectName("controlColumns");
     columns->addItem("自由布局", 0);
     columns->addItem("两列排列", 2);
@@ -213,7 +216,7 @@ SerialControlPanel::SerialControlPanel(QWidget *parent) : QWidget(parent)
     auto clearAll = new QPushButton("清空全部");
     clearAll->setObjectName("clearAllControls");
     clearAll->setToolTip("清空本页面所有组内的控件，保留控件组和串口连接");
-    connect(clearAll, &QPushButton::clicked, this, [this] { clearControls(true); });
+    connect(clearAll, &QPushButton::clicked, this, [this] { clearControls(); });
     tools->addWidget(clearAll);
     tools->addStretch();
     placement->addWidget(columns);
@@ -253,6 +256,10 @@ SerialControlPanel::SerialControlPanel(QWidget *parent) : QWidget(parent)
     saveTimer.setSingleShot(true);
     saveTimer.setInterval(300);
     connect(&saveTimer, &QTimer::timeout, this, &SerialControlPanel::changed);
+    arrangeTimer.setSingleShot(true);
+    arrangeTimer.setInterval(0);
+    connect(&arrangeTimer, &QTimer::timeout, this, &SerialControlPanel::arrange);
+    scroll->viewport()->installEventFilter(this);
     restore({});
 }
 
@@ -318,6 +325,15 @@ void SerialControlPanel::hideEvent(QHideEvent *event)
     QWidget::hideEvent(event);
 }
 
+bool SerialControlPanel::eventFilter(QObject *object, QEvent *event)
+{
+    if (object == scroll->viewport() && event->type() == QEvent::Resize)
+    {
+        arrangeTimer.start();
+    }
+    return QWidget::eventFilter(object, event);
+}
+
 void SerialControlPanel::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
@@ -325,7 +341,7 @@ void SerialControlPanel::resizeEvent(QResizeEvent *event)
     {
         toolbarTools->setDirection(width() < 780 ? QBoxLayout::TopToBottom : QBoxLayout::LeftToRight);
     }
-    arrange();
+    arrangeTimer.start();
 }
 
 void SerialControlPanel::clearCards()
@@ -399,6 +415,7 @@ void SerialControlPanel::restore(const QJsonObject &saved)
     groups = {};
     monitorSettings = saved["monitor"].toObject();
     canvasInitialized = false;
+    canvasReferenceWidth = 0;
     QSet<QString> ids;
     auto incoming = saved["groups"].toArray();
     if (incoming.isEmpty())
@@ -509,8 +526,32 @@ void SerialControlPanel::manageGroup(const QString &action)
     else
     {
         if (list.size() == 1) { status->setText("请至少保留一个控件组；可移除组内控件。"); return; }
-        if (QMessageBox::question(this, "删除控件组", "删除“" + group["name"].toString()
-            + "”及其中的控件？", QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) { return; }
+        QDialog dialog(this);
+        dialog.setObjectName("deleteControlGroupDialog");
+        dialog.setWindowTitle("删除控件组");
+        dialog.resize(460, 250);
+        dialog.setMinimumSize(340, 230);
+        auto body = new QVBoxLayout(&dialog);
+        body->setContentsMargins(16, 12, 16, 12);
+        auto summary = new QLabel("删除“" + group["name"].toString() + "”及其中的控件？");
+        summary->setTextFormat(Qt::PlainText);
+        summary->setWordWrap(true);
+        body->addWidget(summary);
+        auto hint = new QLabel("删除后无法撤销。串口连接和收发记录会保留。");
+        hint->setWordWrap(true);
+        body->addWidget(hint);
+        body->addStretch();
+        auto buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+        auto confirm = buttons->button(QDialogButtonBox::Ok);
+        confirm->setText("删除控件组");
+        confirm->setAutoDefault(false);
+        auto cancel = buttons->button(QDialogButtonBox::Cancel);
+        cancel->setText("取消");
+        cancel->setDefault(true);
+        body->addWidget(buttons);
+        connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+        connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+        if (dialog.exec() != QDialog::Accepted) { return; }
         list.removeAt(index);
         saved["active_group"] = list[qMin(index, int(list.size()) - 1)].toObject()["id"];
     }
@@ -599,31 +640,25 @@ bool SerialControlPanel::addPresetGroup(const QString &presetId)
     return false;
 }
 
-void SerialControlPanel::clearControls(bool allGroups)
+void SerialControlPanel::clearControls()
 {
     cancelPending();
     const auto saved = settings();
     const auto list = saved["groups"].toArray();
     int count = 0;
-    QString name;
     for (const auto &entry : list)
     {
-        const auto group = entry.toObject();
-        if (group["id"].toString() == activeGroup) { name = group["name"].toString(); }
-        if (allGroups || group["id"].toString() == activeGroup)
-        { count += group["controls"].toArray().size(); }
+        count += entry.toObject()["controls"].toArray().size();
     }
     if (!count) { status->setText("所选范围内没有控件，无需清空。"); return; }
     QDialog dialog(this);
     dialog.setObjectName("clearControlsDialog");
-    dialog.setWindowTitle(allGroups ? "清空全部控件" : "清空当前组控件");
+    dialog.setWindowTitle("清空全部控件");
     dialog.resize(460, 250);
     dialog.setMinimumSize(340, 230);
     auto body = new QVBoxLayout(&dialog);
     body->setContentsMargins(16, 12, 16, 12);
-    auto summary = new QLabel(allGroups
-        ? QString("清空本页面 %1 个控件组中的全部 %2 个控件？").arg(list.size()).arg(count)
-        : QString("清空“%1”中的 %2 个控件？").arg(name).arg(count));
+    auto summary = new QLabel(QString("清空本页面 %1 个控件组中的全部 %2 个控件？").arg(list.size()).arg(count));
     summary->setObjectName("clearControlsSummary");
     summary->setTextFormat(Qt::PlainText);
     summary->setWordWrap(true);
@@ -649,11 +684,8 @@ void SerialControlPanel::clearControls(bool allGroups)
     for (int index = 0; index < cleared.size(); ++index)
     {
         auto group = cleared[index].toObject();
-        if (allGroups || group["id"].toString() == activeGroup)
-        {
-            group["controls"] = QJsonArray();
-            cleared[index] = group;
-        }
+        group["controls"] = QJsonArray();
+        cleared[index] = group;
     }
     result["groups"] = cleared;
     restore(result);
@@ -696,6 +728,7 @@ void SerialControlPanel::rememberGeometry()
 {
     if (layoutColumns != 0) { return; }
     canvasInitialized = true;
+    canvasReferenceWidth = qMax(340, scroll->viewport()->width() - 8);
     for (const auto &row : rows)
     {
         const auto rect = row->card->geometry();
@@ -732,6 +765,10 @@ void SerialControlPanel::arrange()
     if (count == 0)
     {
         const int available = qMax(340, scroll->viewport()->width() - 8);
+        // Keep a stable baseline so repeated resizing does not accumulate rounding.
+        // A restored canvas first keeps its saved geometry; live resizing scales it.
+        const qreal scale = canvasInitialized && canvasReferenceWidth > 0
+            ? qreal(available) / canvasReferenceWidth : 1.0;
         const int initialColumns = available >= 700 ? 2 : 1;
         const int cardWidth = qMax(340, (available - 8 * (initialColumns - 1)) / initialColumns);
         for (int index = 0; index < int(rows.size()); ++index)
@@ -741,8 +778,10 @@ void SerialControlPanel::arrange()
             QRect rect(index % initialColumns * (cardWidth + 8), index / initialColumns * 148, cardWidth, 140);
             if (!saved.isEmpty())
             {
-                rect = QRect(qBound(0, saved["x"].toInt(), 16000), qBound(0, saved["y"].toInt(), 16000),
-                    qBound(320, saved["width"].toInt(380), 4000), qBound(132, saved["height"].toInt(140), 4000));
+                rect = QRect(qBound(0, qRound(saved["x"].toInt() * scale), 16000),
+                    qBound(0, saved["y"].toInt(), 16000),
+                    qBound(320, qRound(saved["width"].toInt(380) * scale), 4000),
+                    qBound(132, saved["height"].toInt(140), 4000));
             }
             rect.setSize(rect.size().expandedTo(row->card->minimumSize()));
             rect.moveLeft(qMin(rect.left(), 16000 - rect.width()));
@@ -802,8 +841,10 @@ void SerialControlPanel::rebuild()
         heading->addWidget(editButton);
         connect(editButton, &QPushButton::clicked, this, [this, index] { edit(index); });
         auto more = new QToolButton();
-        more->setText("⋯");
-        more->setToolTip("调整顺序或移除控件");
+        more->setObjectName("controlLayerMenu");
+        more->setText("图层");
+        more->setAccessibleName("调整控件图层");
+        more->setToolTip("调整控件重叠时的上下层级");
         auto menu = new QMenu(more);
         menu->addAction("移至最上层", this, [this, row]
         {

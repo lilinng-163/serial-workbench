@@ -31,7 +31,8 @@ Built with **Qt 6 and C++17**. The Windows application and its native MCP bridge
 | 🖥️ **SSH terminal** | A dedicated interactive terminal with **10,000 lines of scrollback**, selection and copy, ANSI colors, IME input and remote PTY resizing. |
 | 📈 **Waveforms** | Up to 16 named curves, zoom, pan, cursor inspection and four fixed-width live readouts with selectable channels. |
 | 🧩 **JSON / XML** | Separate pages sharing a connection, incremental extraction, structured inspection and a JSON assistant. |
-| 🎛️ **Serial controls** | Sliders, numeric inputs, switches, buttons and choices; groups, draggable/resizable cards, presets and per-control automatic sending. |
+| 🕘 **Version history** | Review the latest three stable releases in Settings, download verified installers, and see the running version in the status bar. |
+| 🎛️ **Serial controls** | Sliders, numeric inputs, switches, buttons and choices; groups, draggable/resizable cards that follow window width, presets and per-control automatic sending. |
 | 📦 **Files & protocols** | Raw-byte and XMODEM-CRC file transfer; C-style frame scripts with persistent state and checksum helpers. |
 | 🤖 **AI collaboration** | Streamable HTTP and STDIO MCP, protocol-level access switches, read-only defaults and an explicit AI control permission. |
 | 🎨 **Workspace** | Detachable tabs, light/dark themes, custom backgrounds, data fonts and per-page clear actions. |
@@ -85,7 +86,9 @@ No device nearby? Select **Demo · 演示波形** as a waveform data source, or 
 ```
 
 
-MCP clients can call `list_search_views` and `search_logs` to use the actual GUI filters, and `get_frame_script`, `validate_frame_script`, `set_frame_script` to inspect, test and apply serial parsers. Writes require AI control permission and a current revision; unsaved GUI edits are protected. The installer offers optional Codex / Claude Code / OpenCode / Pi skills. Startup and port changes check Agent MCP addresses without rewriting configuration. See [Agent integration](docs/agent-integration.md).
+MCP clients can call `list_search_views` and `search_logs` to use the actual GUI filters, and `get_frame_script`, `validate_frame_script`, `set_frame_script` to inspect, test and apply serial parsers. Writes require AI control permission and a current revision; unsaved GUI edits are protected. The installer preselects skill components for detected Agents; Settings → AI / MCP → Agent 接入 → 配置 skill can install or update them later. Startup and port changes check Agent MCP addresses without rewriting configuration. See [Agent integration](docs/agent-integration.md).
+
+When changing a parser through MCP, include matching HEX `sample_chunks` in `set_frame_script` to update the GUI trial inputs too. Validate them offline first; unsaved trial edits are protected. The script editor uses the shared skill/guide workflow and no longer has a separate AI prompt window.
 
 ### Terminal and workspace shortcuts
 
@@ -209,7 +212,7 @@ Example prompts:
 
 > Inspect the temperature and voltage channels. Find spikes and correlate them with the raw receive events.
 
-The bundled [Serial Workbench skill](skills/serial-workbench/SKILL.md) explains connection selection, incremental reading, native search and C-style frame scripts. Agents can retrieve the guide directly with `read_usage_guide`; the installer also offers optional Agent skill components. AI-opened connections and applied scripts appear in the GUI. An activity notice links to call details and the audit log.
+The bundled [Serial Workbench skill](skills/serial-workbench/SKILL.md) explains connection selection, incremental reading, native search and C-style frame scripts. Agents can retrieve the guide directly with `read_usage_guide`; the installer preselects skill components for detected Agents, and Settings can update them later. AI-opened connections and applied scripts appear in the GUI. An activity notice links to call details and the audit log.
 
 ### Access and shared history
 
@@ -227,6 +230,7 @@ Detailed guides are currently in Chinese.
 | --- | --- |
 | [Agent integration](docs/agent-integration.md) | Client formats, configuration paths and connection checks |
 | [Waveform protocol](docs/wave-protocol.md) | Framing, channel names, numeric types and limits |
+| [Version history](docs/version-history.md) | Recent stable release notes and installers |
 | [Serial controls](docs/serial-controls.md) | Control groups, presets, templates and automatic sending |
 | [Frame scripts](docs/frame-scripts.md) | C-style parser API, validation and examples |
 | [JSON assistant](docs/json-assistant.md) | Structured JSON tools |
@@ -254,7 +258,7 @@ The build script compiles the application, runs native tests and deploys Qt libr
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r tests/integration/requirements.txt
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.31
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.32
 ```
 
 To create the installer, single-file launcher and portable ZIP, install NSIS and provide the matching Qt source tree for license notices:

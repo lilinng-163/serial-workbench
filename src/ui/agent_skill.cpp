@@ -7,7 +7,7 @@ namespace sw
 {
 QJsonArray AgentSkill::targets(const AgentEnvironment &e)
 {
-    return {
+    QJsonArray result {
         QJsonObject {{"agent", "codex"}, {"name", "Codex"},
             {"path", e.variable("CODEX_HOME", e.home + "/.codex") + "/skills/serial-workbench"}},
         QJsonObject {{"agent", "claude-code"}, {"name", "Claude Code"},
@@ -16,8 +16,54 @@ QJsonArray AgentSkill::targets(const AgentEnvironment &e)
             {"path", e.variable("OPENCODE_CONFIG_DIR", e.variable("XDG_CONFIG_HOME", e.home + "/.config") + "/opencode")
                 + "/skills/serial-workbench"}},
         QJsonObject {{"agent", "pi"}, {"name", "Pi Agent"},
-            {"path", e.variable("PI_CODING_AGENT_DIR", e.home + "/.pi/agent") + "/skills/serial-workbench"}}
+            {"path", e.variable("PI_CODING_AGENT_DIR", e.home + "/.pi/agent") + "/skills/serial-workbench"}},
+        QJsonObject {{"agent", "hermes"}, {"name", "Hermes"},
+            {"path", e.variable("HERMES_HOME", e.home + "/.hermes") + "/skills/serial-workbench"}},
+        QJsonObject {{"agent", "openclaw"}, {"name", "OpenClaw"},
+            {"path", e.variable("OPENCLAW_STATE_DIR", e.home + "/.openclaw") + "/skills/serial-workbench"}},
+        QJsonObject {{"agent", "grok"}, {"name", "Grok Build"},
+            {"path", e.home + "/.grok/skills/serial-workbench"}},
+        QJsonObject {{"agent", "gemini"}, {"name", "Gemini CLI"},
+            {"path", e.home + "/.gemini/skills/serial-workbench"}}
     };
+    const auto agents = AgentConfig::discover(e);
+    for (int index = 0; index < result.size(); ++index)
+    {
+        auto target = result[index].toObject();
+        bool installed = false;
+        for (const auto &agent : agents)
+        {
+            if (agent.id == target["agent"].toString()) { installed = agent.installed(); }
+        }
+        bool present = false;
+        bool current = true;
+        for (const auto &topic : QStringList {"overview", "frame_script"})
+        {
+            const auto relative = topic == "overview" ? "SKILL.md" : "references/frame-script.md";
+            QFile file(target["path"].toString() + "/" + relative);
+            present = present || file.exists();
+            current = file.open(QIODevice::ReadOnly) && file.readAll() == UsageGuide::text(topic).toUtf8() && current;
+        }
+        target["installed"] = installed;
+        target["skill_state"] = current ? "已是最新" : present ? "可更新 / 修复" : "未安装";
+        result[index] = target;
+    }
+    return result;
+}
+
+void AgentSkill::writeDetection(const QString &path, const AgentEnvironment &environment)
+{
+    QByteArray bytes("[agents]\r\n");
+    for (const auto &value : targets(environment))
+    {
+        const auto target = value.toObject();
+        bytes += target["agent"].toString().toUtf8() + "=" + (target["installed"].toBool() ? "1" : "0") + "\r\n";
+    }
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit())
+    {
+        fail("无法写入 Agent 检测结果");
+    }
 }
 
 QJsonObject AgentSkill::install(const QString &agent, const AgentEnvironment &environment)

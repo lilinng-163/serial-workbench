@@ -27,6 +27,8 @@ add_library(workbench_ui OBJECT
     update_service.h
     update_dialog.cpp
     update_dialog.h
+    release_history_panel.cpp
+    release_history_panel.h
     ssh_dialogs.cpp
     ssh_dialogs.h
     file_transfer_dialog.cpp
@@ -75,6 +77,7 @@ qt_add_resources(workbench_ui workbench_assets
         "${asset_root}/agents/opencode-dark.svg"
         "${asset_root}/agents/pi.svg"
         "${asset_root}/brand/lightning.svg"
+        "${asset_root}/releases/history.json"
         "${asset_root}/icons/check.svg"
         "${asset_root}/icons/chevron-up.svg"
         "${asset_root}/icons/chevron-down.svg"

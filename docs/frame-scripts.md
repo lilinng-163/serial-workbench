@@ -5,7 +5,7 @@
 ## 开始使用
 
 1. 选择串口收发页面，在左侧「脚本解析」旁点击代码图标。
-2. 修改内置示例，或导入 `.c` / `.txt` 脚本。需要 AI 帮忙时点击「AI 提示词」，在二级窗口复制说明；内容包含语法、函数、分帧示例、当前未保存代码和 HEX 样本。补充自己的帧协议后交给 AI。复制不会保存或启用脚本。
+2. 修改内置示例，或导入 `.c` / `.txt` 脚本。AI 通过 MCP 的使用指南和 skill 了解脚本语法；修改代码时也要更新右侧「试解析」里的 HEX 样本，使其符合当前协议。
 3. 点击「语法检查」，在右侧输入 HEX 后点击「试解析」。每行表示一次接收，用换行模拟半帧与分块。
 4. 勾选「应用后启用脚本」，保存。也可保存草稿，随后在左侧启用。
 5. 返回收发页，在原始收发区下方的「脚本解析」分区查看字段结果。拖动上方分隔线调整高度，右上角箭头收起或展开；选中记录可用 Ctrl+C 或右键复制 JSON。
@@ -111,3 +111,5 @@ AI 通过 MCP 工具主动读取解析结果，不会自动逐帧推送；读取
 0.14.0 起脚本结果使用 `read_script_results`，不再由 `read_waveform` 或 `read_structured` 返回。更新后应刷新 AI 客户端的 MCP 工具列表。
 
 AI 接入 MCP 后可用 `read_usage_guide(topic="frame_script")` 直接获取同一份脚本规则与可运行示例；`read_usage_guide()` 返回软件 skill 正文和服务端路径。没有本机文件访问权限的 Agent 可直接读取正文。AI 可调用 get_frame_script 读取代码和 revision，使用 validate_frame_script 离线试解析，再在用户授权且控制权限开启时，以 expected_revision 调用 set_frame_script 保存并明确启用/停用。GUI 未保存编辑或正在试解析时不会被覆盖。
+
+set_frame_script 的可选 sample_chunks 参数同步保存 GUI 试解析输入（最多 64 块、合计 64 KiB）；get_frame_script 返回保存的输入，revision 也随输入变化。GUI 未保存的 HEX 修改和正在试解析时均拒绝覆盖。省略 sample_chunks 保留原输入，空数组清空。修改代码时请提供新协议的样本，并先做离线试解析。

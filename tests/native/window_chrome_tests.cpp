@@ -99,17 +99,20 @@ private slots:
         capture(window.settingsDialog, "settings-about");
         window.settingsDialog->hide();
         QFontDialog fontDialog(&window);
+        fontDialog.setOption(QFontDialog::DontUseNativeDialog);
         fontDialog.setWindowTitle("数据字体");
         verifyFrame(&fontDialog);
         fontDialog.hide();
         QColorDialog colorDialog(&window);
+        colorDialog.setOption(QColorDialog::DontUseNativeDialog);
         colorDialog.setWindowTitle("曲线颜色");
         verifyFrame(&colorDialog);
         colorDialog.hide();
         QFileDialog fileDialog(&window, "选择背景图片", directory.path());
-        verifyFrame(&fileDialog);
-        QVERIFY(QApplication::testAttribute(Qt::AA_DontUseNativeDialogs));
-        fileDialog.hide();
+        fileDialog.ensurePolished();
+        QVERIFY(!QApplication::testAttribute(Qt::AA_DontUseNativeDialogs));
+        QVERIFY(!fileDialog.property("workbenchChrome").toBool());
+        QVERIFY(!fileDialog.findChild<QWidget *>("windowCaptionBackground"));
         QMessageBox message(QMessageBox::Information, "提示", "操作完成", QMessageBox::Ok, &window);
         const auto messageButtons = message.windowFlags() & Qt::WindowMinMaxButtonsHint;
         verifyFrame(&message);
@@ -131,6 +134,59 @@ private slots:
         verifyFrame(detached);
         detached->close();
         window.close();
+    }
+
+    void nativeFilePickerUsesWindowsExplorer()
+    {
+        QVERIFY(!QApplication::testAttribute(Qt::AA_DontUseNativeDialogs));
+        QTemporaryDir directory;
+        QFileDialog dialog(nullptr, "选择背景图片 · 原生窗口验证", directory.path());
+        dialog.setFileMode(QFileDialog::ExistingFile);
+        dialog.setNameFilter("常见图片 (*.jpg *.jpeg *.png *.bmp *.webp *.gif *.tif *.tiff)");
+        dialog.ensurePolished();
+        QVERIFY(!dialog.testOption(QFileDialog::DontUseNativeDialog));
+        QVERIFY(!dialog.property("workbenchChrome").toBool());
+#ifdef Q_OS_WIN
+        if (QGuiApplication::platformName() == "windows")
+        {
+            dialog.open();
+            const auto nativePicker = []
+            {
+                struct Search { HWND window = nullptr; } search;
+                EnumWindows([](HWND window, LPARAM data) -> BOOL
+                {
+                    DWORD process = 0;
+                    GetWindowThreadProcessId(window, &process);
+                    if (process != GetCurrentProcessId() || !IsWindowVisible(window)) { return TRUE; }
+                    wchar_t title[128] {};
+                    wchar_t name[64] {};
+                    GetWindowTextW(window, title, 128);
+                    GetClassNameW(window, name, 64);
+                    if (QString::fromWCharArray(title) == "选择背景图片 · 原生窗口验证"
+                        && QString::fromWCharArray(name) == "#32770")
+                    {
+                        reinterpret_cast<Search *>(data)->window = window;
+                        return FALSE;
+                    }
+                    return TRUE;
+                }, reinterpret_cast<LPARAM>(&search));
+                return search.window;
+            };
+            QTRY_VERIFY_WITH_TIMEOUT(nativePicker(), 5000);
+            const auto target = nativePicker();
+            QVERIFY(target);
+            const auto path = qEnvironmentVariable("SW_CHROME_CAPTURE_DIR");
+            if (!path.isEmpty())
+            {
+                QDir().mkpath(path);
+                QTest::qWait(250);
+                QVERIFY(QGuiApplication::primaryScreen()->grabWindow(reinterpret_cast<WId>(target))
+                    .save(path + "/native-file-picker.png"));
+            }
+            dialog.reject();
+            QTRY_VERIFY(!nativePicker());
+        }
+#endif
     }
 
     void continuousBackgroundAndLiveUpdates()

@@ -451,6 +451,160 @@ private slots:
         QCOMPARE(panel.findChildren<QDoubleSpinBox *>("controlValue").size(), 1);
     }
 
+    void groupPopupShowsEveryEntryAndSwitchesRepeatedly()
+    {
+        sw::installWindowChrome();
+        sw::SerialControlPanel panel;
+        panel.setStyleSheet(sw::Theme::make(false).stylesheet());
+        panel.resize(1000, 700);
+        panel.move(20, 0);
+        panel.addPresetGroup("pid");
+        panel.addPresetGroup("pid");
+        panel.addPresetGroup("motor");
+        panel.show();
+        auto picker = panel.findChild<QComboBox *>("controlGroup");
+        QCOMPARE(picker->count(), 4);
+        const auto before = panel.settings()["groups"].toArray();
+        for (int attempt = 0; attempt < 12; ++attempt)
+        {
+            const int index = attempt % 4;
+            const auto expected = picker->itemData(index).toString();
+            picker->showPopup();
+            QApplication::processEvents();
+            auto popup = QApplication::activePopupWidget();
+            QVERIFY(popup);
+            auto fade = popup->findChild<QVariantAnimation *>("popupFade");
+            if (fade) { QTRY_COMPARE(fade->state(), QAbstractAnimation::Stopped); }
+            if (auto menu = qobject_cast<QMenu *>(popup))
+            {
+                QCOMPARE(menu->actions().size(), 4);
+                for (auto action : menu->actions()) { QVERIFY(menu->rect().contains(menu->actionGeometry(action))); }
+                const auto capture = qEnvironmentVariable("SERIAL_LAYOUT_CAPTURE_DIR");
+                if (attempt == 0 && !capture.isEmpty())
+                {
+                    QDir().mkpath(capture);
+                    QVERIFY(menu->grab().save(capture + "/control-group-popup.png"));
+                }
+                QTest::mouseClick(menu, Qt::LeftButton, Qt::NoModifier, menu->actionGeometry(menu->actions()[index]).center());
+            }
+            else
+            {
+                auto view = picker->view();
+                QVERIFY(view->viewport()->rect().contains(view->visualRect(picker->model()->index(0, 0))));
+                QVERIFY(view->viewport()->rect().contains(view->visualRect(picker->model()->index(3, 0))));
+                QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier,
+                    view->visualRect(picker->model()->index(index, 0)).center());
+            }
+            QTRY_COMPARE(panel.settings()["active_group"].toString(), expected);
+            QTRY_VERIFY(!QApplication::activePopupWidget());
+            QCOMPARE(picker->count(), 4);
+        }
+        QCOMPARE(panel.settings()["groups"].toArray().size(), before.size());
+        panel.close();
+    }
+
+    void freePresetFollowsViewportWidthWithoutSending()
+    {
+        sw::Engine engine;
+        auto channel = engine.open(loop());
+        sw::SerialControlPanel panel;
+        panel.setChannel(channel);
+        panel.setStyleSheet(sw::Theme::make(false).stylesheet());
+        panel.resize(940, 700);
+        panel.addPresetGroup("motor");
+        panel.show();
+        QTest::qWait(60);
+        auto cards = panel.findChildren<sw::ControlCard *>();
+        QCOMPARE(cards.size(), 6);
+        const QRect first = cards[0]->geometry();
+        const QRect second = cards[1]->geometry();
+        const auto values = panel.settings()["groups"].toArray();
+        panel.resize(1440, 800);
+        QTest::qWait(60);
+        QVERIFY(cards[0]->width() > first.width() + 100);
+        QVERIFY(cards[1]->x() > second.x() + 100);
+        QVERIFY(!cards[0]->geometry().intersects(cards[1]->geometry()));
+        QCOMPARE(cards[0]->y(), first.y());
+        QCOMPARE(channel->tx, 0);
+        panel.resize(940, 700);
+        QTest::qWait(60);
+        QVERIFY(qAbs(cards[0]->width() - first.width()) <= 2);
+        QVERIFY(qAbs(cards[1]->x() - second.x()) <= 2);
+        QCOMPARE(panel.settings()["groups"].toArray()[0].toObject()["controls"], values[0].toObject()["controls"]);
+        QCOMPARE(channel->tx, 0);
+        const auto capture = qEnvironmentVariable("SERIAL_LAYOUT_CAPTURE_DIR");
+        if (!capture.isEmpty())
+        {
+            QDir().mkpath(capture);
+            QVERIFY(panel.grab().save(capture + "/control-layout.png"));
+            panel.resize(1440, 800);
+            QTest::qWait(60);
+            QVERIFY(panel.grab().save(capture + "/control-layout-wide.png"));
+        }
+        panel.close();
+    }
+
+    void deleteGroupConfirmationFitsAndCancelsSafely()
+    {
+        sw::installWindowChrome();
+        sw::SerialControlPanel panel;
+        panel.setStyleSheet(sw::Theme::make(false).stylesheet());
+        panel.addPresetGroup("motor");
+        panel.resize(1000, 700);
+        panel.show();
+        QTest::qWait(60);
+        QAction *remove = nullptr;
+        for (auto action : panel.findChildren<QAction *>())
+        {
+            if (action->text() == "删除控件组") { remove = action; }
+        }
+        QVERIFY(remove);
+        const auto before = panel.settings();
+        bool inspected = false;
+        QTimer::singleShot(0, &panel, [&]
+        {
+            auto dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            QVERIFY(dialog);
+            QTimer::singleShot(2000, dialog, &QDialog::reject);
+            auto buttons = dialog->findChild<QDialogButtonBox *>();
+            QVERIFY(buttons);
+            QVERIFY(dialog->contentsRect().contains(QRect(buttons->mapTo(dialog, QPoint()), buttons->size())));
+            auto confirm = buttons->button(QDialogButtonBox::Ok);
+            auto cancel = buttons->button(QDialogButtonBox::Cancel);
+            QVERIFY(confirm && cancel);
+            QCOMPARE(confirm->text(), QString("删除控件组"));
+            QCOMPARE(cancel->text(), QString("取消"));
+            const auto capture = qEnvironmentVariable("SERIAL_LAYOUT_CAPTURE_DIR");
+            if (!capture.isEmpty())
+            {
+                QDir().mkpath(capture);
+                QVERIFY(dialog->grab().save(capture + "/delete-group.png"));
+                if (QGuiApplication::platformName() == "windows")
+                {
+                    dialog->raise();
+                    dialog->activateWindow();
+                    QTest::qWait(150);
+                    QVERIFY(dialog->screen()->grabWindow(dialog->winId()).save(capture + "/delete-group-native.png"));
+                }
+            }
+            inspected = true;
+            cancel->click();
+        });
+        remove->trigger();
+        QVERIFY(inspected);
+        QCOMPARE(panel.settings(), before);
+        QTimer::singleShot(0, &panel, [&]
+        {
+            auto dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            QVERIFY(dialog);
+            dialog->findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok)->click();
+        });
+        remove->trigger();
+        QCOMPARE(panel.settings()["groups"].toArray().size(), 1);
+        QCOMPARE(panel.findChild<QComboBox *>("controlGroup")->count(), 1);
+        panel.close();
+    }
+
     void compactGridThemeAndReopen()
     {
         sw::SerialControlPanel panel;
@@ -692,12 +846,16 @@ private slots:
                 dialog->findChild<QPushButton *>("confirmClearControls")->click();
             });
         };
-        approve();
-        panel.findChild<QAction *>("clearCurrentControlGroup")->trigger();
+        QVERIFY(!panel.findChild<QAction *>("clearCurrentControlGroup"));
         QCOMPARE(panel.settings()["active_group"].toString(), second);
         QCOMPARE(panel.settings()["groups"].toArray().size(), 2);
-        QCOMPARE(panel.settings()["groups"].toArray().last().toObject()["controls"].toArray().size(), 0);
+        QCOMPARE(panel.settings()["groups"].toArray().last().toObject()["controls"].toArray().size(), 8);
         QCOMPARE(controls(panel.settings()).size(), 5);
+        for (auto layer : panel.findChildren<QToolButton *>("controlLayerMenu"))
+        {
+            QCOMPARE(layer->text(), QString("图层"));
+            QCOMPARE(layer->menu()->actions().size(), 2);
+        }
         QVERIFY(panel.selectGroup(first));
         panel.findChild<QCheckBox *>("controlAutoSend")->setChecked(true);
         panel.findChild<QSlider *>("controlSlider")->setValue(99);
@@ -714,7 +872,7 @@ private slots:
         sw::SerialControlPanel restored;
         restored.restore(empty);
         QCOMPARE(restored.settings(), empty);
-        panel.clearControls(true);
+        panel.clearControls();
         QVERIFY(panel.status->text().contains("没有控件"));
     }
 

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "window.h"
-#include "usage_guide.h"
 #include <QSyntaxHighlighter>
 #include <QTextBlock>
 
@@ -188,13 +187,10 @@ public:
         auto load = action("导入脚本");
         auto save = action("导出脚本");
         auto check = action("语法检查");
-        auto ai = action("AI 提示词");
-        ai->setObjectName("scriptAiPrompt");
         check->setObjectName("checkScript");
         tools->addWidget(example);
         tools->addWidget(load);
         tools->addWidget(save);
-        tools->addWidget(ai);
         tools->addStretch();
         tools->addWidget(check);
         body->addLayout(tools);
@@ -216,7 +212,7 @@ public:
         auto tip = new QLabel("每行 HEX 模拟一次接收，可测试半帧、多帧和噪声。");
         tip->setWordWrap(true);
         testBody->addWidget(tip);
-        hex = new QPlainTextEdit("AA 55 C4\n09 E4 0C BC 0D\nAA 55 C4 09 E4 0C BC 0D");
+        hex = new QPlainTextEdit(pane->scriptTestHex);
         hex->setObjectName("scriptTestHex");
         hex->setMaximumHeight(140);
         testBody->addWidget(hex);
@@ -308,50 +304,12 @@ public:
         {
             if (compile()) { status->setText("语法检查通过，可使用右侧 HEX 样本验证解析逻辑。"); }
         });
-        connect(ai, &QPushButton::clicked, this, [this]
-        {
-            if (!owner) { return; }
-            const auto config = owner->channel ? owner->channel->config : owner->draft;
-            const QJsonObject context {{"channel_id", owner->channel ? owner->channel->id : QString()},
-                {"protocol", config.kind}, {"port", config.port}, {"mcp_url", owner->window->mcp->url()}};
-            auto dialog = new QDialog(this);
-            dialog->setObjectName("scriptAiPromptDialog");
-            dialog->setAttribute(Qt::WA_DeleteOnClose);
-            dialog->setWindowTitle("AI 提示词 · 串口帧脚本");
-            dialog->setStyleSheet(owner->window->theme.stylesheet());
-            dialog->resize(780, 600);
-            auto layout = new QVBoxLayout(dialog);
-            auto hint = new QLabel("复制后补充帧协议，再交给 AI。内容包含脚本约束、示例、当前代码和 HEX 样本；不会发送给 AI 或修改当前脚本。");
-            hint->setWordWrap(true);
-            layout->addWidget(hint);
-            auto preview = new QPlainTextEdit(UsageGuide::scriptPrompt(code->toPlainText(), hex->toPlainText(), context));
-            preview->setObjectName("scriptAiPromptText");
-            preview->setFont(owner->window->dataFont);
-            preview->setReadOnly(true);
-            layout->addWidget(preview, 1);
-            auto buttons = new QHBoxLayout();
-            auto copy = action("复制提示词", "primary");
-            copy->setObjectName("copyScriptAiPrompt");
-            auto close = action("关闭");
-            buttons->addStretch();
-            buttons->addWidget(copy);
-            buttons->addWidget(close);
-            layout->addLayout(buttons);
-            connect(copy, &QPushButton::clicked, dialog, [preview, copy]
-            {
-                QApplication::clipboard()->setText(preview->toPlainText());
-                copy->setText("已复制");
-            });
-            connect(close, &QPushButton::clicked, dialog, &QDialog::accept);
-            makeDialogScrollable(dialog, QSize(480, 300));
-            dialog->setWindowModality(Qt::WindowModal);
-            dialog->open();
-        });
         connect(example, &QPushButton::clicked, this, [this]
         {
             auto cursor = code->textCursor();
             cursor.select(QTextCursor::Document);
             cursor.insertText(FrameScriptProgram::example());
+            hex->setPlainText(Pane::exampleTestHex());
         });
         connect(load, &QPushButton::clicked, this, [this]
         {
@@ -383,6 +341,8 @@ public:
             try
             {
                 owner->applyScript(code->toPlainText(), enable->isChecked());
+                owner->scriptTestHex = hex->toPlainText();
+                owner->window->saveSettings();
                 accept();
             }
             catch (const ScriptError &failure) { showFailure(failure.display(), failure.line); }

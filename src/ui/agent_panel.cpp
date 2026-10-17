@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "agent_panel.h"
+#include "agent_skill.h"
+#include "controls.h"
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 
@@ -64,6 +66,10 @@ AgentPanel::AgentPanel(McpServer *owner, QWidget *parent, std::function<AgentEnv
     updateAll->setObjectName("updateAllAgents");
     toolbar->addWidget(scan);
     toolbar->addWidget(updateAll);
+    auto skills = new QPushButton("配置 skill");
+    skills->setObjectName("configureAgentSkills");
+    toolbar->addWidget(skills);
+    connect(skills, &QPushButton::clicked, this, &AgentPanel::configureSkills);
     toolbar->addStretch();
     body->addLayout(toolbar);
     summary = new QLabel();
@@ -133,6 +139,84 @@ AgentPanel::AgentPanel(McpServer *owner, QWidget *parent, std::function<AgentEnv
     connect(updateAll, &QPushButton::clicked, this, &AgentPanel::configureAll);
     connect(server, &McpServer::portChanged, this, [this] { refresh(); });
     refresh();
+}
+
+void AgentPanel::configureSkills()
+{
+    auto dialog = new QDialog(this);
+    dialog->setObjectName("agentSkillDialog");
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle("配置 Agent skill");
+    dialog->resize(760, 570);
+    auto body = new QVBoxLayout(dialog);
+    auto hint = new QLabel("为 Agent 安装或更新软件、MCP 和脚本使用指南。已检测到的 Agent 默认勾选；不同内容先备份，更新后请重载 Agent。");
+    hint->setWordWrap(true);
+    hint->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    body->addWidget(hint);
+    const auto e = environment();
+    struct Choice { QString id; QCheckBox *toggle; QLabel *status; };
+    QList<Choice> choices;
+    for (const auto &value : AgentSkill::targets(e))
+    {
+        const auto target = value.toObject();
+        const auto id = target["agent"].toString();
+        auto row = new QHBoxLayout();
+        auto toggle = new QCheckBox(target["name"].toString());
+        toggle->setObjectName("skill_" + id);
+        toggle->setChecked(target["installed"].toBool());
+        row->addWidget(toggle);
+        auto state = new QLabel((target["installed"].toBool() ? "已检测到 · " : "未检测到 · ") + target["skill_state"].toString());
+        state->setObjectName("skillState_" + id);
+        row->addWidget(state);
+        row->addStretch();
+        body->addLayout(row);
+        auto path = new QLabel(QDir::toNativeSeparators(target["path"].toString()));
+        path->setTextFormat(Qt::PlainText);
+        path->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        path->setWordWrap(true);
+        path->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        body->addWidget(path);
+        choices.append({id, toggle, state});
+    }
+    auto note = new QLabel("这里只更新 skill 文件。MCP 地址仍在 Agent 接入页配置。Claude Desktop 的自定义 skill 需在客户端导入，也可通过 MCP 的 read_usage_guide 读取本指南。");
+    note->setWordWrap(true);
+    note->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    body->addWidget(note);
+    auto actions = new QHBoxLayout();
+    auto install = new QPushButton("安装 / 更新所选");
+    install->setObjectName("installSelectedSkills");
+    auto close = new QPushButton("关闭");
+    actions->addStretch();
+    actions->addWidget(install);
+    actions->addWidget(close);
+    body->addLayout(actions);
+    const auto update = [choices, install]
+    {
+        bool selected = false;
+        for (const auto &choice : choices) { selected = selected || choice.toggle->isChecked(); }
+        install->setEnabled(selected);
+    };
+    for (const auto &choice : choices) { connect(choice.toggle, &QCheckBox::toggled, dialog, update); }
+    update();
+    connect(install, &QPushButton::clicked, dialog, [choices, e]
+    {
+        for (const auto &choice : choices)
+        {
+            if (!choice.toggle->isChecked()) { continue; }
+            try
+            {
+                const auto result = AgentSkill::install(choice.id, e);
+                choice.status->setText(QString("已更新 · %1 个备份 · 请重载 Agent").arg(result["backups"].toArray().size()));
+            }
+            catch (const std::exception &error)
+            {
+                choice.status->setText("未完成：" + QString::fromUtf8(error.what()));
+            }
+        }
+    });
+    connect(close, &QPushButton::clicked, dialog, &QDialog::accept);
+    makeDialogScrollable(dialog, QSize(560, 320));
+    dialog->show();
 }
 
 void AgentPanel::refresh()

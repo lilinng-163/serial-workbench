@@ -31,7 +31,8 @@
 | 🖥️ **SSH 终端** | 专用交互终端，保留 **一万行滚动历史**，支持选择复制、ANSI 颜色、输入法和远端 PTY 尺寸同步。 |
 | 📈 **数值波形** | 最多 16 路命名曲线，缩放、平移、光标检查；四路定宽实时读数，可自行选择通道。 |
 | 🧩 **JSON / XML** | 独立页面共享连接，增量提取与结构化查看，并提供 JSON 助手。 |
-| 🎛️ **串口控制** | 滑块、数字输入、开关、按钮和下拉框；控件组、自由拖动缩放、预设与各控件独立自动发送。 |
+| 🕘 **版本回溯** | 在设置中查看最近三个正式版本的特性并下载安装包，窗口底部显示当前运行版本。 |
+| 🎛️ **串口控制** | 滑块、数字输入、开关、按钮和下拉框；控件组、自由拖动缩放并跟随窗口宽度、预设与各控件独立自动发送。 |
 | 📦 **文件与协议** | 原始字节、XMODEM-CRC 文件传输；带持久状态和校验函数的 C 风格帧脚本。 |
 | 🤖 **AI 协作** | Streamable HTTP / STDIO MCP、按协议开放、默认只读，以及独立的 AI 控制权限。 |
 | 🎨 **工作空间** | 可分离标签、浅色/深色主题、自定义背景、数据字体与各页面一键清空。 |
@@ -85,7 +86,9 @@
 ```
 
 
-AI 可通过 `list_search_views`、`search_logs` 原生调用 GUI 搜索，通过 `get_frame_script`、`validate_frame_script`、`set_frame_script` 读取、试解析并应用串口脚本。写入需要 AI 控制权限和最新 revision，不覆盖 GUI 未保存内容。安装器可选安装 Codex / Claude Code / OpenCode / Pi skill；启动及切换端口时只读检查各 Agent 的 MCP 地址。详见 [Agent 接入说明](docs/agent-integration.md)。
+AI 可通过 `list_search_views`、`search_logs` 原生调用 GUI 搜索，通过 `get_frame_script`、`validate_frame_script`、`set_frame_script` 读取、试解析并应用串口脚本。写入需要 AI 控制权限和最新 revision，不覆盖 GUI 未保存内容。安装器默认勾选检测到的 Agent skill，也可在设置 → AI / MCP → Agent 接入 → 配置 skill 中随时安装或更新；启动及切换端口时只读检查各 Agent 的 MCP 地址。详见 [Agent 接入说明](docs/agent-integration.md)。
+
+通过 MCP 修改脚本时，也要把匹配当前协议的 HEX `sample_chunks` 传给 `set_frame_script`，同步更新 GUI 试解析输入；先离线验证，未保存的样本受覆盖保护。脚本编辑器统一使用 skill/指南流程，移除了单独的 AI 提示词窗口。
 
 ### 终端与工作区快捷操作
 
@@ -225,6 +228,7 @@ V1 `opencode.json` / `opencode.jsonc` 可合并以下条目：
 | --- | --- |
 | [Agent 接入](docs/agent-integration.md) | 客户端格式、配置路径与连接检查 |
 | [波形专用协议](docs/wave-protocol.md) | 分帧、通道名、数值类型与限制 |
+| [版本回溯](docs/version-history.md) | 最近正式版本的特性与安装包 |
 | [串口控制](docs/serial-controls.md) | 控件组、预设、模板和自动发送 |
 | [帧脚本](docs/frame-scripts.md) | C 风格解析 API、校验与示例 |
 | [JSON 助手](docs/json-assistant.md) | JSON 结构化工具 |
@@ -252,7 +256,7 @@ $env:MINGW_BIN = 'C:/Qt/Tools/mingw1310_64/bin'
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r tests/integration/requirements.txt
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.31
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.32
 ```
 
 安装 NSIS，并提供匹配的 Qt 源码目录收集许可证，即可生成安装包、单文件启动器和便携 ZIP：
