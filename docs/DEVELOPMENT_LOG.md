@@ -2,6 +2,16 @@
 
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
 
+## 2026-10-17 — 合并版本地安装包与测试程序
+
+- 执行者：Codex；应用源码基线 `af906ff`，版本保持 `0.15.29`。
+- 用户目标：提供刚合并版本的安装包或测试 EXE。
+- 产物：`dist/local/deepseek-review-20261017-installer/SerialWorkbench-0.15.29-windows-x64-setup.exe`（15,389,619 字节）；直接测试入口为 `dist/local/deepseek-review-20261017/SerialWorkbench.exe`，需保留同目录运行库。
+- 安装包 SHA-256：`5dab43bb1def7cf27af462e022749f3bdaaaf33a07cc676f2702d8e830c3b16d`。
+- 验证：`smoke_installer.py` 完整通过，涵盖中文自定义路径安装、升级发现原目录、设置和背景保留、运行中保护、无 Qt SDK 启动、HTTP / STDIO 与共享独立读取、卸载清理及用户文件保留。测试使用独立产品名和注册表项，没有覆盖正式安装。首次沙箱内运行在注册卸载入口时返回 5，允许隔离测试所需的系统写入后完整通过；日志位于 `build/deepseek-review-20261017/installer-verification-unsandboxed.txt`。
+- 提交与同步：仅交接记录随 `deepseek-dev` 提交推送；没有改应用源码，没有创建新 Release 或修改网站、国内镜像。
+- 剩余工作：用户可安装或直接启动测试；物理设备验证范围与上条审查记录相同。
+
 ## 2026-10-17 — Codex 审查并集成 deepseek-dev
 
 - 执行者：Codex。
