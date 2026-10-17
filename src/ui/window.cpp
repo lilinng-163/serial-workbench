@@ -78,6 +78,37 @@ static QPushButton *button(const QString &text, const QString &name = {})
     return result;
 }
 
+static QString prettyJsonText(const QString &raw)
+{
+    const auto document = QJsonDocument::fromJson(raw.toUtf8());
+    if (document.isObject()) { return QString::fromUtf8(QJsonDocument(document.object()).toJson(QJsonDocument::Indented)); }
+    if (document.isArray()) { return QString::fromUtf8(QJsonDocument(document.array()).toJson(QJsonDocument::Indented)); }
+    return raw;
+}
+
+static QString mcpAuditDetail(const QJsonObject &entry)
+{
+    QString text;
+    text += QString("调用 #%1 · %2\n").arg(entry["seq"].toInteger()).arg(entry["tool"].toString());
+    text += QString("时间：%1\n客户端：%2\n结果：%3\n耗时：%4 ms\n")
+        .arg(entry["time"].toString(), entry["client"].toString(),
+             entry["status"].toString() == "ok" ? QString("成功") : QString("失败"))
+        .arg(entry["duration_ms"].toInteger());
+    const auto summary = entry["summary"].toString();
+    if (!summary.isEmpty()) { text += "摘要：" + summary + "\n"; }
+    const auto arguments = entry["arguments"].toObject();
+    text += "\n参数：\n" + QString::fromUtf8(QJsonDocument(arguments).toJson(QJsonDocument::Indented));
+    if (!entry["error"].toString().isEmpty())
+    {
+        text += "\n错误：\n" + entry["error"].toString() + "\n";
+    }
+    else if (!entry["result"].toString().isEmpty())
+    {
+        text += "\n返回：\n" + prettyJsonText(entry["result"].toString()) + "\n";
+    }
+    return text;
+}
+
 class TabTitleEditor : public QLineEdit
 {
 public:
@@ -1989,9 +2020,13 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     layout->addWidget(right, 1);
     setCentralWidget(root);
     status = label("尚未连接", "muted");
+    aiStatus = label("", "muted");
+    aiStatus->hide();
+    aiStatus->setMaximumWidth(420);
     mcpStatus = label("", "muted");
     statusBar()->setSizeGripEnabled(false);
     statusBar()->addWidget(status, 1);
+    statusBar()->addPermanentWidget(aiStatus);
     statusBar()->addPermanentWidget(mcpStatus);
     if (!primary)
     {
@@ -2136,7 +2171,11 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
                 for (const auto &value : mcp->audit)
                 {
                     const auto item = value.toObject();
-                    new QTreeWidgetItem(auditTable, {item["time"].toString().mid(11, 12), item["client"].toString(), item["tool"].toString(), item["status"] == "ok" ? "成功" : "失败", QString::number(item["duration_ms"].toInteger()), item["error"].toString()});
+                    auto row = new QTreeWidgetItem(auditTable, {item["time"].toString().mid(11, 12), item["client"].toString(),
+                        item["summary"].toString().isEmpty() ? item["tool"].toString() : item["summary"].toString(),
+                        item["status"] == "ok" ? "成功" : "失败", QString::number(item["duration_ms"].toInteger()), item["error"].toString()});
+                    row->setData(0, Qt::UserRole, item);
+                    row->setToolTip(0, item["tool"].toString());
                 }
                 auditTable->setUpdatesEnabled(true);
             }
@@ -2182,6 +2221,59 @@ Pane *Window::findPane(Channel *channel)
         }
     }
     return nullptr;
+}
+
+void Window::showPane(Pane *pane)
+{
+    if (!pane || !pane->window)
+    {
+        return;
+    }
+    Window *host = pane->window;
+    const int index = paneIndex(host->tabs, pane);
+    if (index < 0)
+    {
+        return;
+    }
+    host->tabs->setCurrentIndex(index);
+    host->activate(index);
+    if (host->isMinimized())
+    {
+        host->showNormal();
+    }
+    host->raise();
+    host->activateWindow();
+}
+
+void Window::showAuditDetail(const QJsonObject &entry)
+{
+    if (entry.isEmpty())
+    {
+        return;
+    }
+    auto dialog = new QDialog(settingsDialog ? static_cast<QWidget *>(settingsDialog) : this);
+    dialog->setObjectName("mcpCallDetail");
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle("MCP 调用详情 · " + entry["tool"].toString());
+    dialog->setStyleSheet(theme.stylesheet());
+    dialog->resize(820, 620);
+    auto body = new QVBoxLayout(dialog);
+    auto text = new QPlainTextEdit(mcpAuditDetail(entry));
+    text->setObjectName("mcpCallDetailText");
+    text->setReadOnly(true);
+    text->setFont(dataFont);
+    text->setLineWrapMode(QPlainTextEdit::NoWrap);
+    body->addWidget(text, 1);
+    auto actions = new QHBoxLayout();
+    auto copy = button("复制详情", "outline");
+    connect(copy, &QPushButton::clicked, dialog, [text] { QApplication::clipboard()->setText(text->toPlainText()); });
+    auto close = button("关闭", "primary");
+    connect(close, &QPushButton::clicked, dialog, &QDialog::accept);
+    actions->addStretch();
+    actions->addWidget(copy);
+    actions->addWidget(close);
+    body->addLayout(actions);
+    dialog->show();
 }
 
 Window *Window::detachConnection(int index, const QPoint &position, bool systemMove)
@@ -3733,11 +3825,20 @@ void Window::openSettings()
     connect(availablePort, &QPushButton::clicked, this, [switchPort] { switchPort(0); });
     auditTable = new QTreeWidget();
     auditTable->setRootIsDecorated(false);
-    auditTable->setHeaderLabels({"时间", "客户端", "工具", "结果", "耗时 ms", "错误"});
+    auditTable->setHeaderLabels({"时间", "客户端", "调用", "结果", "耗时 ms", "错误"});
     auditTable->setColumnWidth(0, 115);
-    auditTable->setColumnWidth(1, 160);
-    auditTable->setColumnWidth(2, 160);
+    auditTable->setColumnWidth(1, 150);
+    auditTable->setColumnWidth(2, 220);
+    auditTable->setColumnWidth(3, 70);
+    auditTable->setColumnWidth(4, 80);
+    auditTable->header()->setStretchLastSection(true);
+    auditTable->setToolTip("双击一行查看参数、返回与错误详情");
+    connect(auditTable, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem *item)
+    {
+        showAuditDetail(item->data(0, Qt::UserRole).toJsonObject());
+    });
     mcpTabs->addTab(auditTable, "调用日志");
+    mcpTabs->setTabToolTip(mcpTabs->count() - 1, "双击一行查看调用的参数、返回与错误详情");
     mcpBody->addWidget(mcpTabs, 1);
     pages->addTab(scrollPanel(mcpPage, "mcpScroll"), "AI / MCP");
     auto about = new QWidget();

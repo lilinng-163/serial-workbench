@@ -10,6 +10,48 @@ static QString protocolGroup(const QString &kind)
     return kind == "tcp-client" || kind == "tcp-server" ? QStringLiteral("tcp") : kind;
 }
 
+static QString toolSummary(const QString &name, const QJsonObject &args)
+{
+    if (name == "open_connection")
+    {
+        try
+        {
+            const auto config = Config::fromJson(args["config"].toObject());
+            const auto target = !config.name.isEmpty() ? config.name
+                : config.kind == "serial" ? config.port
+                : config.kind == "ssh" ? config.sshHost
+                : config.kind == "tcp-server" || config.kind == "udp" ? config.bindHost + ":" + QString::number(config.bindPort)
+                : config.host + ":" + QString::number(config.networkPort);
+            return QString("打开 %1 %2").arg(config.kind, target).trimmed();
+        }
+        catch (const std::exception &)
+        {
+            return "打开连接";
+        }
+    }
+    if (name == "close_connection") { return "关闭连接 " + args["channel_id"].toString(); }
+    if (name == "send_data") { return QString("发送 %1 个字符").arg(args["payload"].toString().size()); }
+    if (name == "set_frame_script") { return args["enabled"].toBool() ? "设置并启用帧脚本" : "设置并停用帧脚本"; }
+    if (name == "validate_frame_script") { return "离线验证帧脚本"; }
+    if (name == "search_logs") { return QString("搜索「%1」").arg(args["filter"].toObject()["text"].toString()); }
+    if (name == "list_search_views") { return "列出界面搜索视图"; }
+    return name;
+}
+
+static QString clippedResult(const QJsonValue &value, int limit = 8192)
+{
+    QByteArray bytes;
+    if (value.isArray()) { bytes = QJsonDocument(value.toArray()).toJson(QJsonDocument::Compact); }
+    else if (value.isObject()) { bytes = QJsonDocument(value.toObject()).toJson(QJsonDocument::Compact); }
+    else { bytes = value.toVariant().toString().toUtf8(); }
+    QString text = QString::fromUtf8(bytes);
+    if (text.size() > limit)
+    {
+        text = text.left(limit) + "\n…（结果已截断）";
+    }
+    return text;
+}
+
 QJsonObject McpServer::protocolAccess() const
 {
     return access;
@@ -392,14 +434,15 @@ void McpServer::finishCall(QTcpSocket *socket, const QJsonObject &rpc, const QSt
     QElapsedTimer timer;
     timer.start();
     QJsonObject result;
+    QJsonValue toolValue;
     QString error;
     try
     {
-        const QJsonValue value = call(name, args);
-        const QByteArray text = value.isArray() ? QJsonDocument(value.toArray()).toJson(QJsonDocument::Compact)
-            : QJsonDocument(value.toObject()).toJson(QJsonDocument::Compact);
+        toolValue = call(name, args);
+        const QByteArray text = toolValue.isArray() ? QJsonDocument(toolValue.toArray()).toJson(QJsonDocument::Compact)
+            : QJsonDocument(toolValue.toObject()).toJson(QJsonDocument::Compact);
         result = {{"content", QJsonArray {QJsonObject {{"type", "text"}, {"text", QString::fromUtf8(text)}}}}, {"isError", false}};
-        result["structuredContent"] = value.isObject() ? value.toObject() : QJsonObject {{"result", value}};
+        result["structuredContent"] = toolValue.isObject() ? toolValue.toObject() : QJsonObject {{"result", toolValue}};
     }
     catch (const std::exception &exception)
     {
@@ -415,12 +458,16 @@ void McpServer::finishCall(QTcpSocket *socket, const QJsonObject &rpc, const QSt
     {
         if (safeArgs.contains(key)) { safeArgs[key] = "已省略正文"; }
     }
-    audit.append(QJsonObject {{"seq", calls}, {"time", now()}, {"tool", name}, {"client", sessions.value(session)},
-        {"arguments", safeArgs}, {"status", error.isEmpty() ? "ok" : "error"}, {"error", error}, {"duration_ms", timer.elapsed()}});
+    QJsonObject entry {{"seq", calls}, {"time", now()}, {"tool", name}, {"client", sessions.value(session)},
+        {"summary", toolSummary(name, args)}, {"arguments", safeArgs},
+        {"status", error.isEmpty() ? "ok" : "error"}, {"error", error}, {"duration_ms", timer.elapsed()}};
+    if (error.isEmpty()) { entry["result"] = clippedResult(toolValue); }
+    audit.append(entry);
     while (audit.size() > 1000)
     {
         audit.removeFirst();
     }
+    emit toolCalled(entry);
     respond(socket, 200, {{"jsonrpc", "2.0"}, {"id", rpc["id"]}, {"result", result}}, session);
 }
 
@@ -508,7 +555,9 @@ QJsonValue McpServer::call(const QString &name, const QJsonObject &a)
     {
         const auto config = Config::fromJson(a["config"].toObject());
         requireProtocol(config.kind);
-        return engine->open(config)->describe();
+        auto channel = engine->open(config);
+        emit guiConnectionOpened(channel);
+        return channel->describe();
     }
     auto channel = accessibleChannel(a["channel_id"].toString());
     if (name == "close_connection")
@@ -554,7 +603,7 @@ QJsonArray McpServer::tools() const
     add("send_data", "Send bytes. Requires GUI permission. newline none/lf/cr/crlf, peer IP:port.",
         {{"channel_id", property("string")}, {"payload", property("string")}, {"hex_mode", property("boolean", false)},
          {"encoding", property("string", "utf-8")}, {"newline", property("string", "none")}, {"peer", property("string", "")}}, {"channel_id", "payload"}, false);
-    add("open_connection", "Open serial/tcp-client/tcp-server/udp/ssh. SSH config fields: kind=ssh, ssh_host (alias from ~/.ssh/config or address), optional ssh_user, ssh_port, ssh_identity. Uses the system OpenSSH client and configured key or agent. Requires GUI permission.", {{"config", property("object")}}, {"config"}, false);
+    add("open_connection", "Open serial/tcp-client/tcp-server/udp/ssh. SSH config fields: kind=ssh, ssh_host (alias from ~/.ssh/config or address), optional ssh_user, ssh_port, ssh_identity. Uses the system OpenSSH client and configured key or agent. Requires GUI permission; the matching receive page opens and activates in the GUI.", {{"config", property("object")}}, {"config"}, false);
     add("close_connection", "Disconnect and retain history. Requires GUI permission.", {{"channel_id", property("string")}}, {"channel_id"}, false);
     add("list_search_views", "List GUI receive/JSON/XML search views for exactly one channel. Returns ephemeral view_id values, saved search flags and display mode. Select an exact view before search_logs; no shell/grep needed.",
         {{"channel_id", property("string")}}, {"channel_id"});

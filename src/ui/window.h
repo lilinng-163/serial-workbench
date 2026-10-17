@@ -109,7 +109,7 @@ public:
     QPointer<QDialog> scriptDialog;
     bool supportsScript() const;
     void applyScript(const QString &code, bool enabled);
-    void openScriptEditor();
+    void openScriptEditor(bool nonModal = false);
     void buildScriptResults();
     void refreshScriptResults();
     void clearScriptResults();
@@ -138,12 +138,14 @@ class Window : public QMainWindow
 public:
     void installMcpUi();
     void checkAgentEndpoints();
+    void showAuditDetail(const QJsonObject &entry);
     std::function<AgentEnvironment()> agentEnvironment = AgentEnvironment::current;
     Window(Engine *engine, McpServer *mcp, const QString &settingsPath, Window *primary = nullptr);
     Window *primary;
     QList<QPointer<Window>> hosts;
     Window *rootWindow();
     Pane *findPane(Channel *channel);
+    void showPane(Pane *pane);
     Window *detachConnection(int index, const QPoint &position, bool systemMove = false);
     void transferPane(Pane *pane, Window *target);
     void attachPane(Pane *pane);
@@ -206,6 +208,7 @@ public:
     QLabel *scriptHint;
     QLabel *status;
     QLabel *mcpStatus;
+    QLabel *aiStatus = nullptr;
     QPushButton *updateButton = nullptr;
     QProgressBar *updateProgress = nullptr;
     UpdateService *updater = nullptr;

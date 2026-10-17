@@ -462,18 +462,23 @@ void CheckBoxMotion::paintEvent(QPaintEvent *)
     };
     const bool keyboard = source->hasFocus() && source->property("keyboardFocus").toBool();
     const auto edge = keyboard || source->underMouse() ? motionTheme.accent : motionTheme.edge;
+    // Programmatic state changes can arrive with signals blocked (for example
+    // when AI-synchronized scripts update the toggle), so fall back to the
+    // actual check state whenever no animation is running.
+    const qreal amount = animation.state() == QAbstractAnimation::Running ? progress
+        : source->checkState() == Qt::Unchecked ? 0.0 : 1.0;
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
     painter.setOpacity(source->isEnabled() ? 1 : 0.45);
     painter.setPen(QPen(edge, keyboard ? 1.4 : 1.0));
-    painter.setBrush(blend(motionTheme.panel, motionTheme.accent, progress));
+    painter.setBrush(blend(motionTheme.panel, motionTheme.accent, amount));
     painter.drawRoundedRect(bounds, 4.5, 4.5);
-    if (progress < 0.001) { return; }
+    if (amount < 0.001) { return; }
 
     painter.setPen(QPen(motionTheme.onAccent, 1.7, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
     if (source->checkState() == Qt::PartiallyChecked)
     {
-        const qreal half = bounds.width() * 0.24 * progress;
+        const qreal half = bounds.width() * 0.24 * amount;
         painter.drawLine(bounds.center() - QPointF(half, 0), bounds.center() + QPointF(half, 0));
         return;
     }
@@ -482,7 +487,7 @@ void CheckBoxMotion::paintEvent(QPaintEvent *)
     const QPointF end(bounds.left() + bounds.width() * 0.78, bounds.top() + bounds.height() * 0.31);
     const qreal first = QLineF(start, middle).length();
     const qreal second = QLineF(middle, end).length();
-    const qreal distance = (first + second) * progress;
+    const qreal distance = (first + second) * amount;
     QPainterPath tick(start);
     if (distance <= first)
     {

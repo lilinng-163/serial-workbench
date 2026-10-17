@@ -2,6 +2,26 @@
 
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
 
+## 2026-10-17 — GUI 同步 AI 的 MCP 操作与可查看调用详情
+
+- 执行者：DeepSeek。
+- 分支与起点：`deepseek-dev`，起点 `e1f402b`。
+- 用户目标：AI 调用 MCP 时界面全程不可见；AI 打开串口、写入并启用脚本后 GUI 应同步显示；调用日志信息太少，需点击查看更详细的参数与结果。
+- 已完成：
+  - `src/mcp/mcp.h`、`mcp.cpp`：新增 `guiConnectionOpened`、`toolCalled` 信号；`open_connection` 成功后通知 GUI；每次 HTTP 工具调用在审计中记录 `summary`、`arguments`、`result`（结果最多 8 KiB，超出截断）；`open_connection` 工具说明补充“GUI 会打开并激活对应页面”。
+  - `src/ui/window.*`：新增 `showPane()` 激活并置前对应标签页（含分离窗口）；状态栏新增常驻 `AI · 操作 · 成功/失败` 标签，悬停显示客户端、时间、耗时和错误；调用日志表保存完整审计对象，双击打开 `showAuditDetail()` 详情对话框（格式化参数、返回、错误，可复制）。
+  - `src/ui/mcp_ui.cpp`：AI 打开连接时激活页面；AI 写入/启用脚本时激活页面，并在编辑器未打开时以非模态窗口展示 AI 代码；状态栏同步显示最近 AI 操作。
+  - `src/ui/script_editor.cpp`：`openScriptEditor(bool nonModal)`，手动打开仍为窗口模态，AI 同步使用非模态。
+  - `src/ui/button_motion.cpp`：无动画运行时按实际勾选状态绘制，修复程序化（信号被阻断）更新脚本开关后复选框仍显示未勾选的问题。
+- 验证：
+  - `cmake --build build/native-release --parallel 4` 成功；完整 `ctest` 16/16 通过。
+  - 新增 `mcp_workflow_tests::guiSyncsAiConnectionScriptAndAudit`：验证 AI open_connection 激活对应页、set_frame_script 写入并启用后侧栏开关勾选、脚本编辑器非模态并显示代码、审计含 summary/参数/返回、状态栏 AI 标签可见、详情对话框含“参数/返回”。
+  - 实际进程联调：启动应用后经 HTTP MCP 打开 `loop://`、写入并启用帧脚本、读取状态；截图 `build/ai-live.png` 显示连接页被激活、脚本解析面板出现、侧栏“脚本解析”已勾选、状态栏显示 `AI · get_status · 成功`；`build/ai-sync-captures/` 另含脚本编辑器、审计详情与主窗口截图。
+- 未完成：无。
+- 风险与兼容：AI 打开连接或写入脚本会主动置前窗口与标签（按用户要求）；写操作仍需 GUI 的 AI 控制权限。审计结果截断到 8 KiB，参数中的 payload 长度与脚本正文仍按原规则脱敏。脚本编辑器仅在没有已打开编辑器时自动弹出，且为非模态。未连接真实外部 SSH 主机或物理串口复测。
+- 提交与同步：见交接回复中的提交哈希；推送 `deepseek-dev`，未推送 `main`，未发布 Release。
+- 下一步：Codex 审查、运行原生测试并集成。
+
 ## 2026-10-17 — MCP 搜索、脚本、可选 skill 与启动地址检查
 
 - 执行者：Codex；先完成稳定版 v0.15.30 发布（提交 `d8d7084`，GitHub Release ID `415571124`），核对四个附件大小及 SHA-256 后正式发布；随后从保留的开发分支建立 `codex/mcp-guided-workflow`，开发版本 `0.15.31`，未创建 0.15.31 Release。

@@ -31,6 +31,8 @@ public:
 signals:
     void portChanged(quint16 port);
     void protocolAccessChanged();
+    void toolCalled(const QJsonObject &entry);
+    void guiConnectionOpened(Channel *channel);
 
 private:
     QJsonObject access {{"serial", true}, {"tcp", true}, {"udp", true}, {"ssh", true}};

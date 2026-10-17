@@ -5,6 +5,8 @@
 #include "serial_control_panel.h"
 #include "serial_monitor_dialog.h"
 #include <QtTest>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
 
 class McpWorkflowTests : public QObject
 {
@@ -253,6 +255,109 @@ private slots:
             QTest::qWait(220);
             QApplication::processEvents();
             QVERIFY(window.settingsDialog->grab().save(captures + "/agent-endpoint-checks.png"));
+        }
+        window.close();
+    }
+
+    void guiSyncsAiConnectionScriptAndAudit()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        window.show();
+        QVERIFY(mcp.start(0));
+        engine.allowControl = true;
+
+        // AI opens a serial loop connection; the matching GUI page is activated.
+        const auto opened = mcp.call("open_connection", {{"config", QJsonObject {{"kind", "serial"}, {"port", "loop://"}}}}).toObject();
+        auto channel = engine.get(opened["id"].toString());
+        QVERIFY(channel);
+        auto pane = window.findPane(channel);
+        QVERIFY(pane);
+        QCOMPARE(window.active, pane);
+        QCOMPARE(window.stack->currentWidget(), static_cast<QWidget *>(pane));
+
+        // AI writes and enables a frame script; the page is activated and the
+        // code is exposed in a non-modal editor.
+        const auto match = QRegularExpression("```c\\n(.*?)\\n```", QRegularExpression::DotMatchesEverythingOption)
+            .match(sw::UsageGuide::text("frame_script"));
+        QVERIFY(match.hasMatch());
+        const auto code = match.captured(1);
+        const auto current = mcp.call("get_frame_script", {{"channel_id", channel->id}}).toObject();
+        const auto applied = mcp.call("set_frame_script", {{"channel_id", channel->id}, {"code", code},
+            {"enabled", true}, {"expected_revision", current["revision"]}}).toObject();
+        QVERIFY(applied["enabled"].toBool());
+        QCOMPARE(pane->scriptCode, code);
+        QVERIFY(pane->scriptDialog);
+        QCOMPARE(pane->scriptDialog->windowModality(), Qt::NonModal);
+        auto editor = pane->scriptDialog->findChild<QPlainTextEdit *>("scriptCode");
+        QVERIFY(editor);
+        QCOMPARE(editor->toPlainText(), code);
+        QCOMPARE(window.active, pane);
+        QTRY_VERIFY(window.scriptToggle->isChecked());
+
+        // Every HTTP tool call stores arguments, summary and returned payload.
+        QNetworkAccessManager client;
+        QByteArray session;
+        int id = 0;
+        const auto post = [&](const QString &method, const QJsonObject &params)
+        {
+            QNetworkRequest request(QUrl(mcp.url()));
+            request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+            request.setRawHeader("Accept", "application/json, text/event-stream");
+            if (!session.isEmpty()) { request.setRawHeader("Mcp-Session-Id", session); }
+            return client.post(request, QJsonDocument(QJsonObject {{"jsonrpc", "2.0"}, {"id", ++id},
+                {"method", method}, {"params", params}}).toJson(QJsonDocument::Compact));
+        };
+        auto initialized = post("initialize", {{"protocolVersion", "2025-03-26"},
+            {"clientInfo", QJsonObject {{"name", "Audit test"}, {"version", "1"}}}});
+        QTRY_VERIFY(initialized->isFinished());
+        QCOMPARE(initialized->error(), QNetworkReply::NoError);
+        session = initialized->rawHeader("Mcp-Session-Id");
+        QVERIFY(!session.isEmpty());
+        initialized->deleteLater();
+        auto reply = post("tools/call", {{"name", "get_status"}, {"arguments", QJsonObject {}}});
+        QTRY_VERIFY(reply->isFinished());
+        QCOMPARE(reply->error(), QNetworkReply::NoError);
+        reply->deleteLater();
+        QVERIFY(!mcp.audit.isEmpty());
+        const auto entry = mcp.audit.last().toObject();
+        QCOMPARE(entry["tool"].toString(), QString("get_status"));
+        QVERIFY(!entry["summary"].toString().isEmpty());
+        QVERIFY(entry.contains("arguments"));
+        QVERIFY(!entry["result"].toString().isEmpty());
+        QTRY_VERIFY(window.aiStatus->isVisible());
+        QVERIFY(window.aiStatus->text().contains("AI"));
+
+        // The audit table exposes the stored detail on double click.
+        window.openSettings();
+        auto pages = window.settingsDialog->findChild<sw::DetachableTabs *>("settingsPages");
+        auto mcpTabs = window.settingsDialog->findChild<sw::DetachableTabs *>("mcpPages");
+        QVERIFY(pages && mcpTabs);
+        pages->setCurrentIndex(1);
+        mcpTabs->setCurrentIndex(2);
+        QTRY_COMPARE(window.auditTable->topLevelItemCount(), mcp.audit.size());
+        auto row = window.auditTable->topLevelItem(window.auditTable->topLevelItemCount() - 1);
+        QVERIFY(row);
+        const auto stored = row->data(0, Qt::UserRole).toJsonObject();
+        QVERIFY(!stored.isEmpty());
+        window.showAuditDetail(stored);
+        QTRY_VERIFY(window.findChild<QDialog *>("mcpCallDetail"));
+        auto detail = window.findChild<QDialog *>("mcpCallDetail");
+        auto text = detail->findChild<QPlainTextEdit *>("mcpCallDetailText");
+        QVERIFY(text);
+        QVERIFY(text->toPlainText().contains("参数"));
+        QVERIFY(text->toPlainText().contains("返回"));
+        const auto captures = qEnvironmentVariable("MCP_WORKFLOW_CAPTURE_DIR");
+        if (!captures.isEmpty())
+        {
+            QDir().mkpath(captures);
+            QTest::qWait(220);
+            QApplication::processEvents();
+            QVERIFY(window.grab().save(captures + "/ai-gui-sync.png"));
+            QVERIFY(pane->scriptDialog->grab().save(captures + "/ai-script-editor.png"));
+            QVERIFY(detail->grab().save(captures + "/ai-audit-detail.png"));
         }
         window.close();
     }
