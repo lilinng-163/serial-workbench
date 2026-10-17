@@ -518,6 +518,69 @@ private slots:
         window.close();
     }
 
+    void savedSshTerminalModeDoesNotLeakIntoSerialDraft()
+    {
+        QTemporaryDir directory;
+        const auto path = directory.filePath("settings.json");
+        QFile settings(path);
+        QVERIFY(settings.open(QIODevice::WriteOnly));
+        settings.write(QJsonDocument(QJsonObject {
+            {"connection", QJsonObject {{"kind", "ssh"}, {"host", "example.invalid"}}},
+            {"appearance", QJsonObject {{"terminal_mode", true}}}}).toJson());
+        settings.close();
+
+        sw::Engine engine;
+        sw::McpServer server(&engine);
+        sw::Window window(&engine, &server, path);
+        auto pane = window.active;
+        QVERIFY(!pane->channel);
+        QVERIFY(engine.channels.isEmpty());
+        QVERIFY(pane->terminalMode);
+        QVERIFY(pane->sender->isHidden());
+
+        // Exercise the actual protocol selector rather than mutating the draft.
+        window.protocol->setCurrentIndex(0);
+        pane->tick();
+        QCOMPARE(pane->draft.kind, QString("serial"));
+        QVERIFY(!pane->terminalMode);
+        QVERIFY(!pane->sender->isHidden());
+        QVERIFY(!pane->modeButton->isHidden());
+        QVERIFY(engine.channels.isEmpty());
+        window.close();
+    }
+
+    void connectedSerialRestoresExplicitTerminalPreference()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer server(&engine);
+        sw::Window window(&engine, &server, directory.filePath("settings.json"));
+        sw::Config config;
+        config.port = "loop://";
+        auto channel = engine.open(config);
+        auto pane = window.findPane(channel);
+        QVERIFY(pane);
+        channel->receive("MODE_RESTORE_SAMPLE\r\n");
+        const auto history = engine.journal.read(0, 1000, channel->id);
+
+        pane->restore({{"terminal_mode", true}});
+        pane->tick();
+        QVERIFY(pane->userTerminalMode);
+        QVERIFY(pane->terminalMode);
+        QCOMPARE(pane->display->currentWidget(), static_cast<QWidget *>(pane->terminal));
+        QVERIFY(pane->sender->isHidden());
+
+        pane->restore({{"terminal_mode", false}});
+        pane->tick();
+        QVERIFY(!pane->userTerminalMode);
+        QVERIFY(!pane->terminalMode);
+        QCOMPARE(pane->display->currentWidget(), static_cast<QWidget *>(pane->log));
+        QVERIFY(!pane->sender->isHidden());
+        QCOMPARE(engine.journal.read(0, 1000, channel->id), history);
+        QCOMPARE(channel->tx, 0);
+        window.close();
+    }
+
     void switchingFromSshBackToSerialRestoresLogView()
     {
         QTemporaryDir directory;

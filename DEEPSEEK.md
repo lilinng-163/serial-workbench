@@ -7,7 +7,7 @@
 | 项目 | 当前状态 |
 | --- | --- |
 | 仓库 | https://github.com/lilinng-163/serial-workbench |
-| 本机源码 | `E:demoserial`；其他机器以实际克隆目录为准 |
+| 本机源码 | `E:/demo/serial`；其他机器以实际克隆目录为准 |
 | 正式主线 | `main` |
 | DeepSeek 开发分支 | `deepseek-dev` |
 | 交接基线 | `43f3dc4184e59349380cd80479ad5f9259faa53e` |

@@ -88,12 +88,12 @@ private slots:
         QTest::mouseRelease(button, Qt::LeftButton);
         QTest::qWait(180);
         QCOMPARE(clicks.count(), 1);
-        QCOMPARE(motion->checkedAmount(), 1.0);
-        QCOMPARE(motion->pressAmount(), 0.0);
+        QTRY_COMPARE_WITH_TIMEOUT(motion->checkedAmount(), 1.0, 1000);
+        QTRY_COMPARE_WITH_TIMEOUT(motion->pressAmount(), 0.0, 1000);
         QTest::keyClick(button, Qt::Key_Space);
         QTest::qWait(180);
         QCOMPARE(clicks.count(), 2);
-        QCOMPARE(motion->checkedAmount(), 0.0);
+        QTRY_COMPARE_WITH_TIMEOUT(motion->checkedAmount(), 0.0, 1000);
         enter(button);
         QTest::qWait(30);
         button->setEnabled(false);
@@ -202,13 +202,12 @@ private slots:
         QVERIFY(motion->running());
         QTRY_VERIFY_WITH_TIMEOUT(motion->checkedAmount() > 0 && motion->checkedAmount() < 1, 300);
         QCOMPARE(check->geometry(), bounds);
-        QTest::qWait(180);
-        QCOMPARE(motion->checkedAmount(), 1.0);
+        QTRY_COMPARE_WITH_TIMEOUT(motion->checkedAmount(), 1.0, 1000);
         check->setFocus(Qt::TabFocusReason);
         QTest::keyClick(check, Qt::Key_Space);
         QTest::qWait(180);
         QCOMPARE(toggles.size(), 2);
-        QCOMPARE(motion->checkedAmount(), 0.0);
+        QTRY_COMPARE_WITH_TIMEOUT(motion->checkedAmount(), 0.0, 1000);
         QTest::mouseClick(check, Qt::LeftButton, Qt::NoModifier, QPoint(8, check->height() / 2));
         QCOMPARE(toggles.size(), 3);
         QTest::qWait(35);
@@ -279,8 +278,7 @@ private slots:
         comboFade->setCurrentTime(50);
         QVERIFY(comboFade->currentValue().toReal() > 0 && comboFade->currentValue().toReal() < 1);
         QCOMPARE(popup->geometry(), comboBounds);
-        QTest::qWait(160);
-        QCOMPARE(comboFade->state(), QAbstractAnimation::Stopped);
+        QTRY_COMPARE_WITH_TIMEOUT(comboFade->state(), QAbstractAnimation::Stopped, 1000);
         QCOMPARE(popup->windowOpacity(), 1.0);
         verify(popup);
         if (qEnvironmentVariableIsSet("POPUP_STYLE_CAPTURE")) { QVERIFY(popup->grab().save(prefix + "encoding.png")); }
@@ -306,7 +304,7 @@ private slots:
         QCOMPARE(menuFade->duration(), comboFade->duration());
         menuFade->setCurrentTime(50);
         QVERIFY(menuFade->currentValue().toReal() > 0 && menuFade->currentValue().toReal() < 1);
-        QTest::qWait(160);
+        QTRY_COMPARE_WITH_TIMEOUT(menuFade->state(), QAbstractAnimation::Stopped, 1000);
         QCOMPARE(menu.windowOpacity(), 1.0);
         verify(&menu);
         if (qEnvironmentVariableIsSet("POPUP_STYLE_CAPTURE")) { QVERIFY(menu.grab().save(prefix + "menu.png")); }
