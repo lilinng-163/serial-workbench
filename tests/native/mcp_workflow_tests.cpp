@@ -366,6 +366,32 @@ private slots:
         }
         window.close();
     }
+
+    void auditTableFollowsNewestEntries()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        window.show();
+        window.openSettings();
+        auto pages = window.settingsDialog->findChild<sw::DetachableTabs *>("settingsPages");
+        auto mcpTabs = window.settingsDialog->findChild<sw::DetachableTabs *>("mcpPages");
+        QVERIFY(pages && mcpTabs);
+        pages->setCurrentIndex(1);
+        mcpTabs->setCurrentIndex(2);
+        for (int i = 0; i < 40; ++i)
+        {
+            mcp.audit.append(QJsonObject {{"seq", i + 1}, {"time", "2026-10-17T07:00:00.000Z"}, {"tool", "get_status"},
+                {"client", "test"}, {"summary", "get_status"}, {"status", "ok"}, {"duration_ms", 0}});
+        }
+        mcp.calls = 40;
+        QTRY_COMPARE(window.auditTable->topLevelItemCount(), 40);
+        auto scroll = window.auditTable->verticalScrollBar();
+        QTRY_VERIFY(scroll->maximum() > 0);
+        QTRY_COMPARE(scroll->value(), scroll->maximum());
+        window.close();
+    }
 };
 
 QTEST_MAIN(McpWorkflowTests)

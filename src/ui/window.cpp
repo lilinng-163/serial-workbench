@@ -2196,6 +2196,8 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
             if (auditTable->property("lastSequence").toLongLong() != mcp->calls)
             {
                 auditTable->setProperty("lastSequence", mcp->calls);
+                const auto scroll = auditTable->verticalScrollBar();
+                const bool follow = scroll->value() >= scroll->maximum() - 2;
                 auditTable->setUpdatesEnabled(false);
                 auditTable->clear();
                 for (const auto &value : mcp->audit)
@@ -2208,6 +2210,10 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
                     row->setToolTip(0, item["tool"].toString());
                 }
                 auditTable->setUpdatesEnabled(true);
+                if (follow && auditTable->topLevelItemCount() > 0)
+                {
+                    auditTable->scrollToItem(auditTable->topLevelItem(auditTable->topLevelItemCount() - 1));
+                }
             }
         }
     });
