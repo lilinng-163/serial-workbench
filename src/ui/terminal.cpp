@@ -153,6 +153,22 @@ void LogView::reset()
     streams.clear();
 }
 
+void LogView::setFilter(const SearchFilter &criteria)
+{
+    matcher = criteria;
+    filter = criteria.text;
+    const int previous = verticalScrollBar()->value();
+    for (auto block = document()->begin(); block.isValid(); block = block.next())
+    {
+        const bool visible = matcher.matches(block.text());
+        block.setVisible(visible);
+        block.setLineCount(visible ? 1 : 0);
+    }
+    document()->markContentsDirty(0, document()->characterCount());
+    viewport()->update();
+    verticalScrollBar()->setValue(follow ? verticalScrollBar()->maximum() : previous);
+}
+
 void LogView::feed(const QJsonObject &event)
 {
     const QString direction = event["direction"].toString();
@@ -196,6 +212,10 @@ void LogView::feed(const QJsonObject &event)
             }
             cursor.insertText(prefix, format);
             stream.block = cursor.block();
+            const bool visible = matcher.matches(stream.block.text());
+            stream.block.setVisible(visible);
+            stream.block.setLineCount(visible ? 1 : 0);
+            document()->markContentsDirty(stream.block.position(), stream.block.length());
         }
     };
     for (int at = 0; at < text.size(); ++at)
@@ -283,7 +303,9 @@ void LogView::feed(const QJsonObject &event)
         cursor.insertText(run, format);
         if (!filter.isEmpty())
         {
-            stream.block.setVisible(stream.block.text().contains(filter, Qt::CaseInsensitive));
+            const bool visible = matcher.matches(stream.block.text());
+            stream.block.setVisible(visible);
+            stream.block.setLineCount(visible ? 1 : 0);
             document()->markContentsDirty(stream.block.position(), stream.block.length());
         }
     }

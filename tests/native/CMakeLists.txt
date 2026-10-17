@@ -182,3 +182,14 @@ add_test(NAME button_motion_tests COMMAND "${CMAKE_COMMAND}" -E env
     -o "${PROJECT_BINARY_DIR}/button-motion-tests.txt,txt"
 )
 set_tests_properties(button_motion_tests PROPERTIES TIMEOUT 30)
+
+qt_add_executable(search_filter_tests search_filter_tests.cpp)
+workbench_configure_target(search_filter_tests)
+target_link_libraries(search_filter_tests PRIVATE workbench_ui Qt6::Test)
+add_test(NAME search_filter_tests COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=${workbench_test_path}"
+    $<TARGET_FILE:search_filter_tests>
+    -platform offscreen
+    -o "${PROJECT_BINARY_DIR}/search-filter-tests.txt,txt"
+)
+set_tests_properties(search_filter_tests PROPERTIES TIMEOUT 30)

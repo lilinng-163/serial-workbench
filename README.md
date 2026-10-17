@@ -76,6 +76,8 @@ The installer includes the runtime libraries and MCP bridge. SSH uses the Window
 4. Click **+ → 新建控件页面** to add a waveform, JSON, XML or serial-control page. Choose its data source; several pages can share one connection.
 5. Open **设置 → AI / MCP** to connect your agent to the running application.
 
+The receive log, serial monitor window and JSON/XML record list share the same search controls: **Aa** (case sensitive), **ab** (whole word), **.*** (regular expression) and **&&** (logical matching). All switches start off. With logical matching enabled, `temperature && alarm || fault` means both `temperature` and `alarm`, or `fault` (`&&` takes precedence). Use double quotes around terms containing operators, such as `"A||B"`; quoted regex terms also work when both modes are enabled. Invalid expressions show a warning border and an explanation on hover, keeping records visible. Search settings are saved with the page/window; filtering changes only the display, including while paused, and leaves shared MCP history intact.
+
 No device nearby? Select **Demo · 演示波形** as a waveform data source, or launch the bundled demo:
 
 ```powershell

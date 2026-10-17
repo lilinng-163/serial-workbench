@@ -35,6 +35,7 @@ private:
     Theme appearance;
     QFont dataFont;
     LogView *log = nullptr;
+    FilterBox *filter = nullptr;
     QLabel *source = nullptr;
     QLabel *connection = nullptr;
     QLabel *statistics = nullptr;

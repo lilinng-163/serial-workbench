@@ -40,6 +40,8 @@ add_library(workbench_ui OBJECT
     wave_plot.cpp
     wave_settings.cpp
     controls.h
+    search_filter.cpp
+    search_filter.h
     terminal.cpp
     terminal.h
     docking.cpp

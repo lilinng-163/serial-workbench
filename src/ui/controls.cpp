@@ -319,6 +319,10 @@ QString Theme::stylesheet() const
         QComboBox#protocolSelector { background: $hover; border-color: $edge; padding: 8px 28px 8px 10px; }
         QComboBox#protocolSelector:focus { border-color: $accent; }
         QLineEdit#searchBox { padding: 5px 8px; background: $panel; }
+        QLineEdit#searchBox[invalidFilter="true"] { border-color: $red; }
+        QToolButton[searchOption="true"] { padding: 0; min-height: 0; border-radius: 4px; font-family: 'Segoe UI'; font-size: 12px; color: $muted; }
+        QToolButton[searchOption="true"]:hover { background: $hover; color: $text; }
+        QToolButton[searchOption="true"]:checked { background: $hover; color: $accent; border-color: $accent; }
         QLineEdit#tabTitleEditor, QLineEdit#tabTitleEditor:focus, QLineEdit#tabTitleEditor:hover { background: $panel; color: $text; border: none; border-bottom: 1px solid $edge; border-radius: 0; padding: 0 3px; min-height: 0; }
         QComboBox { padding-right: 28px; combobox-popup: 0; }
         QComboBox::drop-down { border: none; width: 28px; }
