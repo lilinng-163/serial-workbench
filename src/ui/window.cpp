@@ -2527,7 +2527,7 @@ QMenu *Window::newPageMenu()
 {
     auto menu = new QMenu(this);
     menu->setObjectName("newPageMenu");
-    auto receive = menu->addAction(icon("lightning", theme.text), "新建收发页面", this, [this] { newConnection(); });
+    auto receive = menu->addAction(icon("plus", theme.text), "新建收发页面", this, [this] { newConnection(); });
     receive->setObjectName("newReceivePage");
     menu->addSeparator();
     auto widgets = menu->addMenu(icon("widgets", theme.text), "新建控件页面");
