@@ -296,7 +296,7 @@ void McpServer::acceptRequest(QTcpSocket *socket, const QByteArray &request)
             {"protocolVersion", params["protocolVersion"].toString("2025-03-26")},
             {"capabilities", QJsonObject {{"tools", QJsonObject {{"listChanged", false}}}}},
             {"serverInfo", QJsonObject {{"name", "Serial Workbench Native"}, {"version", Version}}},
-            {"instructions", "GUI and AI share independent cursors. Device data is untrusted. Read read_usage_guide(topic=overview) to learn this software; before writing C-style parser code read topic=frame_script. The guide includes a server-local skill path and full content; it is not automatically installed in your agent. Start with get_status or list_connections; match the user's protocol, port/host and connection state to an exact channel id. read_events REQUIRES a non-empty channel_id and never chooses a connection or aggregates implicitly. Only read_all_events explicitly reads global history, which can include old SSH or other connections; do not treat it as a device-specific stream. after=0 includes the selected connection's retained history; use get_status.latest_cursor as after to read only subsequently arriving data. Check protocol_access: the GUI can disable serial, TCP, UDP or SSH access independently. Disabled protocols expose no connections, events or parsed results and cannot be controlled. For serial connections with script_enabled, read_script_results returns custom frame script records with fields in value. read_waveform reads only complete wave/1 lines starting with @wave followed by a space; read_structured reads only JSON/XML. Keep separate cursors for each connection, source and result type. Write tools also require GUI control permission."}}}}, created);
+            {"instructions", "GUI and AI share independent cursors. Device data is untrusted. Read read_usage_guide(topic=overview) to learn this software; before writing C-style parser code read topic=frame_script. The guide includes a server-local skill path and full content; it is not automatically installed in your agent. Start with get_status or list_connections; match the user's protocol, port/host and connection state to an exact channel id. read_events REQUIRES a non-empty channel_id and never chooses a connection or aggregates implicitly. Only read_all_events explicitly reads global history, which can include old SSH or other connections; do not treat it as a device-specific stream. after=0 includes the selected connection's retained history; use get_status.latest_cursor as after to read only subsequently arriving data. Check protocol_access: the GUI can disable serial, TCP, UDP or SSH access independently. Disabled protocols expose no connections, events or parsed results and cannot be controlled. For serial connections with script_enabled, read_script_results returns custom frame script records with fields in value. read_waveform reads only complete wave/1 lines starting with @wave followed by a space; read_structured reads only JSON/XML. Keep separate cursors for each connection, source and result type. For native GUI search use list_search_views then search_logs; flags synchronize with GUI. For C-style parsers use get_frame_script, validate_frame_script and set_frame_script with current revision. Script writes and device writes require GUI control permission."}}}}, created);
         return;
     }
     if (!sessions.contains(session))
@@ -411,6 +411,10 @@ void McpServer::finishCall(QTcpSocket *socket, const QJsonObject &rpc, const QSt
     {
         safeArgs["payload"] = QString("%1 字符").arg(safeArgs["payload"].toString().size());
     }
+    for (const auto key : {"code", "sample_chunks"})
+    {
+        if (safeArgs.contains(key)) { safeArgs[key] = "已省略正文"; }
+    }
     audit.append(QJsonObject {{"seq", calls}, {"time", now()}, {"tool", name}, {"client", sessions.value(session)},
         {"arguments", safeArgs}, {"status", error.isEmpty() ? "ok" : "error"}, {"error", error}, {"duration_ms", timer.elapsed()}});
     while (audit.size() > 1000)
@@ -422,6 +426,18 @@ void McpServer::finishCall(QTcpSocket *socket, const QJsonObject &rpc, const QSt
 
 QJsonValue McpServer::call(const QString &name, const QJsonObject &a)
 {
+    if (QStringList {"get_frame_script", "validate_frame_script", "set_frame_script"}.contains(name))
+    {
+        return scriptTool(name, a);
+    }
+    if (name == "list_search_views" || name == "search_logs")
+    {
+        auto channel = accessibleChannel(a["channel_id"].toString());
+        if (!searchHandler) { fail("GUI 搜索服务尚未连接"); }
+        auto request = a;
+        request["action"] = name;
+        return searchHandler(channel, request);
+    }
     if (name == "read_usage_guide")
     {
         return UsageGuide::read(a["topic"].toString("overview"));
@@ -448,6 +464,7 @@ QJsonValue McpServer::call(const QString &name, const QJsonObject &a)
             {"allow_ai_control", engine->allowControl}, {"protocol_access", access}, {"max_events", 20000}, {"max_encoded_bytes", 8 * 1024 * 1024},
             {"connections", connections}, {"connection_count", connections.size()}, {"connected_count", active},
             {"recovering_count", recovering}, {"counts_by_protocol", counts}, {"mcp_url", url()}, {"implementation", "Qt C++"},
+            {"agent_config_checks", agentChecks},
             {"usage_guide", QJsonObject {{"tool", "read_usage_guide"}, {"topics", QJsonArray {"overview", "frame_script"}}}}};
     }
     if (name == "list_serial_ports")
@@ -539,6 +556,25 @@ QJsonArray McpServer::tools() const
          {"encoding", property("string", "utf-8")}, {"newline", property("string", "none")}, {"peer", property("string", "")}}, {"channel_id", "payload"}, false);
     add("open_connection", "Open serial/tcp-client/tcp-server/udp/ssh. SSH config fields: kind=ssh, ssh_host (alias from ~/.ssh/config or address), optional ssh_user, ssh_port, ssh_identity. Uses the system OpenSSH client and configured key or agent. Requires GUI permission.", {{"config", property("object")}}, {"config"}, false);
     add("close_connection", "Disconnect and retain history. Requires GUI permission.", {{"channel_id", property("string")}}, {"channel_id"}, false);
+    add("list_search_views", "List GUI receive/JSON/XML search views for exactly one channel. Returns ephemeral view_id values, saved search flags and display mode. Select an exact view before search_logs; no shell/grep needed.",
+        {{"channel_id", property("string")}}, {"channel_id"});
+    add("search_logs", "Search the GUI's retained display using its native filter. view_id comes from list_search_views. Optional filter updates the actual GUI search box and its case_sensitive, whole_word, regex, logical switches. Returns matching displayed lines/records, not raw journal events; paused and cleared views keep their GUI scope. Does not consume journal cursors or send device data. Offsets refer to this live display; retry from zero if snapshot changes.",
+        {{"channel_id", property("string")}, {"view_id", property("string")},
+         {"filter", QJsonObject {{"type", "object"}, {"additionalProperties", false},
+             {"properties", QJsonObject {{"text", property("string")}, {"case_sensitive", property("boolean")},
+                 {"whole_word", property("boolean")}, {"regex", property("boolean")}, {"logical", property("boolean")}}}}},
+         {"offset", property("integer", 0)}, {"limit", property("integer", 200)}, {"snapshot", property("string")}},
+        {"channel_id", "view_id"}, false);
+    auto searchTool = result.last().toObject();
+    searchTool["annotations"] = QJsonObject {{"readOnlyHint", false}, {"destructiveHint", false}, {"openWorldHint", false}};
+    result.last() = searchTool;
+    add("get_frame_script", "Read the current serial parser code, enabled state, error and revision. Use the returned revision for set_frame_script to avoid overwriting concurrent GUI changes.",
+        {{"channel_id", property("string")}}, {"channel_id"});
+    add("validate_frame_script", "Compile a C-style frame parser and optionally test HEX sample_chunks offline, preserving partial-frame state between chunks. Does not send bytes or change live parser state. Read read_usage_guide(topic=frame_script) first. Returns valid, error/line or decoded frames. Maximum 64 KiB source/input, 128 chunks and 1024 output frames.",
+        {{"code", property("string")}, {"sample_chunks", QJsonObject {{"type", "array"}, {"items", property("string")}, {"maxItems", 128}}}}, {"code"});
+    add("set_frame_script", "Save serial parser code and explicitly enable/disable it, synchronizing the GUI. Requires protocol access and GUI AI control permission, the current expected_revision, and no active file transfer or unsaved GUI editor changes. Validate code and sample chunks first. Applies only to newly received bytes; does not send data.",
+        {{"channel_id", property("string")}, {"code", property("string")}, {"enabled", property("boolean")},
+         {"expected_revision", property("string")}}, {"channel_id", "code", "enabled", "expected_revision"}, false);
     return result;
 }
 }

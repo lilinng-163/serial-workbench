@@ -4,6 +4,7 @@
 #include "terminal.h"
 #include "mcp.h"
 #include "update_service.h"
+#include "agent_config.h"
 
 namespace sw
 {
@@ -51,6 +52,7 @@ class Pane : public QWidget
 {
     Q_OBJECT
 public:
+    QString searchViewId = QUuid::createUuid().toString(QUuid::Id128);
     explicit Pane(Window *window, const QString &instrumentKind = {});
     Window *window;
     QPointer<Channel> channel;
@@ -113,7 +115,7 @@ public:
     void clearScriptResults();
     void resizeScriptResults();
     void setChannel(Channel *channel);
-    void tick();
+    void tick(bool includeHidden = false);
     void sendCurrent();
     void setTerminal(bool enabled);
     void clearView();
@@ -134,6 +136,9 @@ class Window : public QMainWindow
 {
     Q_OBJECT
 public:
+    void installMcpUi();
+    void checkAgentEndpoints();
+    std::function<AgentEnvironment()> agentEnvironment = AgentEnvironment::current;
     Window(Engine *engine, McpServer *mcp, const QString &settingsPath, Window *primary = nullptr);
     Window *primary;
     QList<QPointer<Window>> hosts;

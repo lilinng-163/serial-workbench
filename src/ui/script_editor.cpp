@@ -264,6 +264,7 @@ public:
         body->addWidget(status);
         auto footer = new QHBoxLayout();
         enable = new QCheckBox("应用后启用脚本");
+        enable->setObjectName("scriptEnabled");
         enable->setChecked(pane->channel ? pane->channel->scriptEnabled : pane->scriptRequested);
         footer->addWidget(enable);
         footer->addStretch();

@@ -2,6 +2,7 @@
 
 #include "window.h"
 #include "window_chrome.h"
+#include "agent_skill.h"
 
 int main(int argc, char *argv[])
 {
@@ -32,7 +33,27 @@ int main(int argc, char *argv[])
     parser.addOption({"screenshot", "Save window preview", "path"});
     parser.addOption({"ready-file", "Write startup timing", "path"});
     parser.addOption({"quit-after", "Close after milliseconds", "ms"});
+    parser.addOption({"install-skill", "Install the bundled skill for codex/claude-code/opencode/pi without opening the GUI", "agent"});
+    parser.addOption({"skill-report", "Write the skill installation result to a JSON file", "path"});
     parser.process(app);
+    if (parser.isSet("install-skill"))
+    {
+        QJsonObject result;
+        int code = 0;
+        try { result = sw::AgentSkill::install(parser.value("install-skill")); }
+        catch (const std::exception &error)
+        {
+            result = {{"error", QString::fromUtf8(error.what())}};
+            code = 3;
+        }
+        if (parser.isSet("skill-report"))
+        {
+            QSaveFile file(parser.value("skill-report"));
+            const auto bytes = QJsonDocument(result).toJson();
+            if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) { return 4; }
+        }
+        return code;
+    }
     bool validPort = false;
     auto port = parser.value("mcp-port").toUInt(&validPort);
     if (!parser.isSet("mcp-port"))
@@ -77,10 +98,12 @@ int main(int argc, char *argv[])
             socket->disconnectFromServer();
         }
         window.showNormal();
+        window.checkAgentEndpoints();
         window.raise();
         window.activateWindow();
     });
     window.show();
+    QTimer::singleShot(0, &window, &sw::Window::checkAgentEndpoints);
     if (parser.isSet("demo"))
     {
         sw::Config config;

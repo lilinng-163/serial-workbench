@@ -18,7 +18,7 @@
 
 **开始前重新执行 `git fetch origin`、`git status`、`git log`。上述版本和提交是交接快照，不代表未来远程的最新状态。**
 
-本次按用户要求先发布 v0.15.30。后续已提出但尚未实现：MCP 原生搜索与 GUI 同步、脚本写入/验证接口、安装时可选 Agent skill，以及启动时检查各 Agent 的 MCP 地址。此次发布不包含这些扩展，后续按用户指示继续。
+稳定版本 v0.15.30 已先发布。开发分支随后实现 MCP 原生搜索与 GUI 同步、脚本读写/离线验证、安装时可选 Agent skill 和启动地址检查，开发版本为 0.15.31，尚未创建新 Release。具体验证与交接以开发日志最新记录为准。
 
 ## 2. 项目解决什么问题
 
@@ -85,7 +85,7 @@ src/bridge/main.cpp
 4. **SSH 只有终端**：`Pane::setTerminal` 和 `tick` 强制 SSH 终端模式，隐藏模式按钮与发送栏。保留历史滚动、复制、IME、PTY 尺寸同步及替代屏恢复。历史选区不能当作远端输入删除。
 5. **SSH 输入保密**：发送可能包含远端密码，`Channel::send` 不将 SSH 输入正文写入共享日志。认证缓存使用现有 Windows DPAPI 流程，不把密码或私钥写入设置、截图、日志和 MCP。
 6. **波形协议**：仅解析完整 `@wave name=value,...` 行；最多 16 路。脚本结果、普通数字、JSON/XML 不自动变成波形。顶部读数默认前四路、定宽、可换通道。
-7. **脚本边界**：C 风格脚本只用于串口，后台执行且有资源限制；MCP 当前可读结果，不能上传、编译或启用脚本。不要只修改说明就声称新增了工具。
+7. **脚本边界**：C 风格脚本只用于串口，后台执行且有资源限制；MCP 可读取脚本、离线编译试解析；修改/启用需要串口开放、AI 控制权限和最新 revision，不能覆盖 GUI 未保存编辑或正在执行的试解析，文件传输期间也拒绝修改。
 8. **发送与布局**：控件默认手动，各控件自动发送独立；恢复配置、移动或缩放控件不发送命令。文件传输期间遵守原连接独占规则。
 9. **交互约束**：重命名仅右键或 F2，输入框避开图标与关闭按钮；中键关闭页。动画不挤压相邻控件、不改变点击几何区域。圆角检查实际的弹窗和标签底部过渡。
 10. **运行与打包**：启动不自动连接硬件；发行包不包含个人设置、背景图片或测试 Demo。不要覆盖正在运行的程序。发布前验证原生程序和实际下载包。
@@ -120,7 +120,7 @@ ctest --test-dir build/native-release --output-on-failure
 ctest --test-dir build/native-release -R terminal_keyboard_tests --output-on-failure
 
 # 打包目录的集成测试；Python 仅供测试，不是产品运行依赖
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.30
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.31
 ```
 
 Qt 最低 6.9；本机为 Qt 6.11.1 / MinGW 13.1。首次准备 Python 测试环境：

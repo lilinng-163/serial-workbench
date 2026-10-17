@@ -9,12 +9,15 @@ namespace sw
 {
 class AgentPanel : public QWidget
 {
+    Q_OBJECT
 public:
     explicit AgentPanel(McpServer *server, QWidget *parent = nullptr,
         std::function<AgentEnvironment()> environment = AgentEnvironment::current);
     void refresh();
     void configureAll();
     void checkAgent(int index, bool configure);
+signals:
+    void configurationUpdated();
 private:
     struct Card
     {

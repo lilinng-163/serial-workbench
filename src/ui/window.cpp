@@ -1143,11 +1143,11 @@ void Pane::applyAppearance()
     }
 }
 
-void Pane::tick()
+void Pane::tick(bool includeHidden)
 {
     if (instrument)
     {
-        if (isVisible()) { instrument->tick(channel); }
+        if (isVisible() || includeHidden) { instrument->tick(channel); }
         return;
     }
     const bool ready = channel && (channel->state == "connected" || channel->state == "listening");
@@ -1179,7 +1179,7 @@ void Pane::tick()
         repeat->setChecked(false);
     }
     peer->setVisible(channel && (channel->config.kind == "tcp-server" || channel->config.kind == "udp"));
-    if (!channel || !isVisible())
+    if (!channel || (!isVisible() && !includeHidden))
     {
         if (!channel && isVisible()) { refreshScriptResults(); }
         return;
@@ -2148,6 +2148,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     connect(&portTimer, &QTimer::timeout, this, &Window::refreshPorts);
     portTimer.start();
     port->setFocus();
+    if (!primary) { installMcpUi(); }
     if (updater && QGuiApplication::platformName() != "offscreen"
         && !QCoreApplication::arguments().contains("--screenshot"))
     {
@@ -3051,6 +3052,20 @@ void Window::updateStatus()
     serialInfo->setVisible(!serialText.isEmpty());
     mcpStatus->setText(mcp->isListening() ? QString("MCP 就绪  ·  %1").arg(mcp->serverPort()) : "MCP 离线");
     mcpStatus->setToolTip(mcp->error.isEmpty() ? mcp->url() : mcp->error);
+    QStringList mismatches;
+    for (const auto &value : mcp->agentChecks)
+    {
+        const auto check = value.toObject();
+        if (!check["matches"].toBool())
+        {
+            mismatches.append(check["name"].toString() + "：" + check["status"].toString());
+        }
+    }
+    if (!mismatches.isEmpty())
+    {
+        mcpStatus->setText(mcpStatus->text() + QString(" · %1 个 Agent 待检查").arg(mismatches.size()));
+        mcpStatus->setToolTip(mcpStatus->toolTip() + "\n" + mismatches.join('\n') + "\n设置 → AI / MCP → Agent 接入可更新配置");
+    }
 }
 
 void Window::applyTheme(bool dark)
@@ -3502,6 +3517,7 @@ void Window::waveHelp()
 
 void Window::openSettings()
 {
+    rootWindow()->checkAgentEndpoints();
     if (settingsDialog)
     {
         settingsDialog->show();
@@ -3631,7 +3647,7 @@ void Window::openSettings()
     availablePort->setToolTip("立即切换到系统分配的空闲端口，再使用一键更新同步 Agent 地址");
     portResult->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     mcpBody->addWidget(portResult);
-    auto permission = new QCheckBox("允许 AI 发送报文和控制连接");
+    auto permission = new QCheckBox("允许 AI 发送报文、控制连接和应用脚本");
     permission->setChecked(engine->allowControl);
     connect(permission, &QCheckBox::toggled, this, [this](bool checked)
     {
@@ -3688,7 +3704,8 @@ void Window::openSettings()
     connectionBody->addWidget(mcpSummary);
     connectionBody->addWidget(mcpConnections, 1);
     mcpTabs->addTab(connectionPage, "连接总览");
-    auto clients = new AgentPanel(mcp);
+    auto clients = new AgentPanel(mcp, nullptr, rootWindow()->agentEnvironment);
+    connect(clients, &AgentPanel::configurationUpdated, rootWindow(), &Window::checkAgentEndpoints);
     connect(mcp, &McpServer::portChanged, settingsDialog, [this, address, mcpPort, clients](quint16 port)
     {
         address->setText(mcp->url());

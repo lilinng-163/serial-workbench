@@ -1,6 +1,14 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # 更新记录
 
+## 0.15.31 — 开发版，未发布 Release
+
+- MCP 新增 list_search_views / search_logs，直接同步 GUI 搜索条件和匹配开关，读取收发页、JSON/XML 及已打开小窗的显示结果，无需 grep。
+- 新增 get_frame_script / validate_frame_script / set_frame_script，支持离线分块试解析、revision 冲突检查和受 AI 控制权限约束的脚本应用；保留 GUI 未保存编辑及正在试解析的内容。
+- 安装器增加默认不选的 Codex、Claude Code、OpenCode、Pi skill 组件，支持环境目录覆盖、变更备份和同内容幂等安装；不修改 Agent MCP 配置。
+- 启动、再次唤起和端口变化时只读检查 Agent 地址，在 GUI 与 MCP 状态中显示差异；一键更新仍由用户操作。
+- English: add native GUI search and synchronized parser MCP tools, optional per-Agent skill installation, and read-only startup endpoint checks.
+
 ## 0.15.30 — 2026-10-17
 
 ### 新增

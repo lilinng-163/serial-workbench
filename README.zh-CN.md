@@ -84,6 +84,9 @@
 .\SerialWorkbench.exe --demo --view waveform
 ```
 
+
+AI 可通过 `list_search_views`、`search_logs` 原生调用 GUI 搜索，通过 `get_frame_script`、`validate_frame_script`、`set_frame_script` 读取、试解析并应用串口脚本。写入需要 AI 控制权限和最新 revision，不覆盖 GUI 未保存内容。安装器可选安装 Codex / Claude Code / OpenCode / Pi skill；启动及切换端口时只读检查各 Agent 的 MCP 地址。详见 [Agent 接入说明](docs/agent-integration.md)。
+
 ### 终端与工作区快捷操作
 
 | 操作 | 快捷键 / 交互 |
@@ -246,7 +249,7 @@ $env:MINGW_BIN = 'C:/Qt/Tools/mingw1310_64/bin'
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r tests/integration/requirements.txt
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.30
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.31
 ```
 
 安装 NSIS，并提供匹配的 Qt 源码目录收集许可证，即可生成安装包、单文件启动器和便携 ZIP：

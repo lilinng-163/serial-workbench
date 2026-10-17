@@ -167,6 +167,36 @@ Section "工作台与 MCP（必需）" Application
     ${EndIf}
 SectionEnd
 
+!macro InstallAgentSkill AGENT
+    InitPluginsDir
+    ClearErrors
+    ExecWait '"$INSTDIR\SerialWorkbench.exe" --install-skill ${AGENT} --skill-report "$PLUGINSDIR\skill-${AGENT}.json"' $0
+    ${If} ${Errors}
+        StrCpy $0 4
+    ${EndIf}
+    ${If} $0 != 0
+        DetailPrint "${AGENT} skill 安装失败；主程序安装已完成。"
+        MessageBox MB_OK|MB_ICONEXCLAMATION "${AGENT} skill 未安装完成。请检查用户目录写入权限，稍后可重新运行安装器选择此组件。已有 skill 文件会先备份。" /SD IDOK
+    ${EndIf}
+!macroend
+
+!ifdef WORKBENCH_TEST_SKILL_CODEX
+Section "Codex 使用指南 skill（当前用户 .codex/skills）" SkillCodex
+!else
+Section /o "Codex 使用指南 skill（当前用户 .codex/skills）" SkillCodex
+!endif
+    !insertmacro InstallAgentSkill codex
+SectionEnd
+Section /o "Claude Code 使用指南 skill（当前用户 .claude/skills）" SkillClaude
+    !insertmacro InstallAgentSkill claude-code
+SectionEnd
+Section /o "OpenCode 使用指南 skill（当前用户 .config/opencode/skills）" SkillOpenCode
+    !insertmacro InstallAgentSkill opencode
+SectionEnd
+Section /o "Pi Agent 使用指南 skill（当前用户 .pi/agent/skills）" SkillPi
+    !insertmacro InstallAgentSkill pi
+SectionEnd
+
 Section "创建桌面快捷方式" Desktop
     CreateShortCut "$DESKTOP\${PRODUCT_NAME}.lnk" "$INSTDIR\SerialWorkbench.exe" "" "$INSTDIR\SerialWorkbench.exe" 0
 SectionEnd
@@ -174,6 +204,10 @@ SectionEnd
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
 !insertmacro MUI_DESCRIPTION_TEXT ${Application} "安装软件、运行库、共享 MCP 桥、开始菜单与卸载程序。"
 !insertmacro MUI_DESCRIPTION_TEXT ${Desktop} "在当前用户桌面创建浅绿色闪电图标的快捷方式。"
+!insertmacro MUI_DESCRIPTION_TEXT ${SkillCodex} "可选。安装软件/MCP/脚本使用指南；遵循 CODEX_HOME，变更文件先备份，不修改 MCP 地址或其他配置。卸载软件时保留 skill。"
+!insertmacro MUI_DESCRIPTION_TEXT ${SkillClaude} "可选。遵循 CLAUDE_CONFIG_DIR，保留已有 skill 备份；安装后重载 Agent。"
+!insertmacro MUI_DESCRIPTION_TEXT ${SkillOpenCode} "可选。遵循 OPENCODE_CONFIG_DIR 或 XDG_CONFIG_HOME，安装后重载 Agent。"
+!insertmacro MUI_DESCRIPTION_TEXT ${SkillPi} "可选。遵循 PI_CODING_AGENT_DIR，安装后可使用 /reload。"
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
 
 Function un.onInit

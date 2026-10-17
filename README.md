@@ -84,6 +84,9 @@ No device nearby? Select **Demo · 演示波形** as a waveform data source, or 
 .\SerialWorkbench.exe --demo --view waveform
 ```
 
+
+MCP clients can call `list_search_views` and `search_logs` to use the actual GUI filters, and `get_frame_script`, `validate_frame_script`, `set_frame_script` to inspect, test and apply serial parsers. Writes require AI control permission and a current revision; unsaved GUI edits are protected. The installer offers optional Codex / Claude Code / OpenCode / Pi skills. Startup and port changes check Agent MCP addresses without rewriting configuration. See [Agent integration](docs/agent-integration.md).
+
 ### Terminal and workspace shortcuts
 
 | Action | Shortcut / interaction |
@@ -248,7 +251,7 @@ The build script compiles the application, runs native tests and deploys Qt libr
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r tests/integration/requirements.txt
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.30
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.31
 ```
 
 To create the installer, single-file launcher and portable ZIP, install NSIS and provide the matching Qt source tree for license notices:

@@ -106,8 +106,8 @@ AI 通过 MCP 工具主动读取解析结果，不会自动逐帧推送；读取
 }
 ```
 
-输出在 `sources.default.records` 中，例如 `{"format":"script","value":{"温度":25,"电压":3.3}, ...}`，`event_seq` 对应完成该帧的原始接收批次。下次把 `sources.default.next_cursor` 作为该 AI 自己的游标；其他 AI 和界面分别保留自己的游标。`read_waveform` 只返回设备按波形格式发送的数据，`read_structured` 只返回 JSON / XML；三类结果的游标分别保存。脚本代码由界面编辑与启用，MCP 提供结果读取。
+输出在 `sources.default.records` 中，例如 `{"format":"script","value":{"温度":25,"电压":3.3}, ...}`，`event_seq` 对应完成该帧的原始接收批次。下次把 `sources.default.next_cursor` 作为该 AI 自己的游标；其他 AI 和界面分别保留自己的游标。`read_waveform` 只返回设备按波形格式发送的数据，`read_structured` 只返回 JSON / XML；三类结果的游标分别保存。脚本可由界面编辑启用，或由具有控制权限的 MCP 使用 revision 同步应用；结果使用独立游标读取。
 
 0.14.0 起脚本结果使用 `read_script_results`，不再由 `read_waveform` 或 `read_structured` 返回。更新后应刷新 AI 客户端的 MCP 工具列表。
 
-AI 接入 MCP 后可用 `read_usage_guide(topic="frame_script")` 直接获取同一份脚本规则与可运行示例；`read_usage_guide()` 返回软件 skill 正文和服务端路径。没有本机文件访问权限的 Agent 可直接读取正文。该指南不提供不存在的脚本上传或启用工具，AI 生成的代码仍需在编辑器检查、试解析后保存。
+AI 接入 MCP 后可用 `read_usage_guide(topic="frame_script")` 直接获取同一份脚本规则与可运行示例；`read_usage_guide()` 返回软件 skill 正文和服务端路径。没有本机文件访问权限的 Agent 可直接读取正文。AI 可调用 get_frame_script 读取代码和 revision，使用 validate_frame_script 离线试解析，再在用户授权且控制权限开启时，以 expected_revision 调用 set_frame_script 保存并明确启用/停用。GUI 未保存编辑或正在试解析时不会被覆盖。
