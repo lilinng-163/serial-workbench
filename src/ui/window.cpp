@@ -16,6 +16,8 @@
 #include <QProcess>
 #include <QProgressBar>
 #include <QTextCodec>
+#include <QGuiApplication>
+#include <QScreen>
 #include <numeric>
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -1157,7 +1159,14 @@ void Pane::tick()
     const bool ssh = (channel ? channel->config.kind : draft.kind) == "ssh";
     terminal->keyboardSelectionEnabled = ssh;
     modeButton->setVisible(!ssh);
-    if (ssh && !terminalMode) { setTerminal(true); }
+    if (ssh)
+    {
+        if (!terminalMode) { setTerminal(true); }
+    }
+    else if (terminalMode != userTerminalMode)
+    {
+        setTerminal(userTerminalMode);
+    }
     transferButton->setVisible((channel ? channel->config.kind : draft.kind) == "serial");
     transferButton->setEnabled(available && channel->serial);
     exportButton->setEnabled(channel);
@@ -1239,6 +1248,7 @@ void Pane::setTerminal(bool enabled)
     if (instrument) { return; }
     const bool ssh = (channel ? channel->config.kind : draft.kind) == "ssh";
     if (ssh) { enabled = true; }
+    if (!ssh) { userTerminalMode = enabled; }
     modeButton->setVisible(!ssh);
     if (enabled && !sender->isHidden())
     {
@@ -1534,7 +1544,9 @@ void Pane::restore(const QJsonObject &settings)
         senderSizes = {sizes[0].toInt(), sizes[1].toInt()};
         QTimer::singleShot(0, this, [this] { splitter->setSizes(senderSizes); });
     }
-    setTerminal((channel && channel->config.kind == "ssh") || settings["terminal_mode"].toBool());
+    const bool ssh = (channel ? channel->config.kind : draft.kind) == "ssh";
+    userTerminalMode = channel && !ssh && settings.value("terminal_mode").toBool();
+    setTerminal(ssh || userTerminalMode);
     if (!supportsScript()) { scriptRequested = false; }
     else if (settings.contains("script_code"))
     {
@@ -1582,7 +1594,8 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     setWindowIcon(QIcon(":/brand/lightning.svg"));
     setFont(Theme::interfaceFont());
     setMinimumSize(480, 320);
-    resize(1400, 900);
+    const QScreen *screen = QGuiApplication::primaryScreen();
+    resize(1400, qMin(960, screen ? screen->availableGeometry().height() : 960));
     QFile settingsFile(path);
     if (settingsFile.open(QIODevice::ReadOnly))
     {
@@ -3202,8 +3215,20 @@ void Window::beginTabRename(int index)
     // Use the style's text area so icon sizes, padding and close buttons stay clear.
     auto textRect = tabs->style()->subElementRect(QStyle::SE_TabBarTabText, &option, tabs);
     const auto tabRect = tabs->tabRect(index);
-    textRect.setTop(tabRect.top() + 8);
-    textRect.setBottom(tabRect.bottom() - 7);
+    // Grow the editor across the free space up to the close button so the title
+    // is not clipped by the field frame, while still clearing the tab icon.
+    if (auto *closeButton = tabs->tabButton(index, QTabBar::RightSide))
+    {
+        if (closeButton->geometry().left() > textRect.left())
+        {
+            textRect.setRight(closeButton->geometry().left() - 4);
+        }
+    }
+    // Anchor the underline just below the title text instead of the tab box.
+    const int textHeight = editor->fontMetrics().height();
+    const int center = tabRect.center().y();
+    textRect.setTop(center - textHeight / 2 - 3);
+    textRect.setBottom(center + textHeight / 2 + 2);
     editor->setGeometry(textRect);
     QPointer<Pane> selected = pane;
     editor->onFinish = [this, editor, selected](bool accept)

@@ -517,6 +517,48 @@ private slots:
         QVERIFY(!pane->sender->isHidden());
         window.close();
     }
+
+    void switchingFromSshBackToSerialRestoresLogView()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer server(&engine);
+        sw::Window window(&engine, &server, directory.filePath("settings.json"));
+        auto pane = window.newConnection();
+        pane->draft.kind = "ssh";
+        pane->tick();
+        QVERIFY(pane->terminalMode);
+        QVERIFY(pane->sender->isHidden());
+        pane->draft.kind = "serial";
+        pane->tick();
+        QVERIFY(!pane->terminalMode);
+        QCOMPARE(pane->display->currentWidget(), static_cast<QWidget *>(pane->log));
+        QVERIFY(!pane->sender->isHidden());
+        QVERIFY(!pane->modeButton->isHidden());
+        window.close();
+    }
+
+    void manualTerminalPreferenceSurvivesSshExcursion()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer server(&engine);
+        sw::Window window(&engine, &server, directory.filePath("settings.json"));
+        auto pane = window.newConnection();
+        pane->draft.kind = "serial";
+        pane->tick();
+        QTest::mouseClick(pane->modeButton, Qt::LeftButton);
+        QVERIFY(pane->terminalMode);
+        pane->draft.kind = "ssh";
+        pane->tick();
+        QVERIFY(pane->terminalMode);
+        pane->draft.kind = "serial";
+        pane->tick();
+        QVERIFY(pane->terminalMode);
+        QVERIFY(pane->sender->isHidden());
+        QCOMPARE(pane->display->currentWidget(), static_cast<QWidget *>(pane->terminal));
+        window.close();
+    }
 };
 QTEST_MAIN(TerminalKeyboardTests)
 #include "terminal_keyboard_tests.moc"
