@@ -390,6 +390,43 @@ private slots:
         auto scroll = window.auditTable->verticalScrollBar();
         QTRY_VERIFY(scroll->maximum() > 0);
         QTRY_COMPARE(scroll->value(), scroll->maximum());
+
+        // Reading an older call must keep both its position and selection when
+        // a new call arrives; rebuilding the table used to reset both.
+        scroll->setValue(5);
+        auto selected = window.auditTable->topLevelItem(8);
+        window.auditTable->setCurrentItem(selected);
+        scroll->setValue(5);
+        const auto top = window.auditTable->itemAt(QPoint(1, 1));
+        QVERIFY(top);
+        const auto topSequence = top->data(0, Qt::UserRole).toJsonObject()["seq"].toInteger();
+        const auto selectedSequence = selected->data(0, Qt::UserRole).toJsonObject()["seq"].toInteger();
+        mcp.audit.append(QJsonObject {{"seq", 41}, {"tool", "get_status"}, {"status", "ok"}});
+        mcp.calls = 41;
+        QTRY_COMPARE(window.auditTable->topLevelItemCount(), 41);
+        const auto restoredTop = window.auditTable->itemAt(QPoint(1, 1));
+        QVERIFY(restoredTop);
+        QCOMPARE(restoredTop->data(0, Qt::UserRole).toJsonObject()["seq"].toInteger(), topSequence);
+        QVERIFY(window.auditTable->currentItem());
+        QCOMPARE(window.auditTable->currentItem()->data(0, Qt::UserRole).toJsonObject()["seq"].toInteger(), selectedSequence);
+
+        // Evicting the oldest retained row must preserve the same visible call.
+        mcp.audit.removeFirst();
+        mcp.audit.append(QJsonObject {{"seq", 42}, {"tool", "get_status"}, {"status", "ok"}});
+        mcp.calls = 42;
+        QTRY_COMPARE(window.auditTable->property("lastSequence").toLongLong(), 42);
+        const auto retainedTop = window.auditTable->itemAt(QPoint(1, 1));
+        QVERIFY(retainedTop);
+        QCOMPARE(retainedTop->data(0, Qt::UserRole).toJsonObject()["seq"].toInteger(), topSequence);
+        QVERIFY(window.auditTable->currentItem());
+        QCOMPARE(window.auditTable->currentItem()->data(0, Qt::UserRole).toJsonObject()["seq"].toInteger(), selectedSequence);
+
+        // Following resumes once the user returns to the bottom.
+        scroll->setValue(scroll->maximum());
+        mcp.audit.append(QJsonObject {{"seq", 43}, {"tool", "get_status"}, {"status", "ok"}});
+        mcp.calls = 43;
+        QTRY_COMPARE(window.auditTable->topLevelItemCount(), 42);
+        QTRY_COMPARE(scroll->value(), scroll->maximum());
         window.close();
     }
 };

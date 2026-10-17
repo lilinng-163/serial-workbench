@@ -2,6 +2,19 @@
 
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
 
+## 2026-10-17 — Codex 审查 DeepSeek 并发布 0.15.31
+
+- 用户目标：查阅并合并 `deepseek-dev`，随后发布正式 Release；保留开发分支，网站和国内镜像继续冻结。
+- 集成范围：从 `origin/main=d8d7084` 创建独立审查分支 `codex/review-release-0.15.31`，非快进合并 `origin/deepseek-dev=e95c1bf`；保留 `e1f402b` 的 MCP 搜索/脚本/可选 skill 工作，以及 DeepSeek 的 `877a437`、`1e1402d`、`e95c1bf` 三个提交历史。
+- 审查：按 codebase-memory 查询入口和调用链，针对索引标记的解析与时效缺口回读源码；检查权限、独立读取、脚本 revision/未保存编辑保护、非模态脚本窗口、AI 提示及审计展示。发现调用日志刷新会清除选中项，补充按调用序号恢复选中项和回看锚点；最旧记录淘汰后仍保留存续锚点，回到底部后恢复自动跟随。
+- 文档：补齐中英文 README 的新工具表格，移除“脚本只能在 GUI 编辑”的过时说明；更新交接入口、更新记录和 `docs/releases/0.15.31.md`。
+- 构建与测试：原生 Release 构建成功；16/16 CTest 通过，共 399 项通过、4 项可选联网/真机测试跳过。Windows 原生工作流 9 项通过，检查 AI 提示、脚本编辑器和调用详情截图。新增回看测试先复现选中项丢失，再验证修复、旧行淘汰和恢复跟随；首轮新增测试的临时 JSON 引用错误已修正，相关失败日志保留。
+- 分发验证：`smoke_installer.py` 通过可选 Codex skill、中文目录安装、原路径升级、设置/用户文件保留、无 SDK 启动、运行中保护、HTTP/STDIO 17 工具和卸载检查；使用隔离配置与独立测试注册项，没有修改真实 Agent 配置。`smoke_release.py` 通过便携 ZIP、单文件首次启动/缓存复用/损坏缓存修复及 HTTP/STDIO 工作流。
+- 产物：`dist/local/0.15.31/` 包含安装包、单文件 EXE、便携 ZIP 和 `SHA256SUMS.txt`；三个原生 EXE 与本次构建一致，payload 不含个人设置或测试 Demo。打包及验证记录在忽略目录 `build/release-0.15.31-verification/`，payload 为 `build/release-0.15.31-be0faecd/SerialWorkbench/`。
+- 安装包 SHA-256：`1abc1b811e5339ddc2d6adf469228fad6859bc699059f39949d4bcb3928f6353`；大小 15,439,442 字节。
+- 提交与发布：本记录随发行提交，使用普通推送同步 `main`、`deepseek-dev` 与 `v0.15.31` 标签；GitHub Release 上传上述四项产物并核对远端大小和 SHA-256 后公开。最终提交、上传核验和发布结果见交接回复。
+- 限制与后续：本轮没有物理串口或外部真实 SSH 主机联调；升级后 Agent 需重载 MCP 连接以发现新增工具。未更新网站、服务器或国内镜像；不删除 `deepseek-dev`，下次 DeepSeek 从同步后的分支继续。
+
 ## 2026-10-17 — 调用日志自动跟随最新记录
 
 - 执行者：DeepSeek。

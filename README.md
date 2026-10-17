@@ -197,6 +197,9 @@ The bridge forwards to the running desktop application. Reload the agent's MCP c
 | Discover sessions and ports | `get_status`, `list_connections`, `list_serial_ports` |
 | Read raw device output | `read_events` for one connection; `read_all_events` for mixed history |
 | Inspect parsed data | `read_waveform`, `read_structured`, `read_script_results` |
+| Search the GUI display | `list_search_views`, `search_logs` — share case, whole-word, regex and logical switches with the GUI |
+| Inspect or test a serial parser | `get_frame_script`, `validate_frame_script` — offline tests leave the live parser unchanged |
+| Apply a serial parser | `set_frame_script` — requires AI control permission and the latest revision; protects unsaved GUI edits |
 | Learn the workflow / parser syntax | `read_usage_guide` |
 | Send data or manage connections | `send_data`, `open_connection`, `close_connection` — requires AI control permission |
 
@@ -206,7 +209,7 @@ Example prompts:
 
 > Inspect the temperature and voltage channels. Find spikes and correlate them with the raw receive events.
 
-The bundled [Serial Workbench skill](skills/serial-workbench/SKILL.md) explains connection selection, incremental reading and C-style frame scripts. Agents can retrieve the guide directly with `read_usage_guide`; installing a skill into an agent is a separate step. MCP currently reads script results; scripts are edited and enabled in the GUI.
+The bundled [Serial Workbench skill](skills/serial-workbench/SKILL.md) explains connection selection, incremental reading, native search and C-style frame scripts. Agents can retrieve the guide directly with `read_usage_guide`; the installer also offers optional Agent skill components. AI-opened connections and applied scripts appear in the GUI. An activity notice links to call details and the audit log.
 
 ### Access and shared history
 

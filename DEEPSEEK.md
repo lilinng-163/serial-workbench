@@ -10,15 +10,15 @@
 | 本机源码 | `E:/demo/serial`；其他机器以实际克隆目录为准 |
 | 正式主线 | `main` |
 | DeepSeek 开发分支 | `deepseek-dev` |
-| 交接基线 | 以 `v0.15.30` 标签及最新开发交接记录为准 |
-| 已发布版本 | [v0.15.30](https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.30)，2026-10-17 |
+| 交接基线 | 以 `v0.15.31` 标签及最新开发交接记录为准 |
+| 已发布版本 | [v0.15.31](https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.31)，2026-10-17 |
 | 技术栈 | C++17、Qt Widgets / Network / SerialPort / Core5Compat / Svg、CMake、Ninja |
 | 主要分发平台 | Windows x64；Docker 用于 Linux 开发构建 |
 | 用户文档 | [English](README.md) / [简体中文](README.zh-CN.md) |
 
 **开始前重新执行 `git fetch origin`、`git status`、`git log`。上述版本和提交是交接快照，不代表未来远程的最新状态。**
 
-稳定版本 v0.15.30 已先发布。开发分支随后实现 MCP 原生搜索与 GUI 同步、脚本读写/离线验证、安装时可选 Agent skill 和启动地址检查，开发版本为 0.15.31，尚未创建新 Release。具体验证与交接以开发日志最新记录为准。
+v0.15.31 集成 MCP 原生搜索与 GUI 同步、脚本读写/离线验证、安装时可选 Agent skill、启动地址检查，以及 DeepSeek 完成的 AI 活动提示、连接/脚本界面同步与调用详情。Codex 审查时补充了调用日志选中项及回看位置的恢复。具体验证与发布结果以开发日志最新记录为准。
 
 ## 2. 项目解决什么问题
 
@@ -94,7 +94,7 @@ src/bridge/main.cpp
 
 ## 6. 已完成的最近工作
 
-v0.15.30 增加收发页、小窗和 JSON/XML 的大小写、全词、正则、逻辑搜索及设置保存；支持暂停筛选和分段行判断，保留独立共享历史；修复结构化详情选择、SSH 草稿切回串口和标签重命名，并改善默认窗口高度。验证证据和发布结果见最新开发交接记录。
+v0.15.31 将原生搜索与串口脚本工作流开放给 MCP，新增可选 skill、只读地址检查、AI 活动提示、调用详情及界面同步。v0.15.30 增加收发页、小窗和 JSON/XML 的大小写、全词、正则、逻辑搜索及设置保存；支持暂停筛选和分段行判断，保留独立共享历史；修复结构化详情选择、SSH 草稿切回串口和标签重命名，并改善默认窗口高度。验证证据和发布结果见最新开发交接记录。
 
 v0.15.29 已包含：SSH 单一终端模式及一万行历史；串口控制组/预设/自由布局/独立收发小窗；定宽波形读数和通道选择；波形/JSON/XML 本地清空；标签重命名修复与特征图标；设置/下拉圆角和更平稳的控件反馈；MCP 使用指南与 skill；自定义背景；中英双语 README 和七张实图。
 
@@ -149,7 +149,7 @@ python -m venv .venv
   --screenshot build/preview.png --quit-after 2200
 ```
 
-发布步骤见 [安装器说明](docs/windows-installer.md)。网站与国内镜像在本次交接时保持冻结；v0.15.30 只发布 GitHub，不能擅自更新服务器或镜像。
+发布步骤见 [安装器说明](docs/windows-installer.md)。网站与国内镜像在本次交接时保持冻结；v0.15.31 只发布 GitHub，不能擅自更新服务器或镜像。
 
 ## 8. DeepSeek 开发流程
 

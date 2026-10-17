@@ -2198,6 +2198,13 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
                 auditTable->setProperty("lastSequence", mcp->calls);
                 const auto scroll = auditTable->verticalScrollBar();
                 const bool follow = scroll->value() >= scroll->maximum() - 2;
+                const int previousScroll = scroll->value();
+                const auto selected = auditTable->currentItem();
+                const auto top = auditTable->itemAt(QPoint(1, 1));
+                const qint64 selectedSequence = selected ? selected->data(0, Qt::UserRole).toJsonObject()["seq"].toInteger() : -1;
+                const qint64 topSequence = top ? top->data(0, Qt::UserRole).toJsonObject()["seq"].toInteger() : -1;
+                QTreeWidgetItem *restoredSelection = nullptr;
+                QTreeWidgetItem *restoredTop = nullptr;
                 auditTable->setUpdatesEnabled(false);
                 auditTable->clear();
                 for (const auto &value : mcp->audit)
@@ -2208,11 +2215,22 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
                         item["status"] == "ok" ? "成功" : "失败", QString::number(item["duration_ms"].toInteger()), item["error"].toString()});
                     row->setData(0, Qt::UserRole, item);
                     row->setToolTip(0, item["tool"].toString());
+                    if (item["seq"].toInteger() == selectedSequence) { restoredSelection = row; }
+                    if (item["seq"].toInteger() == topSequence) { restoredTop = row; }
                 }
+                if (restoredSelection) { auditTable->setCurrentItem(restoredSelection); }
                 auditTable->setUpdatesEnabled(true);
                 if (follow && auditTable->topLevelItemCount() > 0)
                 {
                     auditTable->scrollToItem(auditTable->topLevelItem(auditTable->topLevelItemCount() - 1));
+                }
+                else if (restoredTop)
+                {
+                    auditTable->scrollToItem(restoredTop, QAbstractItemView::PositionAtTop);
+                }
+                else
+                {
+                    scroll->setValue(previousScroll);
                 }
             }
         }

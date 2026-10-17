@@ -197,6 +197,9 @@ V1 `opencode.json` / `opencode.jsonc` 可合并以下条目：
 | 发现会话与端口 | `get_status`、`list_connections`、`list_serial_ports` |
 | 读取设备原始输出 | `read_events` 读取指定连接，`read_all_events` 读取混合历史 |
 | 查看解析结果 | `read_waveform`、`read_structured`、`read_script_results` |
+| 搜索界面显示内容 | `list_search_views`、`search_logs`，与 GUI 共用大小写、全词、正则和逻辑开关 |
+| 读取或试解析串口脚本 | `get_frame_script`、`validate_frame_script`，离线试解析不改变正在使用的脚本 |
+| 应用串口脚本 | `set_frame_script`，需要 AI 控制权限和最新 revision，保护 GUI 未保存的编辑 |
 | 了解使用流程与脚本语法 | `read_usage_guide` |
 | 发送数据或管理连接 | `send_data`、`open_connection`、`close_connection`，需要开启 AI 控制权限 |
 
@@ -206,7 +209,7 @@ V1 `opencode.json` / `opencode.jsonc` 可合并以下条目：
 
 > 检查 temperature 和 voltage 通道的突变，并与原始接收记录关联。
 
-附带的 [Serial Workbench skill](skills/serial-workbench/SKILL.md) 说明连接选择、增量读取与 C 风格帧脚本。AI 也可直接调用 `read_usage_guide` 获取正文；安装 skill 到某个 Agent 是单独操作。MCP 当前可读取脚本结果，脚本的编辑和启用在界面中完成。
+附带的 [Serial Workbench skill](skills/serial-workbench/SKILL.md) 说明连接选择、增量读取、原生搜索与 C 风格帧脚本。AI 可直接调用 `read_usage_guide` 获取正文，也可在安装器中选装对应 Agent 的 skill。AI 打开的连接和应用的脚本会同步显示在界面中；活动提示可直接打开调用详情与调用日志。
 
 ### 权限与共享历史
 
