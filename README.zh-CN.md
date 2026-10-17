@@ -60,6 +60,8 @@
 
 **[下载最新版本 →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
+v0.15.32 新增版本回溯、Agent skill 配置和脚本样本同步，并修复系统文件选择与串口控件交互。[查看更新说明](docs/releases/0.15.32.md)。
+
 | 文件 | 适合的使用方式 |
 | --- | --- |
 | `SerialWorkbench-<版本>-windows-x64-setup.exe` | 安装版，提供快捷方式和卸载入口，推荐使用。 |

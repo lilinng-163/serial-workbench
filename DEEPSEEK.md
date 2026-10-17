@@ -10,8 +10,8 @@
 | 本机源码 | `E:/demo/serial`；其他机器以实际克隆目录为准 |
 | 正式主线 | `main` |
 | DeepSeek 开发分支 | `deepseek-dev` |
-| 交接基线 | 以 `v0.15.31` 标签及最新开发交接记录为准 |
-| 已发布版本 | [v0.15.31](https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.31)，2026-10-17 |
+| 交接基线 | 以 `v0.15.32` 标签及最新开发交接记录为准 |
+| 已发布版本 | [v0.15.32](https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.32)，2026-10-17 |
 | 技术栈 | C++17、Qt Widgets / Network / SerialPort / Core5Compat / Svg、CMake、Ninja |
 | 主要分发平台 | Windows x64；Docker 用于 Linux 开发构建 |
 | 用户文档 | [English](README.md) / [简体中文](README.zh-CN.md) |
@@ -20,7 +20,7 @@
 
 v0.15.31 集成 MCP 原生搜索与 GUI 同步、脚本读写/离线验证、安装时可选 Agent skill、启动地址检查，以及 DeepSeek 完成的 AI 活动提示、连接/脚本界面同步与调用详情。Codex 审查时补充了调用日志选中项及回看位置的恢复。具体验证与发布结果以开发日志最新记录为准。
 
-当前开发分支版本为 0.15.32：新增设置中的 skill 安装/更新、安装器按已检测 Agent 默认勾选、脚本试解析 HEX 的 MCP 同步与保存，并移除脚本 AI 提示词窗口。另已修复系统文件选择、控件组下拉/删除与自由布局宽度跟随，新增版本回溯和底部版本号，并统一清空入口、图层文字和主题滑块，提供新的测试安装包；正式 Release 仍为 v0.15.31，详见开发日志最新记录。
+v0.15.32 新增设置中的 skill 安装/更新、安装器按已检测 Agent 默认勾选、脚本试解析 HEX 的 MCP 同步与保存，并移除脚本 AI 提示词窗口。修复系统文件选择、控件组下拉/删除与自由布局宽度跟随，新增版本回溯和底部版本号，并统一清空入口、图层文字和主题滑块。正式安装包、单文件和便携包的验证与发布结果见最新开发日志；deepseek-dev 保留用于接续开发。
 
 ## 2. 项目解决什么问题
 
@@ -151,7 +151,7 @@ python -m venv .venv
   --screenshot build/preview.png --quit-after 2200
 ```
 
-发布步骤见 [安装器说明](docs/windows-installer.md)。网站与国内镜像在本次交接时保持冻结；v0.15.31 只发布 GitHub，不能擅自更新服务器或镜像。
+发布步骤见 [安装器说明](docs/windows-installer.md)。网站与国内镜像在本次交接时保持冻结；v0.15.32 只发布 GitHub，不能擅自更新服务器或镜像。
 
 ## 8. DeepSeek 开发流程
 

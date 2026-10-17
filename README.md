@@ -60,6 +60,8 @@ Screenshots are captured from the application using generated example data and l
 
 **[Download the latest release →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
+v0.15.32 adds release history, Agent skill configuration and parser sample synchronization, with native file pickers and refined serial controls. [Release notes](docs/releases/0.15.32.md).
+
 | Package | Use it when… |
 | --- | --- |
 | `SerialWorkbench-<version>-windows-x64-setup.exe` | You want the installer, shortcuts and an uninstall entry. Recommended. |

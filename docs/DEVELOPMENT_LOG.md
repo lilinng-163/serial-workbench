@@ -2,6 +2,17 @@
 
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
 
+## 2026-10-17 — 发布 0.15.32 并交接 DeepSeek
+
+- 用户目标：先发布正式 Release，再切回 deepseek-dev 接续开发；保留开发分支，网站和国内镜像继续冻结。
+- 集成：从 origin/main 的 `571ecc9` 建立 `codex/release-0.15.32`，以非快进合并保留 origin/deepseek-dev 的 `a400f7b` 及其四个开发提交历史；合并提交 `d731e21`。复核脚本样本的权限、revision 与未保存编辑保护，以及发行改动范围；本轮仅补充发行文档。
+- 范围：版本回溯和状态栏版本；设置/安装器的 Agent skill 配置；GUI/MCP 试解析样本同步；系统文件选择；控件组下拉、删除和宽度跟随；清空、图层和主题滑块。更新 CHANGELOG、中英 README、交接基线与 `docs/releases/0.15.32.md`。
+- 构建与测试：Release 构建成功，17/17 CTest，413 项通过、5 项可选联网/真机测试跳过。Windows 原生 MCP 工作流 11 项、历史设置 3 项、控件布局 3 项通过，检查本次构建的实际窗口截图。应用源码与已验证开发版一致。
+- 安装验证：smoke_installer.py 通过 Agent skill 预选、中文自定义路径、旧版本注册后原路径升级、配置/用户文件保留、无 SDK 启动、运行中保护、HTTP/STDIO 17 工具与搜索/脚本同步及卸载。隔离环境测试，没有修改真实 Agent 配置或用户安装。
+- 分发验证：smoke_release.py 通过便携 ZIP 的完整清单和无 SDK 运行，单文件 EXE 的中文路径、首次启动、缓存复用、CLI 转发、共享 MCP 和损坏缓存修复。三个原生 EXE 与构建哈希一致，payload 不含个人设置或 Demo；未进行物理串口或外部 SSH 联调。
+- 产物：`dist/local/0.15.32/` 含安装包、单文件 EXE、便携 ZIP、SHA256SUMS.txt。安装包 15,464,069 字节，SHA-256 `499fcc9217c1d711a363266cf213a5f9af056f250284cb255e27ee1706f313cc`。证据在 `build/release-0.15.32-verification/`，payload 在 `build/release-0.15.32-a283307f/SerialWorkbench/`。
+- 发布与交接：发行提交后普通推送 main、deepseek-dev 和 v0.15.32 标签；GitHub Release 上传四项产物并核对远端大小/哈希后公开，最终提交和发布结果见交接回复。保留 deepseek-dev 并回到该分支，不启动或切换其他模型，不更新网站、服务器或国内镜像。
+
 ## 2026-10-17 — 图层按钮移除菜单小箭头
 
 - 用户目标：去掉「图层」文字右下角的小箭头，保留点击展开菜单。

@@ -1,13 +1,16 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # 更新记录
 
-## 0.15.32 — 开发版，未发布 Release
+## 0.15.32 — 2026-10-17
 
 - 移除脚本编辑器的 AI 提示词窗口，skill 要求修改代码时同时更新匹配当前协议的试解析 HEX 样本。
 - set_frame_script 支持 sample_chunks，同步并保存 GUI 试解析输入；revision 覆盖已保存样本，保护未保存编辑。
 - 设置增加 skill 安装/更新入口；安装器默认勾选已检测到的 Agent，支持八种本地 skill 目录，保留取消选择、备份和同内容幂等更新。
 - 新建控件菜单保留网格图标，串口控制页使用独立滑杆图标。
-- English: replace the script AI prompt window with the shared skill workflow, synchronize trial HEX inputs over MCP, configure skills from Settings and preselect detected Agents in the installer, and distinguish control-page icons.
+- 设置增加版本回溯，查看最近三个正式版本的特性，后台下载安装包并校验；工作台底部固定显示当前版本。
+- 文件选择恢复 Windows 系统窗口；修复控件组下拉显示、切换与删除弹窗，自由布局随窗口宽度调整。
+- 串口控制统一保留清空全部入口，图层操作使用清晰文字并去掉小箭头；所有水平滑块统一跟随主题。
+- English: replace the script AI prompt window with the shared skill workflow, synchronize parser trial inputs, configure skills in Settings and preselect installed Agents. Add recent release notes and verified installer downloads, show the running version, restore native file pickers, fix group selection and responsive layouts, and refine control actions and themed sliders.
 
 ## 0.15.31 — 2026-10-17
 
