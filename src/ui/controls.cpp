@@ -693,6 +693,16 @@ void drawIcon(QPainter &p, const QString &name, QRectF rect, const QColor &color
             p.drawEllipse(QPointF(x, 12), 0.8, 0.8);
         }
     }
+    else if (name == "receive")
+    {
+        // Log page with a bidirectional send/receive arrow.
+        stroke({{14, 3}, {5, 3}, {5, 21}, {19, 21}, {19, 8}, {14, 3}, {14, 8}, {19, 8}});
+        stroke({{9, 10}, {15, 10}});
+        stroke({{9, 13}, {13, 13}});
+        stroke({{8, 18}, {16, 18}});
+        stroke({{11, 15.5}, {8, 18}, {11, 20.5}});
+        stroke({{13, 15.5}, {16, 18}, {13, 20.5}});
+    }
     else
     {
         stroke({{14, 3}, {5, 3}, {5, 21}, {19, 21}, {19, 8}, {14, 3},
