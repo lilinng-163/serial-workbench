@@ -17,6 +17,7 @@ class SerialControlPanel : public QWidget
 {
     Q_OBJECT
 public:
+    SerialMonitorDialog *receiveMonitor() const;
     explicit SerialControlPanel(QWidget *parent = nullptr);
     ~SerialControlPanel() override;
     void setChannel(Channel *channel);

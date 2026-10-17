@@ -90,7 +90,7 @@ def compile_fixture(args, target, version=None):
     payload = args.payload.resolve()
     size = sum(p.stat().st_size for p in payload.rglob("*") if p.is_file()) // 1024 + 1
     subprocess.run([
-        args.makensis, "/V2", "/INPUTCHARSET", "UTF8",
+        args.makensis, "/V2", "/INPUTCHARSET", "UTF8", "/DWORKBENCH_TEST_SKILL_CODEX",
         f"/DVERSION={version or args.expected_version}", f"/DPAYLOAD_DIR={payload}",
         f"/DOUTPUT_EXE={target}", f"/DBRAND_DIR={ROOT / 'resources/brand'}",
         f"/DREMOVE_MANIFEST={args.remove_manifest.resolve()}", f"/DSIZE_KB={size}",
@@ -158,6 +158,7 @@ def main():
         }}, "mcp_port": 8765, "widget_pages": [control_page, canvas_page]}), encoding="utf-8")
         env = os.environ.copy()
         env["LOCALAPPDATA"] = str(profile)
+        env["CODEX_HOME"] = str(profile / "codex")
         windows = Path(os.environ["SystemRoot"])
         env["PATH"] = os.pathsep.join((str(windows / "System32"), str(windows)))
         app = None
@@ -165,6 +166,12 @@ def main():
             baseline_version = "0.15.7"
             compile_fixture(args, setup, baseline_version)
             install(setup, destination, env)
+            skill = profile / "codex/skills/serial-workbench/SKILL.md"
+            assert skill.is_file(), "Selected Codex skill component was not installed"
+            assert "search_logs" in skill.read_text(encoding="utf-8")
+            assert (skill.parent / "references/frame-script.md").is_file()
+            assert not (profile / "codex/config.toml").exists(), "Skill installation must not configure MCP"
+            print("PASS selected skill component installs guide/references without changing MCP config", flush=True)
             info = registration()
             assert info is not None, f"Registration missing: installed={destination.exists()}, marker={(destination / 'installation.json').exists()}, files={len(list(destination.rglob('*')))}"
             assert info["DisplayVersion"] == baseline_version
@@ -231,6 +238,7 @@ def main():
             wait_for(lambda: registration() is None and not (destination / "SerialWorkbench.exe").exists())
             wait_for(lambda: not (destination / "Uninstall.exe").exists())
             assert settings.exists(), "Personal settings must be retained by default"
+            assert skill.is_file(), "Installed skills must be retained on app uninstall"
             assert background.read_bytes() == image, "Personal background images must be retained by default"
             assert note.read_text(encoding="utf-8") == "user data"
             assert plugin_note.read_text(encoding="utf-8") == "user data"

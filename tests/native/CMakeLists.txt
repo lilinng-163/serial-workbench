@@ -193,3 +193,14 @@ add_test(NAME search_filter_tests COMMAND "${CMAKE_COMMAND}" -E env
     -o "${PROJECT_BINARY_DIR}/search-filter-tests.txt,txt"
 )
 set_tests_properties(search_filter_tests PROPERTIES TIMEOUT 30)
+
+qt_add_executable(mcp_workflow_tests mcp_workflow_tests.cpp)
+workbench_configure_target(mcp_workflow_tests)
+target_link_libraries(mcp_workflow_tests PRIVATE workbench_ui Qt6::Test)
+add_test(NAME mcp_workflow_tests COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=${workbench_test_path}"
+    $<TARGET_FILE:mcp_workflow_tests>
+    -platform offscreen
+    -o "${PROJECT_BINARY_DIR}/mcp-workflow-tests.txt,txt"
+)
+set_tests_properties(mcp_workflow_tests PROPERTIES TIMEOUT 30)

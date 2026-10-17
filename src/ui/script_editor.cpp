@@ -167,11 +167,11 @@ public:
     int remaining = 0;
     int frames = 0;
 
-    explicit ScriptEditor(Pane *pane) : QDialog(pane->window), owner(pane)
+    explicit ScriptEditor(Pane *pane, bool nonModal) : QDialog(pane->window), owner(pane)
     {
         setObjectName("scriptEditor");
         setWindowTitle("自定义帧解析 · C 风格脚本");
-        setWindowModality(Qt::WindowModal);
+        setWindowModality(nonModal ? Qt::NonModal : Qt::WindowModal);
         setAttribute(Qt::WA_DeleteOnClose);
         setWindowFlag(Qt::WindowMaximizeButtonHint);
         setSizeGripEnabled(true);
@@ -264,6 +264,7 @@ public:
         body->addWidget(status);
         auto footer = new QHBoxLayout();
         enable = new QCheckBox("应用后启用脚本");
+        enable->setObjectName("scriptEnabled");
         enable->setChecked(pane->channel ? pane->channel->scriptEnabled : pane->scriptRequested);
         footer->addWidget(enable);
         footer->addStretch();
@@ -453,7 +454,7 @@ void Pane::applyScript(const QString &code, bool enabled)
     refreshScriptResults();
 }
 
-void Pane::openScriptEditor()
+void Pane::openScriptEditor(bool nonModal)
 {
     if (!supportsScript()) { return; }
     if (scriptDialog)
@@ -463,7 +464,7 @@ void Pane::openScriptEditor()
         scriptDialog->activateWindow();
         return;
     }
-    scriptDialog = new ScriptEditor(this);
+    scriptDialog = new ScriptEditor(this, nonModal);
     scriptDialog->show();
 }
 }

@@ -7,6 +7,7 @@ import asyncio
 import ctypes
 from ctypes import wintypes
 import json
+import re
 from pathlib import Path
 import socket
 import subprocess
@@ -47,13 +48,18 @@ async def check(url, bridge, allow, expected_version=None):
             initialized = await client.initialize()
             if expected_version:
                 assert initialized.serverInfo.version == expected_version
-            assert len((await client.list_tools()).tools) == 12
+            assert len((await client.list_tools()).tools) == 17
             assert "read_usage_guide" in initialized.instructions
             guide = unpack(await client.call_tool("read_usage_guide", {}))
             assert guide["guide"] and guide["skill_path_scope"] == "server_host"
             assert guide["skill_path"] and Path(guide["skill_path"]).is_file()
             parser_guide = unpack(await client.call_tool("read_usage_guide", {"topic": "frame_script"}))
             assert "void main(const uint8_t data[], int length)" in parser_guide["guide"]
+            code = re.search(r"```c\n(.*?)\n```", parser_guide["guide"], re.S).group(1)
+            validation = unpack(await client.call_tool("validate_frame_script", {
+                "code": code, "sample_chunks": ["AA55C4", "09E40CBC0D"],
+            }))
+            assert validation["valid"] and validation["frames"][0]["温度"] == 25
             missing = await client.call_tool("read_events", {})
             assert missing.isError and "channel_id" in missing.content[0].text
             status = unpack(await client.call_tool("get_status"))
@@ -67,7 +73,7 @@ async def check(url, bridge, allow, expected_version=None):
             async with stdio_client(params) as (sr, sw):
                 async with ClientSession(sr, sw) as second:
                     await second.initialize()
-                    assert len((await second.list_tools()).tools) == 12
+                    assert len((await second.list_tools()).tools) == 17
                     other = unpack(await second.call_tool("read_all_events", {}))
                     assert other["session_id"] == events["session_id"]
                     assert other["events"][:len(events["events"])] == events["events"]
@@ -119,6 +125,33 @@ async def check(url, bridge, allow, expected_version=None):
                     unchanged = unpack(await client.call_tool("read_waveform", {"channel_id": channel_id}))
                     assert unchanged["sources"]["default"]["total_samples"] == sample_count
                     assert unchanged["sources"]["default"]["rejected_lines"] == 0
+                    views = unpack(await client.call_tool("list_search_views", {"channel_id": channel_id}))["views"]
+                    log_view = next(v for v in views if v["kind"] == "log")
+                    found = unpack(await client.call_tool("search_logs", {
+                        "channel_id": channel_id, "view_id": log_view["view_id"],
+                        "filter": {"text": "temperature && 999", "logical": True,
+                                   "regex": False, "whole_word": False, "case_sensitive": False},
+                    }))
+                    assert found["total_matches"] > 0
+                    assert all("temperature=999" in r["text"] for r in found["rows"])
+                    live_script = unpack(await second.call_tool("get_frame_script", {"channel_id": channel_id}))
+                    applied = unpack(await second.call_tool("set_frame_script", {
+                        "channel_id": channel_id, "code": code, "enabled": True,
+                        "expected_revision": live_script["revision"],
+                    }))
+                    assert applied["enabled"] and applied["code"] == code
+                    unpack(await second.call_tool("send_data", {
+                        "channel_id": channel_id, "hex_mode": True, "payload": "AA55C409E40CBC0D",
+                    }))
+                    records = []
+                    for _ in range(50):
+                        parsed = unpack(await client.call_tool("read_script_results", {"channel_id": channel_id}))
+                        records = parsed.get("sources", {}).get("default", {}).get("records", [])
+                        if records:
+                            break
+                        await asyncio.sleep(.02)
+                    assert records[-1]["value"]["温度"] == 25
+                    print("PASS native GUI search and synchronized script validate/apply/results over HTTP/STDIO")
                     unpack(await second.call_tool("close_connection", {"channel_id": channel_id}))
                     reopened = unpack(await second.call_tool("open_connection", config))
                     assert reopened["id"] == channel_id
@@ -129,7 +162,7 @@ async def check(url, bridge, allow, expected_version=None):
                     assert invalid.isError
                     status = unpack(await client.call_tool("get_status"))
                     assert status["session_id"] == events["session_id"]
-                    print("PASS HTTP/stdio, 12 tools, shared history, baud reconfiguration, long poll, loopback, strict wave/1, integer/double values, reconnect, validation")
+                    print("PASS HTTP/stdio, 17 tools, shared history, baud reconfiguration, long poll, loopback, strict wave/1, integer/double values, reconnect, validation")
 
 
 def main():

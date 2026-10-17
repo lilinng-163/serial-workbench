@@ -4,6 +4,7 @@
 #include "terminal.h"
 #include "mcp.h"
 #include "update_service.h"
+#include "agent_config.h"
 
 namespace sw
 {
@@ -51,6 +52,7 @@ class Pane : public QWidget
 {
     Q_OBJECT
 public:
+    QString searchViewId = QUuid::createUuid().toString(QUuid::Id128);
     explicit Pane(Window *window, const QString &instrumentKind = {});
     Window *window;
     QPointer<Channel> channel;
@@ -107,13 +109,13 @@ public:
     QPointer<QDialog> scriptDialog;
     bool supportsScript() const;
     void applyScript(const QString &code, bool enabled);
-    void openScriptEditor();
+    void openScriptEditor(bool nonModal = false);
     void buildScriptResults();
     void refreshScriptResults();
     void clearScriptResults();
     void resizeScriptResults();
     void setChannel(Channel *channel);
-    void tick();
+    void tick(bool includeHidden = false);
     void sendCurrent();
     void setTerminal(bool enabled);
     void clearView();
@@ -134,11 +136,19 @@ class Window : public QMainWindow
 {
     Q_OBJECT
 public:
+    void installMcpUi();
+    void checkAgentEndpoints();
+    void showAuditDetail(const QJsonObject &entry);
+    void showAiActivity(const QJsonObject &entry);
+    void positionAiToast();
+    void openAiAudit();
+    std::function<AgentEnvironment()> agentEnvironment = AgentEnvironment::current;
     Window(Engine *engine, McpServer *mcp, const QString &settingsPath, Window *primary = nullptr);
     Window *primary;
     QList<QPointer<Window>> hosts;
     Window *rootWindow();
     Pane *findPane(Channel *channel);
+    void showPane(Pane *pane);
     Window *detachConnection(int index, const QPoint &position, bool systemMove = false);
     void transferPane(Pane *pane, Window *target);
     void attachPane(Pane *pane);
@@ -201,6 +211,11 @@ public:
     QLabel *scriptHint;
     QLabel *status;
     QLabel *mcpStatus;
+    QLabel *aiStatus = nullptr;
+    QWidget *workspace = nullptr;
+    QFrame *aiToast = nullptr;
+    QLabel *aiToastText = nullptr;
+    QJsonObject aiToastEntry;
     QPushButton *updateButton = nullptr;
     QProgressBar *updateProgress = nullptr;
     UpdateService *updater = nullptr;
@@ -208,6 +223,7 @@ public:
     QTimer timer;
     QTimer portTimer;
     QTimer sshConfigTimer;
+    QTimer aiToastTimer;
     QString sshConfigFingerprint;
     QJsonArray lastPorts;
     bool portsLoaded = false;

@@ -5,6 +5,7 @@
 add_library(workbench_ui OBJECT
     window.cpp
     window.h
+    mcp_ui.cpp
     background_image.cpp
     background_image.h
     background_settings.cpp
@@ -32,6 +33,8 @@ add_library(workbench_ui OBJECT
     file_transfer_dialog.h
     agent_config.cpp
     agent_config.h
+    agent_skill.cpp
+    agent_skill.h
     agent_panel.cpp
     agent_panel.h
     button_motion.cpp

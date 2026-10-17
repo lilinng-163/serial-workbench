@@ -131,6 +131,7 @@ AgentPanel::AgentPanel(McpServer *owner, QWidget *parent, std::function<AgentEnv
     body->addStretch();
     connect(scan, &QPushButton::clicked, this, &AgentPanel::refresh);
     connect(updateAll, &QPushButton::clicked, this, &AgentPanel::configureAll);
+    connect(server, &McpServer::portChanged, this, [this] { refresh(); });
     refresh();
 }
 
@@ -150,10 +151,23 @@ void AgentPanel::refresh()
         card.check->setEnabled(agent.installed() && server->isListening());
         card.configure->setToolTip(agent.installed() ? "保存并检查：" + agent.configPath : "安装后重新检测");
         card.check->setToolTip(agent.installed() ? "只读检查配置与 MCP 服务" : "安装后才可检查配置");
-        card.result->hide();
+        card.result->setVisible(agent.installed());
+        if (agent.installed())
+        {
+            try
+            {
+                card.result->setText(AgentConfig::check(agent, server->url(),
+                    QCoreApplication::applicationDirPath() + "/SerialWorkbenchMCP.exe"));
+            }
+            catch (const std::exception &error)
+            {
+                card.result->setText("检查未完成：" + QString::fromUtf8(error.what()));
+            }
+        }
     }
     updateAll->setEnabled(installed > 0 && server->isListening());
     findChild<QPushButton *>("agentScan")->setToolTip(QString("检测到 %1 / %2 个 Agent").arg(installed).arg(agents.size()));
+    emit configurationUpdated();
 }
 
 void AgentPanel::prepareProbe(const std::function<void(const QString &)> &finished)
@@ -244,6 +258,7 @@ void AgentPanel::checkAgent(int index, bool configure)
         }
         cards[index].result->setText(result);
         busy = false;
+        emit configurationUpdated();
     });
 }
 
@@ -282,6 +297,7 @@ void AgentPanel::configureAll()
         }
         else { summary->setText(failure); }
         busy = false;
+        emit configurationUpdated();
     });
 }
 }

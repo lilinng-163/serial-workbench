@@ -9,6 +9,10 @@ class SerialMonitorDialog : public QDialog
 {
     Q_OBJECT
 public:
+    QString searchViewId = QUuid::createUuid().toString(QUuid::Id128);
+    QString channelId() const { return boundId; }
+    FilterBox *searchBox() const { return filter; }
+    LogView *logView() const { return log; }
     explicit SerialMonitorDialog(QWidget *parent = nullptr);
     void setChannel(Channel *channel);
     void setAppearance(const Theme &theme, const QFont &font);

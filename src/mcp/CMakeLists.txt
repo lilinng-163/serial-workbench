@@ -3,6 +3,7 @@
 add_library(workbench_mcp STATIC
     mcp.cpp
     mcp.h
+    script_tools.cpp
     usage_guide.cpp
     usage_guide.h
 )

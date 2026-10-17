@@ -8,6 +8,10 @@
 
 namespace sw
 {
+SerialMonitorDialog *SerialControlPanel::receiveMonitor() const
+{
+    return monitor.data();
+}
 struct SerialControlPanel::Row
 {
     QJsonObject spec;

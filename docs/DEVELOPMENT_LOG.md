@@ -2,6 +2,70 @@
 
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
 
+## 2026-10-17 — 调用日志自动跟随最新记录
+
+- 执行者：DeepSeek。
+- 分支与起点：`deepseek-dev`，起点 `1e1402d`。
+- 用户目标：打开“调用日志”时只看到旧记录，新发生的 AI 调用在表格底部不可见。
+- 已完成：`src/ui/window.cpp` 的日志刷新先记录用户是否停在底部；重建行后，若原来跟随底部（或首次打开），自动滚动到最后一行；用户主动上滚阅读历史时不会被新记录拉回底部。
+- 验证：构建成功；完整 `ctest` 16/16 通过；新增 `mcp_workflow_tests::auditTableFollowsNewestEntries`，注入 40 条记录后确认表格行数为 40 且滚动条位于最大值。
+- 未完成：当前正在运行的 `dist` 实例仍为 `1e1402d` 构建；应用运行中无法覆盖 EXE，且重启会断开正在使用的 MCP 会话，故本次未重启部署。
+- 风险与兼容：仅影响调用日志的滚动位置；不改变审计内容与排序。
+- 提交与同步：见交接回复中的提交哈希；推送 `deepseek-dev`，未推送 `main`。
+- 下一步：重启应用后生效；Codex 审查并集成。
+
+## 2026-10-17 — AI 活动浮层与一键打开调用日志
+
+- 执行者：DeepSeek。
+- 分支与起点：`deepseek-dev`，起点 `877a437`。
+- 用户目标：状态栏右下角的 AI 调用提示太不显眼，实际使用中“看不见命令”；需要更醒目的 GUI 反馈。
+- 已完成：
+  - `src/ui/window.*` 新增工作区浮层 `aiToast`：每次 MCP 工具调用显示 `AI · 操作 · 成功/失败`，10 秒后自动隐藏；提供“详情”（最近一次调用的参数/返回/错误）与“全部记录”（打开 设置 → AI / MCP → 调用日志）；可手动关闭；窗口缩放时重新定位在标签栏下方、页面工具栏之下，不遮挡顶部按钮。
+  - `src/ui/mcp_ui.cpp` 的 `toolCalled` 统一调用 `Window::showAiActivity()`，同时更新浮层与状态栏标签。
+  - `src/ui/window.*` 新增 `openAiAudit()`，从浮层直接切到设置中的 AI/MCP 调用日志页。
+- 验证：
+  - 构建成功；完整 `ctest` 16/16 通过。
+  - `mcp_workflow_tests` 新增断言：HTTP 调用后浮层可见且文本含 AI；点击“全部记录”后设置页停在 AI / MCP、MCP 页停在调用日志。
+  - 截图 `build/ai-sync-captures/ai-gui-sync.png`：浮层位于工具栏下方右侧，显示 `AI · get_status · 成功` 与两个按钮；状态栏同时保留 `AI · get_status · 成功`。
+- 未完成：无。
+- 风险与兼容：浮层是临时提示（10 秒），不拦截输入；频繁调用会不断刷新为最近一条；历史与详情仍以调用日志为准。写操作权限、共享连接与读取游标未改动。
+- 提交与同步：见交接回复中的提交哈希；推送 `deepseek-dev`，未推送 `main`。
+- 下一步：Codex 审查并集成。
+
+## 2026-10-17 — GUI 同步 AI 的 MCP 操作与可查看调用详情
+
+- 执行者：DeepSeek。
+- 分支与起点：`deepseek-dev`，起点 `e1f402b`。
+- 用户目标：AI 调用 MCP 时界面全程不可见；AI 打开串口、写入并启用脚本后 GUI 应同步显示；调用日志信息太少，需点击查看更详细的参数与结果。
+- 已完成：
+  - `src/mcp/mcp.h`、`mcp.cpp`：新增 `guiConnectionOpened`、`toolCalled` 信号；`open_connection` 成功后通知 GUI；每次 HTTP 工具调用在审计中记录 `summary`、`arguments`、`result`（结果最多 8 KiB，超出截断）；`open_connection` 工具说明补充“GUI 会打开并激活对应页面”。
+  - `src/ui/window.*`：新增 `showPane()` 激活并置前对应标签页（含分离窗口）；状态栏新增常驻 `AI · 操作 · 成功/失败` 标签，悬停显示客户端、时间、耗时和错误；调用日志表保存完整审计对象，双击打开 `showAuditDetail()` 详情对话框（格式化参数、返回、错误，可复制）。
+  - `src/ui/mcp_ui.cpp`：AI 打开连接时激活页面；AI 写入/启用脚本时激活页面，并在编辑器未打开时以非模态窗口展示 AI 代码；状态栏同步显示最近 AI 操作。
+  - `src/ui/script_editor.cpp`：`openScriptEditor(bool nonModal)`，手动打开仍为窗口模态，AI 同步使用非模态。
+  - `src/ui/button_motion.cpp`：无动画运行时按实际勾选状态绘制，修复程序化（信号被阻断）更新脚本开关后复选框仍显示未勾选的问题。
+- 验证：
+  - `cmake --build build/native-release --parallel 4` 成功；完整 `ctest` 16/16 通过。
+  - 新增 `mcp_workflow_tests::guiSyncsAiConnectionScriptAndAudit`：验证 AI open_connection 激活对应页、set_frame_script 写入并启用后侧栏开关勾选、脚本编辑器非模态并显示代码、审计含 summary/参数/返回、状态栏 AI 标签可见、详情对话框含“参数/返回”。
+  - 实际进程联调：启动应用后经 HTTP MCP 打开 `loop://`、写入并启用帧脚本、读取状态；截图 `build/ai-live.png` 显示连接页被激活、脚本解析面板出现、侧栏“脚本解析”已勾选、状态栏显示 `AI · get_status · 成功`；`build/ai-sync-captures/` 另含脚本编辑器、审计详情与主窗口截图。
+- 未完成：无。
+- 风险与兼容：AI 打开连接或写入脚本会主动置前窗口与标签（按用户要求）；写操作仍需 GUI 的 AI 控制权限。审计结果截断到 8 KiB，参数中的 payload 长度与脚本正文仍按原规则脱敏。脚本编辑器仅在没有已打开编辑器时自动弹出，且为非模态。未连接真实外部 SSH 主机或物理串口复测。
+- 提交与同步：见交接回复中的提交哈希；推送 `deepseek-dev`，未推送 `main`，未发布 Release。
+- 下一步：Codex 审查、运行原生测试并集成。
+
+## 2026-10-17 — MCP 搜索、脚本、可选 skill 与启动地址检查
+
+- 执行者：Codex；先完成稳定版 v0.15.30 发布（提交 `d8d7084`，GitHub Release ID `415571124`），核对四个附件大小及 SHA-256 后正式发布；随后从保留的开发分支建立 `codex/mcp-guided-workflow`，开发版本 `0.15.31`，未创建 0.15.31 Release。
+- MCP 新增 5 个工具（合计 17）：`list_search_views` / `search_logs` 通过受协议权限约束的 channel_id、当前 GUI 的 view_id，同步收发页、JSON/XML 和已打开小窗的文本、大小写、全词、正则与逻辑开关；结果来自 GUI 的有界显示缓存，保留暂停/清空/编码/HEX 语义。非活动页面可刷新自己的显示缓存，不切用户标签；分页提供 snapshot、next_offset 和截断标记，未消费其他读取者的原始游标。
+- 脚本工具：`get_frame_script` 读取代码/状态/revision；`validate_frame_script` 在独立运行时离线编译和分块试解析（64 KiB、128 块、1024 帧及总耗时限制），不发送字节或修改在线状态；`set_frame_script` 明确 enabled，要求串口访问、AI 控制、当前 expected_revision，拒绝文件传输、GUI 未保存代码/启用状态及正在试解析时覆盖。成功后在线脚本、GUI 编辑器/开关/状态和设置保存同步；审计省略代码与 HEX 样本正文。
+- 安装 skill：组件页增加默认不勾选的 Codex、Claude Code、OpenCode、Pi 选项；原生 `--install-skill` 使用同一份嵌入指南和脚本参考，遵循各 Agent 的环境目录覆盖。不同内容先备份，重复相同内容幂等，不改 MCP 配置；卸载应用时保留 skill。其他客户端可继续通过 read_usage_guide 获取完整正文，不猜测未知客户端的 skill 目录。
+- 地址检查：启动、再次唤起、端口变化和打开设置时只读检查已检测 Agent 的用户级配置；状态栏、Agent 卡片和 get_status.agent_config_checks 显示匹配结果；手动配置/重新检测后刷新。不会自动覆盖地址，用户仍可一键更新并重载 Agent；项目级覆盖和实际客户端是否重载需在客户端核对。解析异常向 MCP 返回通用提示，避免泄露配置片段。
+- 文档：软件 skill、脚本参考/AI 提示词、中英 README、Agent 接入、安装与开发交接入口同步更新。skill-creator 校验通过（项目 .venv 安装 PyYAML，仅为开发验证；以 Python UTF-8 模式运行）。
+- 验证：Release 构建成功；16 组 CTest 全过，共 397 项通过、4 项可选联网/真机测试跳过；Windows 原生工作流 7 项通过并检查搜索/脚本同步及紧凑设置窗口截图。首轮旧工具数量断言 12 已更新为 17，原失败日志保留，不移除断言。
+- 实际分发验证：smoke_installer.py 通过选中 Codex skill 的安装、中文路径、原目录升级、设置保留、无 SDK 启动、运行中保护、HTTP/STDIO 17 工具及原生搜索/脚本应用结果、卸载保留 skill/用户文件。测试只使用独立注册项、临时目录及隔离 CODEX_HOME，没有改真实 Agent 配置。载荷三个 EXE 与构建相同，无个人设置或 Demo EXE。
+- 产物：`dist/local/mcp-workflow-0.15.31-installer/SerialWorkbench-0.15.31-windows-x64-setup.exe`（15,431,033 字节），SHA-256 `faf7e043965e34d1de5fbd648e1ea4f8ca2e81cde1d81b2754dcd4652b5ed88d`；直接测试入口 `dist/local/mcp-workflow-0.15.31/SerialWorkbench.exe`。证据在 `build/mcp-workflow-20261017/`。
+- 风险与范围：未连接额外物理串口或外部 SSH；搜索仅代表 GUI 当前显示范围，更早原始历史仍用 read_events。skill 目录支持上述四种客户端，安装后需重载 Agent/MCP 工具列表。默认不选 skill、不自动修改 Agent 地址；未操作网站或国内镜像。
+- 提交与同步：按用户授权完成后提交推送 deepseek-dev，保留开发分支及历史；main / v0.15.30 稳定版本保持不变。最终开发提交见交接回复。
+
 ## 2026-10-17 — 发布 0.15.30 搜索与界面修复版
 
 - 执行者：Codex；用户要求在 MCP 扩展之前先发布当前完成版。

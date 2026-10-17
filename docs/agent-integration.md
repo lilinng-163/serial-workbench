@@ -23,3 +23,27 @@ OpenCode 已有 `mcp.servers` 时保留 V2 结构；新建配置通过已安装 
 端口切换后使用一键更新同步，再在 Agent 中重载或重启。新端口被占用时，切换失败并继续使用原端口。默认启动占用处理使用操作系统分配的空闲回环端口，并立即保存。
 
 语法校验库固定为 toml++ 3.4.0 和 fkYAML 0.4.2（MIT），许可证在 `third_party/`，打包时复制到 `licenses/`。JSONC/常见 JSON5 使用保留文本位置的局部编辑；YAML 仅编辑块映射，特殊流式映射/合并键等会提示未完成，保留原文件。商标图标来源见 `resources/agents/README.md`。
+
+
+## 安装时选择 skill
+
+安装向导的组件页可单独勾选 Codex、Claude Code、OpenCode、Pi 的使用指南，默认不选。不修改 MCP 配置或密钥；不同内容先备份再替换，相同内容不重复备份，卸载应用时保留 skill。安装失败会提示，主程序仍可使用。
+
+| Agent | 默认 skill 目录 | 环境覆盖 |
+| --- | --- | --- |
+| Codex | `~/.codex/skills/serial-workbench` | `CODEX_HOME` |
+| Claude Code | `~/.claude/skills/serial-workbench` | `CLAUDE_CONFIG_DIR` |
+| OpenCode | `~/.config/opencode/skills/serial-workbench` | `OPENCODE_CONFIG_DIR` / `XDG_CONFIG_HOME` |
+| Pi | `~/.pi/agent/skills/serial-workbench` | `PI_CODING_AGENT_DIR` |
+
+目录规则参考 [Claude Code skills](https://code.claude.com/docs/en/skills)、[OpenCode skills](https://opencode.ai/docs/skills/)、[Pi skills](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/skills.md)；Codex 跟随本机 CODEX_HOME 的 skills 目录。其他 Agent 可直接调用 `read_usage_guide` 获取指南，不假设客户端会扫描某个未经确认的目录。复制 skill 后重载 Agent；skill 不会自动建立 MCP 连接。
+
+## 原生搜索与脚本接口
+
+先 `list_connections` 选准确 channel_id，再 `list_search_views(channel_id)` 取得本次 GUI 的 view_id。`search_logs(channel_id, view_id, filter={text, case_sensitive, whole_word, regex, logical})` 同步搜索框和开关；省略 filter 则沿用 GUI 条件。结果是 GUI 显示缓存中的匹配行/解析记录，保留暂停、清空、HEX/编码及缓存范围，不等于完整原始历史。读取非活动页面时会刷新该页面的显示缓存，不切换用户的当前标签；暂停/冻结仍有效。
+
+使用 offset/limit/snapshot 分页；显示变化后从 0 重试，更新 filter 时不传旧 snapshot。文本截断查看 truncated，原始字节及更早历史仍通过 read_events 的独立游标读取。SSH 保持交互终端，通过 read_events 读取输出，不强行切成日志页。
+
+`get_frame_script(channel_id)` 返回代码、enabled、revision 与错误。`validate_frame_script(code, sample_chunks=[HEX,...])` 离线编译和试解析，支持跨块缓存，不发送数据、不修改在线状态。`set_frame_script(channel_id, code, enabled, expected_revision)` 需要串口开放、AI 控制权限、最新 revision，且没有传文件或 GUI 未保存编辑。应用后 GUI、持久化脚本与编辑器同步，仅处理新收到的数据。原始报文与其他读取者不受试解析影响。
+
+应用每次启动、再次唤起已运行实例及切换 MCP 端口后会检查已检测 Agent 的用户配置。状态栏、Agent 接入卡片及 `get_status.agent_config_checks` 显示结果；自动检查只读，不会自动覆盖地址。用户可通过现有一键更新并重载 Agent。项目级覆盖或 Agent 尚未重载时，仍需在客户端核对实际连接来源。
