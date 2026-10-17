@@ -3008,6 +3008,11 @@ private slots:
             auto version = dialog->findChild<QLabel *>("aboutVersion");
             QVERIFY(about && version);
             QVERIFY(version->text().contains(sw::Version));
+            auto sources = dialog->findChild<QLabel *>("aboutSources");
+            QVERIFY(sources);
+            QVERIFY(sources->text().contains("https://github.com/lilinng-163/serial-workbench"));
+            QVERIFY(sources->text().contains("https://162.14.72.194/"));
+            QVERIFY(sources->openExternalLinks());
             QTRY_VERIFY(about->verticalScrollBar()->maximum() > 0);
             QCOMPARE(about->horizontalScrollBar()->maximum(), 0);
             if (!captureDirectory.isEmpty())

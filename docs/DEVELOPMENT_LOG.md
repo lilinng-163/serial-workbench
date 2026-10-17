@@ -2,6 +2,20 @@
 
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
 
+## 2026-10-17 — 关于页版本信息增加来源链接
+
+- 执行者：DeepSeek。
+- 分支与起点：`deepseek-dev`，起点 `02d94dc`。
+- 用户目标：在设置里的版本信息旁增加来源：GitHub 仓库和 `https://162.14.72.194/`。
+- 已完成：`src/ui/window.cpp` 关于页在版本行下新增 `aboutSources` 富文本链接，使用主题强调色，点击由系统浏览器打开：
+  - `GitHub 仓库` → `https://github.com/lilinng-163/serial-workbench`
+  - `项目主页 / 镜像站` → `https://162.14.72.194/`
+- 验证：构建成功；完整 `ctest` 17/17 通过；`settingsResizeAndRestore` 新增断言检查两个 URL 与 `openExternalLinks`；截图 `build/about-captures/settings-about.png` 显示版本下方两个可点击链接。
+- 未完成：无。
+- 风险与兼容：仅关于页展示与外部跳转，不改更新服务（仍使用 GitHub API 与 `/updates/latest.json` 镜像清单）。
+- 提交与同步：见交接回复中的提交哈希；推送 `deepseek-dev`，未推送 `main`。
+- 下一步：Codex 审查并集成。
+
 ## 2026-10-17 — 数据字体对话框默认尺寸加大
 
 - 执行者：DeepSeek。

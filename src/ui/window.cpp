@@ -3982,6 +3982,17 @@ void Window::openSettings()
     aboutBody->addWidget(aboutText("Serial Workbench", "aboutTitle"));
     aboutBody->addWidget(aboutText(QString("版本 %1 · Qt %2 / C++17")
                                      .arg(Version, QString::fromLatin1(qVersion())), "aboutVersion"));
+    auto sources = new QLabel(QString(
+        "<a href=\"https://github.com/lilinng-163/serial-workbench\" style=\"color:%1;\">GitHub 仓库</a>"
+        " &nbsp;·&nbsp; "
+        "<a href=\"https://162.14.72.194/\" style=\"color:%1;\">项目主页 / 镜像站</a>")
+        .arg(theme.accent.name()));
+    sources->setObjectName("aboutSources");
+    sources->setTextFormat(Qt::RichText);
+    sources->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    sources->setOpenExternalLinks(true);
+    sources->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    aboutBody->addWidget(sources);
     aboutBody->addWidget(aboutText("面向嵌入式开发的串口、网络与 SSH 调试工作台。", "aboutSummary"));
     aboutBody->addSpacing(8);
 
