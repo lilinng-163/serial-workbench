@@ -2,6 +2,7 @@
 
 #pragma once
 #include "controls.h"
+#include "search_filter.h"
 #include "background_image.h"
 #include <QTextCodec>
 #include <deque>
@@ -29,6 +30,7 @@ public:
     bool hex = false;
     bool follow = true;
     QString filter;
+    void setFilter(const SearchFilter &criteria);
     QString encoding = "utf-8";
     struct Stream
     {
@@ -46,6 +48,8 @@ public:
     void wheelEvent(QWheelEvent *event) override;
 signals:
     void zoomRequested(int steps);
+private:
+    SearchFilter matcher;
 };
 
 class TerminalView : public QWidget

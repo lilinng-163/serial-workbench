@@ -35,7 +35,7 @@ public:
     bool isStructured() const { return kind == "json" || kind == "xml"; }
     Combo *source = nullptr;
     QLabel *info = nullptr;
-    QLineEdit *filter = nullptr;
+    FilterBox *filter = nullptr;
     QJsonObject cursors;
     QPointer<Channel> waveChannel;
     QTimer frameTimer;
@@ -99,7 +99,7 @@ public:
     IconButton *follow = nullptr;
     IconButton *exportButton = nullptr;
     IconButton *transferButton = nullptr;
-    QLineEdit *filter = nullptr;
+    FilterBox *filter = nullptr;
     bool terminalMode = false;
     bool userTerminalMode = false;
     QString scriptCode = FrameScriptProgram::example();

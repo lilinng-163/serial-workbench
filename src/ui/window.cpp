@@ -412,17 +412,21 @@ Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), 
         table->setAlternatingRowColors(true);
         table->setUniformRowHeights(true);
         table->header()->setStretchLastSection(true);
-        filter = new SearchBox();
+        filter = new FilterBox();
         filter->setPlaceholderText("筛选解析记录");
-        filter->setMinimumWidth(100);
-        filter->setMaximumWidth(210);
         sourceRow->addWidget(filter);
-        connect(filter, &QLineEdit::textChanged, this, [this](const QString &text)
+        connect(filter, &FilterBox::criteriaChanged, this, [this]
         {
+            QTreeWidgetItem *firstVisible = nullptr;
             for (int index = 0; index < table->topLevelItemCount(); ++index)
             {
                 auto item = table->topLevelItem(index);
-                item->setHidden(!item->data(0, Qt::UserRole).toJsonObject()["text"].toString().contains(text, Qt::CaseInsensitive));
+                item->setHidden(!filter->criteria().matches(item->data(0, Qt::UserRole).toJsonObject()["text"].toString()));
+                if (!item->isHidden() && !firstVisible) { firstVisible = item; }
+            }
+            if (!table->currentItem() || table->currentItem()->isHidden())
+            {
+                table->setCurrentItem(firstVisible);
             }
         });
         if (kind == "json")
@@ -473,6 +477,7 @@ QJsonObject Instrument::settings() const
 {
     if (controls) { return {{"kind", kind}, {"serial_controls", controls->settings()}}; }
     QJsonObject result {{"kind", kind}, {"frozen", freeze->isChecked()}};
+    if (filter) { result["search_filter"] = filter->settings(); }
     if (points)
     {
         result["points"] = points->value();
@@ -526,8 +531,8 @@ void Instrument::tick(Channel *channel)
                 }
                 auto item = new QTreeWidgetItem(table, {record["time"].toString().mid(11, 12), record["format"].toString().toUpper(), source.key(), record["text"].toString().left(200)});
                 item->setData(0, Qt::UserRole, record);
-                item->setHidden(!record["text"].toString().contains(filter->text(), Qt::CaseInsensitive));
-                table->setCurrentItem(item);
+                item->setHidden(!filter->criteria().matches(record["text"].toString()));
+                if (!item->isHidden()) { table->setCurrentItem(item); }
                 while (table->topLevelItemCount() > 200)
                 {
                     delete table->takeTopLevelItem(0);
@@ -663,9 +668,8 @@ Pane::Pane(Window *owner, const QString &instrumentKind) : QWidget(owner), windo
     tools->addWidget(clipboardButton);
     tools->addSpacing(8);
     tools->addStretch();
-    filter = new SearchBox();
+    filter = new FilterBox();
     filter->setPlaceholderText("筛选内容");
-    filter->setToolTip("按文本筛选当前收发记录");
     tools->addWidget(filter, 1);
     pause = new IconButton("pause", "暂停显示，后台继续接收");
     pause->setObjectName("pauseDisplay");
@@ -815,7 +819,7 @@ Pane::Pane(Window *owner, const QString &instrumentKind) : QWidget(owner), windo
             log->verticalScrollBar()->setValue(log->verticalScrollBar()->maximum());
         }
     });
-    connect(filter, &QLineEdit::textChanged, this, [this](const QString &value) { log->filter = value; replay(); });
+    connect(filter, &FilterBox::criteriaChanged, this, [this] { log->setFilter(filter->criteria()); });
     connect(encoding, &QComboBox::currentTextChanged, this, [this](const QString &value)
     {
         log->encoding = value;
@@ -1461,7 +1465,7 @@ QJsonObject Pane::settings() const
         {"script_code", channel ? channel->scriptCode : scriptCode},
         {"script_enabled", channel ? channel->scriptEnabled : scriptRequested},
         {"script_collapsed", scriptCollapsed}, {"script_panel_height", scriptPanelHeight},
-        {"block_cursor", terminal->blockCursor},
+        {"block_cursor", terminal->blockCursor}, {"search_filter", filter->settings()},
         {"copy_shortcut", terminal->copyShortcutEnabled}, {"paste_shortcut", terminal->pasteShortcutEnabled},
         {"right_click_paste", terminal->rightClickPasteEnabled},
         {"terminal_mode", terminalMode}, {"encoding", encoding->currentText()},
@@ -1480,6 +1484,7 @@ void Pane::restore(const QJsonObject &settings)
     {
         if (instrument->freeze) { instrument->freeze->setChecked(settings["frozen"].toBool()); }
         if (instrument->controls) { instrument->controls->restore(settings["serial_controls"].toObject()); }
+        if (instrument->filter) { instrument->filter->restore(settings["search_filter"].toObject()); }
         if (instrument->points)
         {
             instrument->points->setValue(settings["points"].toInt(1000));
@@ -1528,6 +1533,7 @@ void Pane::restore(const QJsonObject &settings)
         }
     }
     log->timestamps = settings.value("timestamps").toBool(true);
+    filter->restore(settings["search_filter"].toObject());
     timestamps->setChecked(log->timestamps);
     hexDisplay->setChecked(settings["hex_display"].toBool());
     wrapLines->setChecked(settings.value("wrap_lines").toBool(true));

@@ -56,6 +56,15 @@ SerialMonitorDialog::SerialMonitorDialog(QWidget *parent) : QDialog(parent, Qt::
     tools->addWidget(encoding);
     body->addLayout(tools);
     log = new LogView(this);
+    filter = new FilterBox(this);
+    filter->setPlaceholderText("筛选小窗收发内容");
+    filter->setMaximumWidth(QWIDGETSIZE_MAX);
+    body->addWidget(filter);
+    connect(filter, &FilterBox::criteriaChanged, this, [this]
+    {
+        log->setFilter(filter->criteria());
+        emit configurationChanged();
+    });
     log->setObjectName("serialMonitorLog");
     body->addWidget(log, 1);
     auto footer = new QHBoxLayout();
@@ -240,11 +249,13 @@ QJsonObject SerialMonitorDialog::settings() const
 {
     return {{"geometry", QString::fromLatin1(saveGeometry().toBase64())}, {"hex", hex->isChecked()},
         {"timestamps", timestamps->isChecked()}, {"follow", follow->isChecked()},
-        {"encoding", encoding->currentText()}, {"newline", newline->currentData().toString()}};
+        {"encoding", encoding->currentText()}, {"newline", newline->currentData().toString()},
+        {"search_filter", filter->settings()}};
 }
 
 void SerialMonitorDialog::restore(const QJsonObject &saved)
 {
+    filter->restore(saved["search_filter"].toObject());
     const QSignalBlocker blockHex(hex);
     const QSignalBlocker blockTimestamps(timestamps);
     const QSignalBlocker blockFollow(follow);
