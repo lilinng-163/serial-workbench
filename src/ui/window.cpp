@@ -3782,6 +3782,10 @@ void Window::openSettings()
         dialog.setWindowTitle("数据字体");
         dialog.setPalette(palette());
         dialog.setStyleSheet(theme.stylesheet());
+        // The themed group boxes and list padding need more room than the
+        // platform default, otherwise the effects section is clipped on open.
+        dialog.setMinimumSize(560, 560);
+        dialog.resize(620, 620);
         if (dialog.exec() == QDialog::Accepted)
         {
             const auto selected = dialog.selectedFont();

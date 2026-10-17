@@ -299,6 +299,44 @@ private slots:
         help->close();
         window.close();
     }
+
+    void dataFontDialogOpensWithEffectsVisible()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer server(&engine);
+        sw::Window window(&engine, &server, directory.filePath("settings.json"));
+        window.openSettings();
+        auto choice = window.settingsDialog->findChild<QPushButton *>("dataFontChoice");
+        QVERIFY(choice);
+        bool checked = false;
+        QTimer::singleShot(300, &window, [&]
+        {
+            auto dialog = window.settingsDialog->findChild<QFontDialog *>();
+            if (!dialog) { dialog = qobject_cast<QFontDialog *>(QApplication::activeModalWidget()); }
+            if (!dialog)
+            {
+                if (auto modal = QApplication::activeModalWidget()) { modal->close(); }
+                return;
+            }
+            QVERIFY(dialog->width() >= 560);
+            QVERIFY(dialog->height() >= 560);
+            for (auto box : dialog->findChildren<QGroupBox *>())
+            {
+                if (box->findChildren<QCheckBox *>().size() >= 2)
+                {
+                    QVERIFY(box->isVisible());
+                    QVERIFY(dialog->contentsRect().contains(box->geometry()));
+                    checked = true;
+                }
+            }
+            capture(dialog, "data-font-dialog");
+            dialog->reject();
+        });
+        choice->click();
+        QVERIFY(checked);
+        window.close();
+    }
 };
 
 QTEST_MAIN(DialogResizeTests)
