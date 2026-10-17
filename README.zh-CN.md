@@ -246,7 +246,7 @@ $env:MINGW_BIN = 'C:/Qt/Tools/mingw1310_64/bin'
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r tests/integration/requirements.txt
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.29
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.30
 ```
 
 安装 NSIS，并提供匹配的 Qt 源码目录收集许可证，即可生成安装包、单文件启动器和便携 ZIP：

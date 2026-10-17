@@ -1,6 +1,27 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # 更新记录
 
+## 0.15.30 — 2026-10-17
+
+### 新增
+
+- 收发日志、串口收发小窗和 JSON/XML 记录列表增加统一搜索开关：区分大小写、全词匹配、正则表达式和逻辑匹配。
+- 逻辑匹配支持 `&&` 与 `||`（`&&` 优先），可与正则组合；双引号可保护包含运算符的搜索项。查询与开关随页面设置保存。
+
+### 改进与修复
+
+- 暂停显示时仍可重新筛选现有日志；分段收到的文本按完整行重新判断，筛选保留共享 MCP 历史和独立读取游标。
+- 无效搜索表达式显示警示边框与悬停说明；JSON/XML 详情与当前可见记录同步，无匹配时清空详情。
+- SSH 草稿切回串口时恢复收发日志，已连接串口仍保留其显式终端偏好。
+- 默认窗口适度增高并限制在可用屏幕高度内；标签重命名下划线贴近文字，并避开图标和关闭按钮。
+
+### English
+
+- Add shared search controls for receive logs, serial monitor windows and JSON/XML records: case sensitivity, whole-word, regular expressions and logical matching.
+- Support `&&` before `||`, quoted terms and combined regex/logical queries; persist search settings per page/window.
+- Refilter paused and partially received log lines without consuming shared MCP history. Explain invalid expressions and keep structured details aligned with visible records.
+- Restore serial log mode when leaving an SSH draft, preserve explicit connected-serial preferences, improve default window height and refine inline tab renaming.
+
 ## 0.15.29 — 2026-10-16
 
 ### 新增

@@ -10,15 +10,15 @@
 | 本机源码 | `E:/demo/serial`；其他机器以实际克隆目录为准 |
 | 正式主线 | `main` |
 | DeepSeek 开发分支 | `deepseek-dev` |
-| 交接基线 | `43f3dc4184e59349380cd80479ad5f9259faa53e` |
-| 已发布版本 | [v0.15.29](https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.29)，2026-10-16 |
+| 交接基线 | 以 `v0.15.30` 标签及最新开发交接记录为准 |
+| 已发布版本 | [v0.15.30](https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.30)，2026-10-17 |
 | 技术栈 | C++17、Qt Widgets / Network / SerialPort / Core5Compat / Svg、CMake、Ninja |
 | 主要分发平台 | Windows x64；Docker 用于 Linux 开发构建 |
 | 用户文档 | [English](README.md) / [简体中文](README.zh-CN.md) |
 
 **开始前重新执行 `git fetch origin`、`git status`、`git log`。上述版本和提交是交接快照，不代表未来远程的最新状态。**
 
-当前没有待续写的业务功能；v0.15.29 的开发与发布已完成。下一项功能以用户新任务为准，不要从这份总结自行推导大规模重构或新需求。
+本次按用户要求先发布 v0.15.30。后续已提出但尚未实现：MCP 原生搜索与 GUI 同步、脚本写入/验证接口、安装时可选 Agent skill，以及启动时检查各 Agent 的 MCP 地址。此次发布不包含这些扩展，后续按用户指示继续。
 
 ## 2. 项目解决什么问题
 
@@ -94,6 +94,8 @@ src/bridge/main.cpp
 
 ## 6. 已完成的最近工作
 
+v0.15.30 增加收发页、小窗和 JSON/XML 的大小写、全词、正则、逻辑搜索及设置保存；支持暂停筛选和分段行判断，保留独立共享历史；修复结构化详情选择、SSH 草稿切回串口和标签重命名，并改善默认窗口高度。验证证据和发布结果见最新开发交接记录。
+
 v0.15.29 已包含：SSH 单一终端模式及一万行历史；串口控制组/预设/自由布局/独立收发小窗；定宽波形读数和通道选择；波形/JSON/XML 本地清空；标签重命名修复与特征图标；设置/下拉圆角和更平稳的控件反馈；MCP 使用指南与 skill；自定义背景；中英双语 README 和七张实图。
 
 基线验证已通过：14 组原生 CTest、Windows 原生终端用例、本地 SSH 测试会话、HTTP/STDIO 集成、便携 ZIP/单文件启动器，以及隔离的安装/升级/卸载检查。它们是 **v0.15.29 的历史结果**，不代表后续修改已经自动通过。
@@ -118,7 +120,7 @@ ctest --test-dir build/native-release --output-on-failure
 ctest --test-dir build/native-release -R terminal_keyboard_tests --output-on-failure
 
 # 打包目录的集成测试；Python 仅供测试，不是产品运行依赖
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.29
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.30
 ```
 
 Qt 最低 6.9；本机为 Qt 6.11.1 / MinGW 13.1。首次准备 Python 测试环境：
@@ -147,7 +149,7 @@ python -m venv .venv
   --screenshot build/preview.png --quit-after 2200
 ```
 
-发布步骤见 [安装器说明](docs/windows-installer.md)。网站与国内镜像在本次交接时保持冻结；v0.15.29 只发布 GitHub，不能擅自更新服务器或镜像。
+发布步骤见 [安装器说明](docs/windows-installer.md)。网站与国内镜像在本次交接时保持冻结；v0.15.30 只发布 GitHub，不能擅自更新服务器或镜像。
 
 ## 8. DeepSeek 开发流程
 

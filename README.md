@@ -248,7 +248,7 @@ The build script compiles the application, runs native tests and deploys Qt libr
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r tests/integration/requirements.txt
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.29
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.30
 ```
 
 To create the installer, single-file launcher and portable ZIP, install NSIS and provide the matching Qt source tree for license notices:
