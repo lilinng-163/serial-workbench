@@ -204,3 +204,14 @@ add_test(NAME mcp_workflow_tests COMMAND "${CMAKE_COMMAND}" -E env
     -o "${PROJECT_BINARY_DIR}/mcp-workflow-tests.txt,txt"
 )
 set_tests_properties(mcp_workflow_tests PROPERTIES TIMEOUT 30)
+
+qt_add_executable(release_history_tests release_history_tests.cpp)
+workbench_configure_target(release_history_tests)
+target_link_libraries(release_history_tests PRIVATE workbench_ui Qt6::Test)
+add_test(NAME release_history_tests COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=${workbench_test_path}"
+    $<TARGET_FILE:release_history_tests>
+    -platform offscreen
+    -o "${PROJECT_BINARY_DIR}/release-history-tests.txt,txt"
+)
+set_tests_properties(release_history_tests PROPERTIES TIMEOUT 30)

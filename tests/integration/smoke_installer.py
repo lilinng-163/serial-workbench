@@ -172,8 +172,11 @@ def main():
         app = None
         try:
             baseline_version = "0.15.7"
-            compile_fixture(args, setup, baseline_version)
-            install(setup, destination, env)
+            # A recently executed installer can remain mapped by Windows briefly.
+            # Keep baseline and upgrade binaries separate, as real releases are.
+            baseline_setup = directory / "SerialWorkbenchInstallerBaselineTest.exe"
+            compile_fixture(args, baseline_setup, baseline_version)
+            install(baseline_setup, destination, env)
             skill = profile / "codex/skills/serial-workbench/SKILL.md"
             assert skill.is_file(), "Detected Codex skill component was not selected"
             assert (profile / "pi/skills/serial-workbench/SKILL.md").is_file(), "Detected Pi skill component was not selected"

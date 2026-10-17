@@ -260,6 +260,7 @@ public:
     bool holdsSerialPort(const QString &name) const;
     void protocolChanged();
     void openSettings();
+    void installUpdate(const QString &path);
     void configureClient(int index, QLabel *result);
     void saveSettings();
     void applyTheme(bool dark);

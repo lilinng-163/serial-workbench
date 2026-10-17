@@ -846,12 +846,16 @@ private slots:
                 dialog->findChild<QPushButton *>("confirmClearControls")->click();
             });
         };
-        approve();
-        panel.findChild<QAction *>("clearCurrentControlGroup")->trigger();
+        QVERIFY(!panel.findChild<QAction *>("clearCurrentControlGroup"));
         QCOMPARE(panel.settings()["active_group"].toString(), second);
         QCOMPARE(panel.settings()["groups"].toArray().size(), 2);
-        QCOMPARE(panel.settings()["groups"].toArray().last().toObject()["controls"].toArray().size(), 0);
+        QCOMPARE(panel.settings()["groups"].toArray().last().toObject()["controls"].toArray().size(), 8);
         QCOMPARE(controls(panel.settings()).size(), 5);
+        for (auto layer : panel.findChildren<QToolButton *>("controlLayerMenu"))
+        {
+            QCOMPARE(layer->text(), QString("图层"));
+            QCOMPARE(layer->menu()->actions().size(), 2);
+        }
         QVERIFY(panel.selectGroup(first));
         panel.findChild<QCheckBox *>("controlAutoSend")->setChecked(true);
         panel.findChild<QSlider *>("controlSlider")->setValue(99);
@@ -868,7 +872,7 @@ private slots:
         sw::SerialControlPanel restored;
         restored.restore(empty);
         QCOMPARE(restored.settings(), empty);
-        panel.clearControls(true);
+        panel.clearControls();
         QVERIFY(panel.status->text().contains("没有控件"));
     }
 

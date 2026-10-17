@@ -284,10 +284,15 @@ QString Theme::stylesheet() const
         QPushButton#serialMonitorSend:disabled { background: $side; color: $muted; border-color: $line; }
         QFrame#serialControlCard QPushButton, QFrame#serialControlCard QToolButton { min-height: 22px; padding: 1px 6px; }
         QFrame#serialControlCard QAbstractSpinBox, QFrame#serialControlCard QComboBox { min-height: 22px; padding-top: 2px; padding-bottom: 2px; }
-        QSlider#controlSlider::groove:horizontal { height: 4px; background: $line; border: 1px solid $edge; }
-        QSlider#controlSlider::sub-page:horizontal { background: $accent; }
-        QSlider#controlSlider::handle:horizontal { border-radius: 3px; width: 12px; margin: -6px 0; background: $panel; border: 1px solid $edge; }
-        QSlider#controlSlider::handle:horizontal:hover { background: $accent; }
+        QSlider { min-height: 24px; background: transparent; }
+        QSlider::groove:horizontal { height: 6px; background: $line; border: none; border-radius: 3px; }
+        QSlider::sub-page:horizontal { background: $accent; border: none; border-radius: 3px; }
+        QSlider::add-page:horizontal { background: $line; border: none; border-radius: 3px; }
+        QSlider::handle:horizontal { width: 12px; margin: -5px 0; background: $panel; border: 2px solid $edge; border-radius: 8px; }
+        QSlider::handle:horizontal:hover, QSlider::handle:horizontal:focus { background: $hover; border-color: $accent; }
+        QSlider::handle:horizontal:pressed { background: $accent; border-color: $accent; }
+        QSlider::sub-page:horizontal:disabled { background: $muted; }
+        QSlider::handle:horizontal:disabled { background: $side; border-color: $line; }
         QLabel#controlValidation { color: $red; }
 
         QLabel#agentTitle { font-size: 14px; font-weight: 600; }
@@ -340,10 +345,10 @@ QString Theme::stylesheet() const
         QPushButton:checked { color: $accent; font-weight: 600; }
         QPushButton[keyboardFocus="true"]:focus, QToolButton[keyboardFocus="true"]:focus { color: $accent; }
         QPushButton:pressed, QToolButton:pressed { color: $text; }
-        QPushButton#primary { background: $accent; color: $onaccent; border: 1px solid $edge; padding: 6px 16px; }
-        QPushButton#primary:hover, QPushButton#primary[keyboardFocus="true"]:focus { background: $accent; color: $onaccent; }
-        QPushButton#primary:pressed { color: $onaccent; }
-        QPushButton#primary:disabled { background: $line; color: $muted; border-color: $edge; }
+        QPushButton#primary, QPushButton#releaseHistoryDownload { background: $accent; color: $onaccent; border: 1px solid $edge; padding: 6px 16px; }
+        QPushButton#primary:hover, QPushButton#primary[keyboardFocus="true"]:focus, QPushButton#releaseHistoryDownload:hover, QPushButton#releaseHistoryDownload[keyboardFocus="true"]:focus { background: $accent; color: $onaccent; }
+        QPushButton#primary:pressed, QPushButton#releaseHistoryDownload:pressed { color: $onaccent; }
+        QPushButton#primary:disabled, QPushButton#releaseHistoryDownload:disabled { background: $line; color: $muted; border-color: $edge; }
         QPushButton#outline, QPushButton[variant="outline"] { color: $text; border: 1px solid $line; background: $panel; }
         QPushButton#outline[keyboardFocus="true"]:focus, QPushButton[variant="outline"][keyboardFocus="true"]:focus { border-color: $accent; color: $accent; }
         QPushButton#outline:hover, QPushButton[variant="outline"]:hover { color: $accent; border-color: $accent; }

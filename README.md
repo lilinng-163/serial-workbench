@@ -31,6 +31,7 @@ Built with **Qt 6 and C++17**. The Windows application and its native MCP bridge
 | 🖥️ **SSH terminal** | A dedicated interactive terminal with **10,000 lines of scrollback**, selection and copy, ANSI colors, IME input and remote PTY resizing. |
 | 📈 **Waveforms** | Up to 16 named curves, zoom, pan, cursor inspection and four fixed-width live readouts with selectable channels. |
 | 🧩 **JSON / XML** | Separate pages sharing a connection, incremental extraction, structured inspection and a JSON assistant. |
+| 🕘 **Version history** | Review the latest three stable releases in Settings, download verified installers, and see the running version in the status bar. |
 | 🎛️ **Serial controls** | Sliders, numeric inputs, switches, buttons and choices; groups, draggable/resizable cards that follow window width, presets and per-control automatic sending. |
 | 📦 **Files & protocols** | Raw-byte and XMODEM-CRC file transfer; C-style frame scripts with persistent state and checksum helpers. |
 | 🤖 **AI collaboration** | Streamable HTTP and STDIO MCP, protocol-level access switches, read-only defaults and an explicit AI control permission. |
@@ -229,6 +230,7 @@ Detailed guides are currently in Chinese.
 | --- | --- |
 | [Agent integration](docs/agent-integration.md) | Client formats, configuration paths and connection checks |
 | [Waveform protocol](docs/wave-protocol.md) | Framing, channel names, numeric types and limits |
+| [Version history](docs/version-history.md) | Recent stable release notes and installers |
 | [Serial controls](docs/serial-controls.md) | Control groups, presets, templates and automatic sending |
 | [Frame scripts](docs/frame-scripts.md) | C-style parser API, validation and examples |
 | [JSON assistant](docs/json-assistant.md) | Structured JSON tools |

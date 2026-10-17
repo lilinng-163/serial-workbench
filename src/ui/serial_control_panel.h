@@ -26,7 +26,7 @@ public:
     void addControl(const QJsonObject &spec);
     void addExamples();
     bool addPresetGroup(const QString &presetId);
-    void clearControls(bool allGroups = false);
+    void clearControls();
     QString addGroup(const QString &name);
     bool selectGroup(const QString &id);
     void setTheme(const Theme &theme);

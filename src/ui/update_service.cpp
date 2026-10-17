@@ -4,6 +4,8 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QFile>
+#include <algorithm>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -22,7 +24,8 @@ const QUrl ReleasesApi("https://api.github.com/repos/lilinng-163/serial-workbenc
 const QUrl MirrorManifest("https://162.14.72.194/updates/latest.json");
 }
 
-UpdateService::UpdateService(QObject *parent) : QObject(parent)
+UpdateService::UpdateService(QObject *parent, QNetworkAccessManager *transport)
+    : QObject(parent), networkClient(transport ? transport : &network), history(bundledHistory())
 {
 }
 
@@ -66,6 +69,7 @@ std::optional<UpdateRelease> UpdateService::parseRelease(const QByteArray &json,
         const auto match = digestPattern.match(digest);
         const auto size = asset.value("size").toInteger();
         if (!url.isValid() || url.scheme() != "https" || url.host() != "github.com"
+            || url.port(-1) != -1 || !url.userInfo().isEmpty()
             || url.path() != expectedPath || !url.query().isEmpty() || !url.fragment().isEmpty()
             || !match.hasMatch() || size <= 0 || size > MaximumInstallerBytes)
         {
@@ -116,6 +120,84 @@ std::optional<UpdateRelease> UpdateService::parseMirrorManifest(const QByteArray
         object.value("published_at").toString()};
 }
 
+QList<UpdateRelease> UpdateService::parseHistory(const QByteArray &json)
+{
+    const auto document = QJsonDocument::fromJson(json);
+    QList<UpdateRelease> result;
+    if (!document.isArray()) { return result; }
+    for (const auto &entry : document.array())
+    {
+        const auto candidate = parseRelease(QJsonDocument(entry.toObject()).toJson(), "0.0.0");
+        if (!candidate) { continue; }
+        const bool duplicate = std::any_of(result.cbegin(), result.cend(), [&](const UpdateRelease &item)
+        { return item.version == candidate->version; });
+        if (!duplicate) { result.append(*candidate); }
+    }
+    std::sort(result.begin(), result.end(), [](const UpdateRelease &left, const UpdateRelease &right)
+    {
+        return QVersionNumber::fromString(left.version) > QVersionNumber::fromString(right.version);
+    });
+    if (result.size() > 3) { result = result.first(3); }
+    return result;
+}
+
+QList<UpdateRelease> UpdateService::bundledHistory()
+{
+    QFile file(":/releases/history.json");
+    return file.open(QIODevice::ReadOnly) ? parseHistory(file.readAll()) : QList<UpdateRelease>();
+}
+
+void UpdateService::checkHistory()
+{
+    if (historyReply || installerReply) { return; }
+    QNetworkRequest request(QUrl("https://api.github.com/repos/lilinng-163/serial-workbench/releases?per_page=30"));
+    request.setHeader(QNetworkRequest::UserAgentHeader, "SerialWorkbench-Updater");
+    request.setRawHeader("Accept", "application/vnd.github+json");
+    request.setTransferTimeout(15000);
+    auto reply = networkClient->get(request);
+    historyReply = reply;
+    connect(reply, &QNetworkReply::readyRead, this, [reply]
+    {
+        if (reply->bytesAvailable() > 2 * 1024 * 1024) { reply->abort(); }
+    });
+    connect(reply, &QNetworkReply::finished, this, [this, reply]
+    {
+        historyReply = nullptr;
+        QList<UpdateRelease> candidates;
+        if (reply->error() == QNetworkReply::NoError
+            && reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() == 200
+            && reply->bytesAvailable() <= 2 * 1024 * 1024)
+        {
+            candidates = parseHistory(reply->readAll());
+        }
+        reply->deleteLater();
+        if (candidates.isEmpty())
+        {
+            emit historyFailed("无法刷新版本列表，保留已有发布记录。可稍后重试。");
+            return;
+        }
+        history = candidates;
+        emit historyChanged();
+    });
+}
+
+bool UpdateService::downloadRelease(const UpdateRelease &candidate)
+{
+    if (installerReply || historyReply) { return false; }
+    // Only allow entries from a validated release feed, including the bundled copy.
+    const auto found = std::find_if(history.cbegin(), history.cend(), [&](const UpdateRelease &item)
+    {
+        return item.version == candidate.version && item.url == candidate.url
+            && item.sha256 == candidate.sha256 && item.size == candidate.size
+            && item.fileName == candidate.fileName;
+    });
+    if (found == history.cend()) { return false; }
+    if (!release || release->version != found->version) { downloadedPath.clear(); }
+    release = *found;
+    download();
+    return isDownloading();
+}
+
 void UpdateService::check()
 {
     if (checkReply || installerReply)
@@ -132,7 +214,7 @@ void UpdateService::startCheck(bool mirror)
     request.setHeader(QNetworkRequest::UserAgentHeader, "SerialWorkbench-Updater");
     request.setRawHeader("Accept", mirror ? "application/json" : "application/vnd.github+json");
     request.setTransferTimeout(mirror ? 8000 : 15000);
-    auto reply = network.get(request);
+    auto reply = networkClient->get(request);
     checkReply = reply;
     connect(reply, &QNetworkReply::finished, this, [this, reply, mirror]
     {
@@ -202,7 +284,7 @@ void UpdateService::download()
     request.setHeader(QNetworkRequest::UserAgentHeader, "SerialWorkbench-Updater");
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     request.setTransferTimeout(60000);
-    auto reply = network.get(request);
+    auto reply = networkClient->get(request);
     installerReply = reply;
 
     connect(reply, &QNetworkReply::readyRead, this, [this, reply] { receiveChunk(reply); });

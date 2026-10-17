@@ -146,9 +146,6 @@ SerialControlPanel::SerialControlPanel(QWidget *parent) : QWidget(parent)
     {
         groupMenu->addAction(entry.second, this, [this, action = entry.first] { manageGroup(action); });
     }
-    groupMenu->addSeparator();
-    auto clearGroup = groupMenu->addAction("清空当前组控件", this, [this] { clearControls(false); });
-    clearGroup->setObjectName("clearCurrentControlGroup");
     manage->setMenu(groupMenu);
     groupRow->addWidget(manage);
     toolbarBody->addLayout(groupRow);
@@ -219,7 +216,7 @@ SerialControlPanel::SerialControlPanel(QWidget *parent) : QWidget(parent)
     auto clearAll = new QPushButton("清空全部");
     clearAll->setObjectName("clearAllControls");
     clearAll->setToolTip("清空本页面所有组内的控件，保留控件组和串口连接");
-    connect(clearAll, &QPushButton::clicked, this, [this] { clearControls(true); });
+    connect(clearAll, &QPushButton::clicked, this, [this] { clearControls(); });
     tools->addWidget(clearAll);
     tools->addStretch();
     placement->addWidget(columns);
@@ -643,31 +640,25 @@ bool SerialControlPanel::addPresetGroup(const QString &presetId)
     return false;
 }
 
-void SerialControlPanel::clearControls(bool allGroups)
+void SerialControlPanel::clearControls()
 {
     cancelPending();
     const auto saved = settings();
     const auto list = saved["groups"].toArray();
     int count = 0;
-    QString name;
     for (const auto &entry : list)
     {
-        const auto group = entry.toObject();
-        if (group["id"].toString() == activeGroup) { name = group["name"].toString(); }
-        if (allGroups || group["id"].toString() == activeGroup)
-        { count += group["controls"].toArray().size(); }
+        count += entry.toObject()["controls"].toArray().size();
     }
     if (!count) { status->setText("所选范围内没有控件，无需清空。"); return; }
     QDialog dialog(this);
     dialog.setObjectName("clearControlsDialog");
-    dialog.setWindowTitle(allGroups ? "清空全部控件" : "清空当前组控件");
+    dialog.setWindowTitle("清空全部控件");
     dialog.resize(460, 250);
     dialog.setMinimumSize(340, 230);
     auto body = new QVBoxLayout(&dialog);
     body->setContentsMargins(16, 12, 16, 12);
-    auto summary = new QLabel(allGroups
-        ? QString("清空本页面 %1 个控件组中的全部 %2 个控件？").arg(list.size()).arg(count)
-        : QString("清空“%1”中的 %2 个控件？").arg(name).arg(count));
+    auto summary = new QLabel(QString("清空本页面 %1 个控件组中的全部 %2 个控件？").arg(list.size()).arg(count));
     summary->setObjectName("clearControlsSummary");
     summary->setTextFormat(Qt::PlainText);
     summary->setWordWrap(true);
@@ -693,11 +684,8 @@ void SerialControlPanel::clearControls(bool allGroups)
     for (int index = 0; index < cleared.size(); ++index)
     {
         auto group = cleared[index].toObject();
-        if (allGroups || group["id"].toString() == activeGroup)
-        {
-            group["controls"] = QJsonArray();
-            cleared[index] = group;
-        }
+        group["controls"] = QJsonArray();
+        cleared[index] = group;
     }
     result["groups"] = cleared;
     restore(result);
@@ -853,8 +841,10 @@ void SerialControlPanel::rebuild()
         heading->addWidget(editButton);
         connect(editButton, &QPushButton::clicked, this, [this, index] { edit(index); });
         auto more = new QToolButton();
-        more->setText("⋯");
-        more->setToolTip("调整顺序或移除控件");
+        more->setObjectName("controlLayerMenu");
+        more->setText("图层");
+        more->setAccessibleName("调整控件图层");
+        more->setToolTip("调整控件重叠时的上下层级");
         auto menu = new QMenu(more);
         menu->addAction("移至最上层", this, [this, row]
         {
