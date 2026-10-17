@@ -31,7 +31,7 @@ Built with **Qt 6 and C++17**. The Windows application and its native MCP bridge
 | 🖥️ **SSH terminal** | A dedicated interactive terminal with **10,000 lines of scrollback**, selection and copy, ANSI colors, IME input and remote PTY resizing. |
 | 📈 **Waveforms** | Up to 16 named curves, zoom, pan, cursor inspection and four fixed-width live readouts with selectable channels. |
 | 🧩 **JSON / XML** | Separate pages sharing a connection, incremental extraction, structured inspection and a JSON assistant. |
-| 🎛️ **Serial controls** | Sliders, numeric inputs, switches, buttons and choices; groups, draggable/resizable cards, presets and per-control automatic sending. |
+| 🎛️ **Serial controls** | Sliders, numeric inputs, switches, buttons and choices; groups, draggable/resizable cards that follow window width, presets and per-control automatic sending. |
 | 📦 **Files & protocols** | Raw-byte and XMODEM-CRC file transfer; C-style frame scripts with persistent state and checksum helpers. |
 | 🤖 **AI collaboration** | Streamable HTTP and STDIO MCP, protocol-level access switches, read-only defaults and an explicit AI control permission. |
 | 🎨 **Workspace** | Detachable tabs, light/dark themes, custom backgrounds, data fonts and per-page clear actions. |

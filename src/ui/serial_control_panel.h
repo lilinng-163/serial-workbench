@@ -38,6 +38,7 @@ signals:
     void zoomRequested(int steps);
 
 protected:
+    bool eventFilter(QObject *object, QEvent *event) override;
     void hideEvent(QHideEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     void showEvent(QShowEvent *event) override;
@@ -58,10 +59,12 @@ private:
     QString activeGroup;
     int layoutColumns = -1;
     bool canvasInitialized = false;
+    int canvasReferenceWidth = 0;
     Theme appearance;
     QLabel *empty = nullptr;
     QTimer sendTimer;
     QTimer saveTimer;
+    QTimer arrangeTimer;
     QPointer<Channel> target;
     int generation = -1;
     void cancelPending();
