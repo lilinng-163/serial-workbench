@@ -274,6 +274,7 @@ QString Theme::stylesheet() const
         QPushButton#sendControl { background: $hover; border: 1px solid $edge; }
         QPushButton#sendControl:disabled { background: $side; color: $muted; border-color: $line; }
         QToolButton#controlPreviewToggle { color: $muted; }
+        QToolButton#controlLayerMenu::menu-indicator { image: none; width: 0px; height: 0px; }
         QDialog#serialMonitorDialog { background: $panel; }
         QLabel#serialMonitorSource { font-weight: 600; }
         QLabel#serialMonitorConnection { background: $side; border: 1px solid $line; border-radius: 4px; padding: 3px 8px; }

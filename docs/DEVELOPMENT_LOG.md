@@ -2,6 +2,15 @@
 
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
 
+## 2026-10-17 — 图层按钮移除菜单小箭头
+
+- 用户目标：去掉「图层」文字右下角的小箭头，保留点击展开菜单。
+- 分支与起点：从 deepseek-dev 的 `14952f6` 建立 `codex/layer-menu-label`，版本仍为 0.15.32。
+- 改动：仅为 `QToolButton#controlLayerMenu::menu-indicator` 隐藏图像并将尺寸置零，保留菜单和上下图层操作。
+- 验证：Release 构建成功，serial_control_tests 与 button_motion_tests 2/2 通过；Windows 原生控件回归 4 项通过，检查 PID 卡片截图。实际打包程序在不含 Qt/MinGW SDK 的 PATH 下启动并生成串口控制截图，确认箭头消失；三个打包 EXE 与构建哈希一致，没有覆盖用户运行中的 `E:/SerialWorkbench/SerialWorkbench.exe`。本次仅改显示样式，未重复运行完整安装升级测试。
+- 产物：`dist/local/layer-label-0.15.32-installer/SerialWorkbench-0.15.32-windows-x64-setup.exe`，15,467,589 字节，SHA-256 `d7888424ffd666defa95151e8d6aaa1fa773f9f9a4a0ea814f90864b803e1df3`。证据在 `build/layer-label-20261017/`，payload 在 `build/release-0.15.32-e5104a03/SerialWorkbench/`。
+- 交接：推送并保留 deepseek-dev，main、正式 Release、网站和国内镜像不变。
+
 ## 2026-10-17 — 版本回溯、底部版本与控件操作整理
 
 - 用户目标：设置增加最近三个版本的特性和安装包；窗口底部显示当前版本；串口控制只保留「清空全部」，省略号菜单换成明确入口，背景设置滑块统一主题。
