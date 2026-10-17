@@ -594,7 +594,15 @@ public:
 
     void resizeEvent(QResizeEvent *event) override
     {
-        const auto direction = width() < 730 ? QBoxLayout::TopToBottom : QBoxLayout::LeftToRight;
+        // Measure the real one-row minimum instead of using a fixed 730 px
+        // threshold, which forced a second row and squeezed the payload box.
+        int oneRow = body->contentsMargins().left() + body->contentsMargins().right();
+        for (int index = 0; index < body->count(); ++index)
+        {
+            if (auto item = body->itemAt(index)) { oneRow += item->minimumSize().width(); }
+            if (index > 0) { oneRow += body->spacing(); }
+        }
+        const auto direction = width() < oneRow ? QBoxLayout::TopToBottom : QBoxLayout::LeftToRight;
         if (body->direction() != direction)
         {
             body->setDirection(direction);
@@ -779,12 +787,12 @@ Pane::Pane(Window *owner, const QString &instrumentKind) : QWidget(owner), windo
     auto sendTools = horizontal();
     sendTools->setSpacing(6);
     encoding = combo({"utf-8", "gbk", "ascii", "latin-1"});
-    encoding->setFixedWidth(108);
+    encoding->setMinimumWidth(84);
     encoding->setToolTip("收发文本编码");
     newline = combo({"None · 无换行", "LF · \\n", "CR · \\r", "CRLF · \\r\\n"});
     newline->setCurrentIndex(3);
     newline->menuPopup = true;
-    newline->setFixedWidth(152);
+    newline->setMinimumWidth(116);
     newline->setToolTip("发送时追加的换行符");
     const QStringList lineNames {"None · 不追加换行", "LF · \\n · Line Feed", "CR · \\r · Carriage Return", "CRLF · \\r\\n · Carriage Return + Line Feed"};
     for (int i = 0; i < lineNames.size(); ++i)
@@ -827,6 +835,7 @@ Pane::Pane(Window *owner, const QString &instrumentKind) : QWidget(owner), windo
     connect(sendButton, &QPushButton::clicked, this, &Pane::sendCurrent);
     actions->addWidget(sendButton);
     auto footer = new SendFooter();
+    footer->setObjectName("sendFooter");
     footer->body->addLayout(sendTools);
     footer->body->addLayout(actions, 1);
     sendBody->addWidget(footer);

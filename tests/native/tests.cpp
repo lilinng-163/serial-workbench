@@ -2998,6 +2998,31 @@ private slots:
         window.close();
     }
 
+    void sendFooterKeepsPayloadProportion()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        window.resize(1416, 968);
+        window.show();
+        QTest::qWait(100);
+        window.resizeParameters(700);
+        QTest::qWait(100);
+        auto pane = window.active;
+        QVERIFY(pane && !pane->isInstrument());
+        auto footer = pane->sender->findChild<QWidget *>("sendFooter");
+        QVERIFY(footer);
+        QTRY_VERIFY(footer->height() < 60);
+        QVERIFY2(pane->payload->height() >= 80, qPrintable(QString::number(pane->payload->height())));
+        const auto captureDirectory = qEnvironmentVariable("SW_UI_CAPTURE_DIR");
+        if (!captureDirectory.isEmpty())
+        {
+            QVERIFY(window.grab().save(QDir(captureDirectory).filePath("send-footer-one-row.png")));
+        }
+        window.close();
+    }
+
     void settingsResizeAndRestore()
     {
         QTemporaryDir directory;
