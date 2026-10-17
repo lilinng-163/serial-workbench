@@ -33,9 +33,17 @@ int main(int argc, char *argv[])
     parser.addOption({"screenshot", "Save window preview", "path"});
     parser.addOption({"ready-file", "Write startup timing", "path"});
     parser.addOption({"quit-after", "Close after milliseconds", "ms"});
-    parser.addOption({"install-skill", "Install the bundled skill for codex/claude-code/opencode/pi without opening the GUI", "agent"});
+    parser.addOption({"install-skill", "Install the bundled skill for codex/claude-code/opencode/pi/hermes/openclaw/grok/gemini without opening the GUI", "agent"});
     parser.addOption({"skill-report", "Write the skill installation result to a JSON file", "path"});
+    parser.addOption({"detect-skill-agents", "Detect installed skill-capable Agents without opening the GUI; write INI to --skill-report"});
     parser.process(app);
+    if (parser.isSet("detect-skill-agents"))
+    {
+        if (!parser.isSet("skill-report")) { return 2; }
+        try { sw::AgentSkill::writeDetection(parser.value("skill-report")); }
+        catch (const std::exception &) { return 3; }
+        return 0;
+    }
     if (parser.isSet("install-skill"))
     {
         QJsonObject result;

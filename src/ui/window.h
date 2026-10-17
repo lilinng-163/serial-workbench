@@ -104,6 +104,8 @@ public:
     FilterBox *filter = nullptr;
     bool terminalMode = false;
     bool userTerminalMode = false;
+    static QString exampleTestHex() { return "AA 55 C4\n09 E4 0C BC 0D\nAA 55 C4 09 E4 0C BC 0D"; }
+    QString scriptTestHex = exampleTestHex();
     QString scriptCode = FrameScriptProgram::example();
     bool scriptRequested = false;
     QPointer<QDialog> scriptDialog;

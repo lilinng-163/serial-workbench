@@ -65,3 +65,5 @@ array 只能是 `data` 或 `buffer`，偏移与长度必须是非负整数且不
 给用户可粘贴的完整 main，并注明字段偏移、字节序、倍率、校验算法与覆盖范围。提供有效、分块、连帧、混合日志、坏校验、坏帧尾的 HEX 样本及预期字段值；协议资料不足时说明哪些规则待确认。不要把示例的校验算法强加到未知设备。
 
 用户在串口收发页保存并启用后，AI 通过 `list_connections` 核对串口 ID 与 `script_enabled`，再 `read_script_results(channel_id=目标ID, cursors={"default":0}, limit=100)`。读取 `sources.default.records[].value`，保存其 `next_cursor`，用记录的 `event_seq` 关联原始数据。JSON/XML 和波形使用各自工具与游标，脚本字段不会自动显示到那些页面。AI 也可先 get_frame_script 读取 revision，使用 validate_frame_script(code, sample_chunks) 离线检查；用户要求且允许 AI 控制时，以 expected_revision 调用 set_frame_script 保存并明确 enabled。GUI 编辑器有未保存内容时不会被覆盖；成功后的读取方式相同。
+
+编写或修改脚本时，必须同时更新匹配协议的试解析 HEX 样本及预期结果，不能沿用无关的内置样本。先 validate_frame_script 离线验证，再在用户要求且有控制权限时，将同一批 sample_chunks 传给 set_frame_script，同步到 GUI 的「试解析」输入区。最多保存 64 个块、合计 64 KiB；省略保留原输入，[] 清空，未保存的 GUI 样本不会被覆盖。

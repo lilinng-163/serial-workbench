@@ -137,9 +137,10 @@ async def check(url, bridge, allow, expected_version=None):
                     live_script = unpack(await second.call_tool("get_frame_script", {"channel_id": channel_id}))
                     applied = unpack(await second.call_tool("set_frame_script", {
                         "channel_id": channel_id, "code": code, "enabled": True,
-                        "expected_revision": live_script["revision"],
+                        "expected_revision": live_script["revision"], "sample_chunks": ["AA55C4", "09E40CBC0D"],
                     }))
                     assert applied["enabled"] and applied["code"] == code
+                    assert applied["sample_chunks"] == ["AA 55 C4", "09 E4 0C BC 0D"]
                     unpack(await second.call_tool("send_data", {
                         "channel_id": channel_id, "hex_mode": True, "payload": "AA55C409E40CBC0D",
                     }))

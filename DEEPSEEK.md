@@ -20,6 +20,8 @@
 
 v0.15.31 集成 MCP 原生搜索与 GUI 同步、脚本读写/离线验证、安装时可选 Agent skill、启动地址检查，以及 DeepSeek 完成的 AI 活动提示、连接/脚本界面同步与调用详情。Codex 审查时补充了调用日志选中项及回看位置的恢复。具体验证与发布结果以开发日志最新记录为准。
 
+当前开发分支版本为 0.15.32：新增设置中的 skill 安装/更新、安装器按已检测 Agent 默认勾选、脚本试解析 HEX 的 MCP 同步与保存，并移除脚本 AI 提示词窗口。已提供测试安装包，正式 Release 仍为 v0.15.31；详见开发日志最新记录。
+
 ## 2. 项目解决什么问题
 
 一个应用同时管理串口、TCP 客户端/服务端、UDP、SSH，提供收发日志、交互终端、波形、JSON/XML、串口控制面板与帧解析脚本。
@@ -120,7 +122,7 @@ ctest --test-dir build/native-release --output-on-failure
 ctest --test-dir build/native-release -R terminal_keyboard_tests --output-on-failure
 
 # 打包目录的集成测试；Python 仅供测试，不是产品运行依赖
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.31
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.32
 ```
 
 Qt 最低 6.9；本机为 Qt 6.11.1 / MinGW 13.1。首次准备 Python 测试环境：

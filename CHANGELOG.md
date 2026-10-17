@@ -1,6 +1,14 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # 更新记录
 
+## 0.15.32 — 开发版，未发布 Release
+
+- 移除脚本编辑器的 AI 提示词窗口，skill 要求修改代码时同时更新匹配当前协议的试解析 HEX 样本。
+- set_frame_script 支持 sample_chunks，同步并保存 GUI 试解析输入；revision 覆盖已保存样本，保护未保存编辑。
+- 设置增加 skill 安装/更新入口；安装器默认勾选已检测到的 Agent，支持八种本地 skill 目录，保留取消选择、备份和同内容幂等更新。
+- 新建控件菜单保留网格图标，串口控制页使用独立滑杆图标。
+- English: replace the script AI prompt window with the shared skill workflow, synchronize trial HEX inputs over MCP, configure skills from Settings and preselect detected Agents in the installer, and distinguish control-page icons.
+
 ## 0.15.31 — 2026-10-17
 
 - MCP 新增 list_search_views / search_logs，直接同步 GUI 搜索条件和匹配开关，读取收发页、JSON/XML 及已打开小窗的显示结果，无需 grep。

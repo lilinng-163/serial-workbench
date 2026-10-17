@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "window.h"
 #include "agent_skill.h"
+#include "agent_panel.h"
 #include "usage_guide.h"
 #include "serial_control_panel.h"
 #include "serial_monitor_dialog.h"
@@ -185,6 +186,126 @@ private slots:
         QVERIFY(!pane->scriptDialog->findChild<QCheckBox *>("scriptEnabled")->isChecked());
         mcp.setProtocolEnabled("serial", false);
         QVERIFY_EXCEPTION_THROWN(mcp.call("get_frame_script", {{"channel_id", channel->id}}), std::runtime_error);
+        window.close();
+    }
+
+    void scriptTrialInputsSynchronizeAndProtectUnsavedEdits()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        window.show();
+        sw::Config config;
+        config.port = "loop://";
+        auto channel = engine.open(config);
+        auto pane = window.findPane(channel);
+        QVERIFY(pane);
+        engine.allowControl = true;
+        const auto previous = mcp.call("get_frame_script", {{"channel_id", channel->id}}).toObject();
+        const QString code = "void main(const uint8_t data[], int length) { emit(\"count\", length); }";
+        QJsonObject request {{"channel_id", channel->id}, {"code", code}, {"enabled", true},
+            {"expected_revision", previous["revision"]}, {"sample_chunks", QJsonArray {"10", "20 30"}}};
+        const auto applied = mcp.call("set_frame_script", request).toObject();
+        QCOMPARE(applied["sample_chunks"].toArray(), QJsonArray({"10", "20 30"}));
+        auto hex = pane->scriptDialog->findChild<QPlainTextEdit *>("scriptTestHex");
+        QCOMPARE(hex->toPlainText(), QString("10\n20 30"));
+        QCOMPARE(pane->settings()["script_test_hex"].toString(), hex->toPlainText());
+        auto run = pane->scriptDialog->findChild<QPushButton *>("testScript");
+        auto results = pane->scriptDialog->findChild<QTreeWidget *>("scriptTestResults");
+        run->click();
+        QTRY_VERIFY(run->isEnabled());
+        QCOMPARE(results->topLevelItemCount(), 2);
+        QVERIFY(results->topLevelItem(1)->text(1).contains("2"));
+        QCOMPARE(channel->tx, 0);
+        request["expected_revision"] = applied["revision"];
+        hex->setPlainText("FF");
+        QVERIFY_EXCEPTION_THROWN(mcp.call("set_frame_script", request), std::runtime_error);
+        QCOMPARE(pane->scriptTestHex, QString("10\n20 30"));
+        hex->setPlainText(pane->scriptTestHex);
+        request["sample_chunks"] = QJsonArray {"GG"};
+        QVERIFY_EXCEPTION_THROWN(mcp.call("set_frame_script", request), std::runtime_error);
+        QCOMPARE(channel->scriptCode, code);
+        request["sample_chunks"] = QJsonArray {};
+        const auto cleared = mcp.call("set_frame_script", request).toObject();
+        QVERIFY(cleared["sample_chunks"].toArray().isEmpty());
+        QVERIFY(hex->toPlainText().isEmpty());
+        QVERIFY(cleared["revision"] != applied["revision"]);
+        const auto captures = qEnvironmentVariable("MCP_WORKFLOW_CAPTURE_DIR");
+        if (!captures.isEmpty())
+        {
+            QDir().mkpath(captures);
+            QVERIFY(pane->scriptDialog->grab().save(captures + "/script-without-prompt.png"));
+        }
+        window.close();
+    }
+
+    void skillSettingsDetectSelectAndInstallWithoutMcp()
+    {
+        QTemporaryDir directory;
+        auto e = environment(directory.path());
+        write(directory.filePath("bin/codex.cmd"), "@echo off");
+        write(directory.filePath("bin/pi.cmd"), "@echo off");
+        // A stale configuration directory must not count as an installed Agent.
+        write(directory.filePath(".gemini/settings.json"), "{}");
+        const auto report = directory.filePath("detected.ini");
+        sw::AgentSkill::writeDetection(report, e);
+        QSettings detected(report, QSettings::IniFormat);
+        QCOMPARE(detected.value("agents/codex").toString(), QString("1"));
+        QCOMPARE(detected.value("agents/pi").toString(), QString("1"));
+        QCOMPARE(detected.value("agents/gemini").toString(), QString("0"));
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
+        window.show();
+        sw::AgentPanel panel(&mcp, &window, [e] { return e; });
+        panel.findChild<QPushButton *>("configureAgentSkills")->click();
+        auto dialog = panel.findChild<QDialog *>("agentSkillDialog");
+        QVERIFY(dialog);
+        auto codex = dialog->findChild<QCheckBox *>("skill_codex");
+        auto pi = dialog->findChild<QCheckBox *>("skill_pi");
+        auto gemini = dialog->findChild<QCheckBox *>("skill_gemini");
+        QVERIFY(codex->isChecked() && pi->isChecked() && !gemini->isChecked());
+        QVERIFY(!QFileInfo::exists(directory.filePath(".codex/skills/serial-workbench/SKILL.md")));
+        dialog->findChild<QPushButton *>("installSelectedSkills")->click();
+        QVERIFY(QFileInfo::exists(directory.filePath(".codex/skills/serial-workbench/SKILL.md")));
+        QVERIFY(QFileInfo::exists(directory.filePath(".pi/agent/skills/serial-workbench/SKILL.md")));
+        QVERIFY(!QFileInfo::exists(directory.filePath(".gemini/skills/serial-workbench/SKILL.md")));
+        QVERIFY(!QFileInfo::exists(directory.filePath(".codex/config.toml")));
+        QCOMPARE(dialog->findChildren<QCheckBox *>().size(), 8);
+        dialog->findChild<QPushButton *>("installSelectedSkills")->click();
+        QVERIFY(dialog->findChild<QLabel *>("skillState_codex")->text().contains("0 个备份"));
+        const auto captures = qEnvironmentVariable("MCP_WORKFLOW_CAPTURE_DIR");
+        if (!captures.isEmpty())
+        {
+            QDir().mkpath(captures);
+            QTest::qWait(120);
+            QVERIFY(dialog->grab().save(captures + "/skill-settings.png"));
+            dialog->resize(560, 320);
+            QTest::qWait(120);
+            QVERIFY(dialog->grab().save(captures + "/skill-settings-compact.png"));
+            window.applyTheme(true);
+            QVERIFY(dialog->grab().save(captures + "/skill-settings-dark.png"));
+        }
+        dialog->close();
+        window.applyTheme(false);
+        window.newInstrument("control");
+        auto menu = window.newPageMenu();
+        auto widgets = menu->findChild<QMenu *>("newWidgetPage");
+        QVERIFY(widgets);
+        const auto gridIcon = widgets->menuAction()->icon().pixmap(24, 24).toImage().convertToFormat(QImage::Format_Alpha8);
+        const auto controlIcon = window.tabs->tabIcon(window.tabs->count() - 1).pixmap(24, 24).toImage().convertToFormat(QImage::Format_Alpha8);
+        QVERIFY(!gridIcon.isNull() && !controlIcon.isNull());
+        QVERIFY(gridIcon != controlIcon);
+        if (!captures.isEmpty())
+        {
+            QVERIFY(window.grab().save(captures + "/control-tab-icon.png"));
+            menu->popup(window.tabs->mapToGlobal(QPoint(20, 20)));
+            QTest::qWait(100);
+            QVERIFY(menu->grab().save(captures + "/new-page-menu-icon.png"));
+            menu->hide();
+        }
+        delete menu;
         window.close();
     }
 

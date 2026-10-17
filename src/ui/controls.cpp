@@ -575,6 +575,16 @@ void drawIcon(QPainter &p, const QString &name, QRectF rect, const QColor &color
         stroke({{17, 14}, {8, 14}});
         stroke({{11, 11}, {8, 14}, {11, 17}});
     }
+    else if (name == "control")
+    {
+        stroke({{3, 5}, {21, 5}});
+        stroke({{3, 12}, {21, 12}});
+        stroke({{3, 19}, {21, 19}});
+        p.setBrush(color);
+        p.drawRoundedRect(QRectF(7, 2, 3, 6), 1, 1);
+        p.drawRoundedRect(QRectF(15, 9, 3, 6), 1, 1);
+        p.drawRoundedRect(QRectF(5, 16, 3, 6), 1, 1);
+    }
     else if (name == "widgets")
     {
         p.drawRoundedRect(QRectF(3, 3, 7, 7), 1, 1);

@@ -2,6 +2,20 @@
 
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
 
+## 2026-10-17 — skill 配置、安装预选与脚本试解析同步
+
+- 用户目标：删除脚本 AI 提示词入口，skill 要求修改脚本时同步试解析样本；区分新建控件菜单与串口控制图标；设置提供 skill 配置，安装器默认勾选本机已有的 Agent。
+- 分支与起点：从 `571ecc9` 建立 `codex/skill-settings-and-parser-samples`，开发版本 0.15.32；正式 Release 仍为 v0.15.31。
+- 脚本：移除提示词按钮、弹窗和无调用的生成函数；GUI 保存并恢复试解析 HEX。get_frame_script 返回 sample_chunks；set_frame_script 可同步保存样本，最多 64 块、合计 64 KiB，省略保留、空数组清空；revision 包含已保存样本，未保存的 HEX 编辑和正在试解析均拒绝覆盖。脚本、样本和启用状态同步到已有编辑器，保持原有协议/写权限与独立读取，不向设备发送试解析数据。
+- skill：指南明确每次写/改脚本都要更新匹配协议的试解析样本，覆盖有效、半帧、连帧、噪声和错误帧，先离线验证再按授权部署。skill-creator 校验通过。中英 README、脚本和 Agent/安装文档同步更新。
+- 配置：设置 → AI / MCP → Agent 接入 → 配置 skill，显示目标目录和内容状态，默认勾选已检测 Agent，可手动增选；按需安装/更新、保留备份及同内容幂等，不修改 MCP 配置。扩展至 Codex、Claude Code、OpenCode、Pi、Hermes、OpenClaw、Grok Build、Gemini CLI 八种已确认的本地目录；Claude Desktop 在客户端导入或通过 MCP 读取指南，不冒充 Claude Code 目录。
+- 安装器：组件页前使用临时原生程序共用 Agent 检测，默认勾选检测到的八种受支持 Agent，允许取消，未检测到的可手动选择；检测不打开工作台或写用户配置。安装错误提示指向设置中的重试入口。
+- 图标：新建控件页面保留网格，串口控制标签及子菜单改用滑杆图标，原生窗口和图标 alpha 差异检查通过。
+- 验证：Release 构建成功，16/16 CTest，共 401 项通过、4 项可选联网/真机测试跳过；Windows 原生工作流 11 项通过，检查设置的正常/紧凑/深色、脚本窗口及两种图标截图。首轮指南 CRLF 导致示例提取失败，恢复指南 LF 后通过；失败日志保存在忽略目录。
+- 安装验证：smoke_installer.py 通过隔离用户环境中模拟 Codex/Pi 的自动勾选与 skill 安装、中文安装路径、原路径升级、设置与用户文件保留、无 SDK 启动、运行中保护、HTTP/STDIO 17 工具及新增样本同步、卸载检查。没有更改真实 Agent 配置或正在运行的 `E:/SerialWorkbench/SerialWorkbench.exe`。
+- 产物：`dist/local/skill-settings-0.15.32-installer/SerialWorkbench-0.15.32-windows-x64-setup.exe`，15,453,994 字节；SHA-256 `ef9f548541691212c33b3410ba364194411f75755c755cd406973849df28f911`。安装包三个原生 EXE 与本次构建一致，不含个人设置或测试 Demo。证据与 package.json 在 `build/skill-settings-20261017/`，payload 在 `build/release-0.15.32-a4af6294/SerialWorkbench/`。
+- 交接：提交并推送 deepseek-dev，保留该分支；不合入 main，不创建 GitHub Release，不修改网站或国内镜像。本轮没有真实物理串口或外部 SSH 主机联调；安装后重载 Agent 的 MCP 连接以获取更新的参数说明。
+
 ## 2026-10-17 — Codex 审查 DeepSeek 并发布 0.15.31
 
 - 用户目标：查阅并合并 `deepseek-dev`，随后发布正式 Release；保留开发分支，网站和国内镜像继续冻结。

@@ -31,6 +31,7 @@ static QString instrumentIconName(const QString &kind)
     {
         return "wave";
     }
+    if (kind == "control") { return "control"; }
     if (kind == "json" || kind == "xml")
     {
         return kind;
@@ -1494,6 +1495,7 @@ QJsonObject Pane::settings() const
     const auto sizes = terminalMode ? senderSizes : splitter->sizes();
     QJsonObject result {{"tab_title", pageTitle}, {"timestamps", log->timestamps}, {"hex_display", log->hex}, {"wrap_lines", wrapLines->isChecked()},
         {"script_code", channel ? channel->scriptCode : scriptCode},
+        {"script_test_hex", scriptTestHex},
         {"script_enabled", channel ? channel->scriptEnabled : scriptRequested},
         {"script_collapsed", scriptCollapsed}, {"script_panel_height", scriptPanelHeight},
         {"block_cursor", terminal->blockCursor}, {"search_filter", filter->settings()},
@@ -1503,6 +1505,7 @@ QJsonObject Pane::settings() const
         {"sender_sizes", QJsonArray {sizes.value(0, 600), sizes.value(1, 150)}}};
     if (!supportsScript())
     {
+        result.remove("script_test_hex");
         result.remove("script_code");
         result.remove("script_enabled");
     }
@@ -1587,6 +1590,7 @@ void Pane::restore(const QJsonObject &settings)
     if (!supportsScript()) { scriptRequested = false; }
     else if (settings.contains("script_code"))
     {
+        scriptTestHex = settings["script_test_hex"].toString(exampleTestHex());
         scriptCode = settings["script_code"].toString();
         scriptRequested = settings["script_enabled"].toBool();
         try

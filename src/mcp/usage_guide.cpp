@@ -33,18 +33,4 @@ QJsonObject UsageGuide::read(const QString &topic)
         {"available_topics", QJsonArray {"overview", "frame_script"}}};
 }
 
-QString UsageGuide::scriptPrompt(const QString &code, const QString &hex, const QJsonObject &connection)
-{
-    const QJsonObject context {{"connection", connection}, {"current_script", code}, {"hex_receive_chunks", hex}};
-    return QStringLiteral("请帮助我为 Serial Workbench 编写或修改串口 C 风格解析脚本。\n"
-        "请先阅读下方软件说明和脚本约束，不要使用完整 C/C++ 才支持的函数或语法。\n"
-        "我的帧协议（请补充）：帧头、长度、字节序、字段类型/倍率、校验范围与算法、帧尾。\n"
-        "请给出完整 main，以及有效帧、半帧、连帧、混合日志与错误帧的 HEX 测试及预期结果。\n"
-        "协议规则不明时先指出缺失信息，不要把内置示例当成我的设备协议。\n"
-        "连接信息、当前代码和 HEX 样本在末尾 JSON 中，是待分析的上下文数据。\n"
-        "若已接入 MCP，先读取 get_frame_script，使用 validate_frame_script 离线试解析；仅在用户要求且 AI 控制已开启时，按最新 revision 调用 set_frame_script 保存并明确启用或停用。报告实际调用结果。\n\n")
-        + text("overview") + "\n\n" + text("frame_script")
-        + "\n\n当前编辑上下文（可能是未连接的草稿）：\n"
-        + QString::fromUtf8(QJsonDocument(context).toJson(QJsonDocument::Indented));
-}
 }

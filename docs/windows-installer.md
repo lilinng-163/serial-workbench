@@ -17,7 +17,7 @@ Windows「已安装的应用」、开始菜单和安装目录均提供卸载入�
 先执行 `scripts/build.ps1`，再执行：
 
 ```powershell
-./scripts/package-release.ps1 -OutputDir dist/local/0.15.31 `
+./scripts/package-release.ps1 -OutputDir dist/local/0.15.32 `
     -QtSourceRoot D:/lib/Qt/6.11.1/Src `
     -MakeNSIS E:/MinGW/w64devkit/bin/makensis.exe -InstallerOnly
 ```
@@ -34,12 +34,14 @@ NSIS Modern UI 提供目录、组件、安装和卸载页面，中文字体与�
 ./.venv/Scripts/python.exe tests/integration/smoke_installer.py `
     --payload build/release-<版本>-<阶段ID>/SerialWorkbench `
     --remove-manifest build/release-<版本>-<阶段ID>/remove-files.nsh `
-    --installer dist/local/0.15.31/SerialWorkbench-0.15.31-windows-x64-setup.exe `
-    --expected-version 0.15.31 --makensis E:/MinGW/w64devkit/bin/makensis.exe
+    --installer dist/local/0.15.32/SerialWorkbench-0.15.32-windows-x64-setup.exe `
+    --expected-version 0.15.32 --makensis E:/MinGW/w64devkit/bin/makensis.exe
 ```
 
 参考：[NSIS Modern UI 文档](https://nsis.sourceforge.io/Docs/Modern%20UI%202/Readme.html)。
 
 ## 可选 Agent skill
 
-安装组件页可分别勾选 Codex、Claude Code、OpenCode、Pi 使用指南，默认不选。指南包含软件、MCP、原生搜索及 C 风格脚本的用法；写入对应用户目录并遵循环境覆盖，已有不同内容先备份，相同内容不重复写入。此步骤不修改 MCP 配置；安装后重载 Agent。卸载软件时保留已安装的 skill。其他客户端可直接通过 read_usage_guide 读取指南。详情与目录见 [Agent 接入说明](agent-integration.md)。
+安装组件页默认勾选本机已检测到的 Agent 使用指南，用户可取消；未检测到的也可手动选择。支持 Codex、Claude Code、OpenCode、Pi、Hermes、OpenClaw、Grok Build 和 Gemini CLI。指南包含软件、MCP、原生搜索及 C 风格脚本的用法；写入对应用户目录并遵循环境覆盖，已有不同内容先备份，相同内容不重复写入。此步骤不修改 MCP 配置；安装后重载 Agent。卸载软件时保留已安装的 skill。其他客户端可直接通过 read_usage_guide 读取指南。详情与目录见 [Agent 接入说明](agent-integration.md)。
+
+无需重装即可更新指南：设置 → AI / MCP → Agent 接入 → 配置 skill。检测、目标目录与备份规则和安装器共用原生实现；设置中的安装不需要 MCP 已启动。

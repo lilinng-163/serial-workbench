@@ -15,6 +15,7 @@ public:
         std::function<AgentEnvironment()> environment = AgentEnvironment::current);
     void refresh();
     void configureAll();
+    void configureSkills();
     void checkAgent(int index, bool configure);
 signals:
     void configurationUpdated();

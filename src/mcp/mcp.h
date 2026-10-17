@@ -2,6 +2,7 @@
 
 #pragma once
 #include "core.h"
+#include <optional>
 
 namespace sw
 {
@@ -25,7 +26,8 @@ public:
     bool protocolEnabled(const QString &kind) const;
     void setProtocolEnabled(const QString &kind, bool enabled);
     std::function<QJsonObject(Channel *, const QJsonObject &)> searchHandler;
-    std::function<void(Channel *, const QString &, bool)> scriptHandler;
+    std::function<void(Channel *, const QString &, bool, const std::optional<QString> &)> scriptHandler;
+    std::function<QString(Channel *)> scriptSampleHandler;
     QJsonArray agentChecks;
 
 signals:
