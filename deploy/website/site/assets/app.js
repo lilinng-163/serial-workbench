@@ -46,6 +46,23 @@
     toastTimer = setTimeout(() => { toast.hidden = true; }, 3000);
   }));
 
+  function renderInline(target, text) {
+    // Build DOM nodes rather than interpreting release text as HTML.
+    for (const part of text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g)) {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        const node = document.createElement('strong');
+        node.textContent = part.slice(2, -2);
+        target.append(node);
+      } else if (part.startsWith('`') && part.endsWith('`')) {
+        const node = document.createElement('code');
+        node.textContent = part.slice(1, -1);
+        target.append(node);
+      } else {
+        target.append(document.createTextNode(part));
+      }
+    }
+  }
+
   function renderReleaseNotes(target, text) {
     target.replaceChildren();
     let paragraph = [];
@@ -54,7 +71,7 @@
     const flush = () => {
       if (paragraph.length) {
         const node = document.createElement('p');
-        node.textContent = paragraph.join(' ');
+        renderInline(node, paragraph.join(' '));
         target.append(node);
         paragraph = [];
       }
@@ -71,19 +88,23 @@
       const bullet = line.match(/^\s*(?:[-*]|\d+\.)\s+(.+)$/);
       if (heading) {
         flush(); list = null;
-        const node = document.createElement('h3'); node.textContent = heading[1]; target.append(node);
+        const node = document.createElement('h3'); renderInline(node, heading[1]); target.append(node);
       } else if (bullet) {
         flush();
         if (!list) { list = document.createElement('ul'); target.append(list); }
-        const node = document.createElement('li'); node.textContent = bullet[1]; list.append(node);
+        const node = document.createElement('li'); renderInline(node, bullet[1]); list.append(node);
       } else if (!line.trim()) { flush(); list = null; }
       else { list = null; paragraph.push(line.trim()); }
     }
     flush();
   }
 
+  let releaseLoading = false;
+  let releaseLoaded = false;
   async function loadLatestRelease() {
     if (!document.querySelector('[data-release-version]')) return;
+    if (releaseLoading) return;
+    releaseLoading = true;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
@@ -107,9 +128,50 @@
       document.querySelectorAll('[data-release-github]').forEach(node => { node.href = githubBase + 'download/v' + release.version + '/' + filename; });
       document.querySelectorAll('[data-release-page]').forEach(node => { node.href = githubBase + 'tag/v' + release.version; });
       document.querySelectorAll('[data-release-notes]').forEach(node => { renderReleaseNotes(node, release.notes || '此版本未提供更新说明。'); });
+      releaseLoaded = true;
     } catch {
-      document.querySelectorAll('[data-release-notes]').forEach(node => { node.textContent = '暂时无法读取最新说明，可以通过上方的 Release 链接查看。'; });
-    } finally { clearTimeout(timeout); }
+      if (!releaseLoaded) document.querySelectorAll('[data-release-notes]').forEach(node => { node.textContent = '暂时无法读取最新说明，可以通过上方的 Release 链接查看。'; });
+    } finally { clearTimeout(timeout); releaseLoading = false; }
   }
   loadLatestRelease();
+  // Keep an already-open page current after the server publishes a new mirror.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) loadLatestRelease();
+  });
+  setInterval(() => { if (!document.hidden) loadLatestRelease(); }, 60000);
+
+  const stage = document.querySelector('[data-lab-stage]');
+  const motionAllowed = matchMedia('(prefers-reduced-motion: no-preference) and (pointer: fine)');
+  if (stage) {
+    let frame = 0;
+    let tiltX = 0;
+    let tiltY = 0;
+    let lightX = 25;
+    let lightY = 10;
+    stage.addEventListener('pointermove', event => {
+      if (!motionAllowed.matches) return;
+      const rect = stage.getBoundingClientRect();
+      tiltY = ((event.clientX - rect.left) / rect.width - .5) * 5;
+      tiltX = -((event.clientY - rect.top) / rect.height - .5) * 4;
+      lightX = (event.clientX - rect.left) / rect.width * 100;
+      lightY = (event.clientY - rect.top) / rect.height * 100;
+      if (!frame) frame = requestAnimationFrame(() => {
+        stage.style.setProperty('--tilt-x', tiltX + 'deg');
+        stage.style.setProperty('--tilt-y', tiltY + 'deg');
+        stage.style.setProperty('--light-x', lightX + '%');
+        stage.style.setProperty('--light-y', lightY + '%');
+        frame = 0;
+      });
+    });
+    const resetStage = () => {
+      cancelAnimationFrame(frame);
+      frame = 0;
+      stage.style.setProperty('--tilt-x', '0deg');
+      stage.style.setProperty('--tilt-y', '0deg');
+      stage.style.removeProperty('--light-x');
+      stage.style.removeProperty('--light-y');
+    };
+    stage.addEventListener('pointerleave', resetStage);
+    motionAllowed.addEventListener('change', resetStage);
+  }
 })();
