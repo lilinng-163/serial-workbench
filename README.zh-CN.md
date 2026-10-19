@@ -60,7 +60,7 @@
 
 **[下载最新版本 →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.32 新增版本回溯、Agent skill 配置和脚本样本同步，并修复系统文件选择与串口控件交互。[查看更新说明](docs/releases/0.15.32.md)。
+v0.15.33 新增主题色选色盘与十六进制输入，自定义色同步浅色/深色界面、分离窗口和串口小窗，并自动保证按钮文字可读。[查看更新说明](docs/releases/0.15.33.md)。
 
 | 文件 | 适合的使用方式 |
 | --- | --- |
@@ -262,7 +262,7 @@ $env:MINGW_BIN = 'C:/Qt/Tools/mingw1310_64/bin'
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r tests/integration/requirements.txt
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.32
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.33
 ```
 
 安装 NSIS，并提供匹配的 Qt 源码目录收集许可证，即可生成安装包、单文件启动器和便携 ZIP：

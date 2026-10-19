@@ -2,6 +2,22 @@
 
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
 
+## 2026-10-19 — 发布 v0.15.33 并交接 Codex
+
+- 执行者：DeepSeek；分支 `deepseek-dev`，起点 `7ea6ab7`。
+- 用户目标：完成主题色开发，发布 GitHub Release，并写交接文件给 Codex。
+- 发布：GitHub Release [v0.15.33](https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.33)；tag `v0.15.33`。资产：
+  - `SerialWorkbench-0.15.33-windows-x64-setup.exe`（15,465,318 字节），SHA-256 `444b7c931c5c9ee483fe5a2eabc394cc77428881b2d744cb3d935f45300aa843`
+  - `SerialWorkbench-0.15.33-windows-x64.exe`（15,002,683 字节），SHA-256 `637d626edafb49e548b5ae76cb425eadf6349dfdac28e4b131948a039dff6ef2`
+  - `SerialWorkbench-0.15.33-windows-x64-portable.zip`（20,591,875 字节），SHA-256 `a5fc8135006928b68892bd87455877ee27b3d8bbc437bc447ceb2b414e7485f6`
+  - `SHA256SUMS.txt`
+- 内容：设置 → 外观 → 主题色（选色盘、`#RRGGBB`/`#RGB`、格式提示、恢复默认）；自定义色同步背景/面板/按钮/选中/标题栏/关于页链接/分离窗口/串口小窗，按钮文字按亮度选黑白。修复深色主题选色盘仍为浅色、关于页 Link 被滚动区/系统调色板覆盖的问题。保留共享 GUI/AI 连接、独立读取、17 个 MCP 工具、权限、搜索与脚本行为。
+- 验证：Release 构建成功；完整 **18/18 CTest**；Windows 实平台 `theme_color_tests` **11/11**（新增极端颜色、深色选色盘、窄设置、关于链接、串口小窗）；`smoke_installer.py` 全部通过；`smoke_release.py` 全部通过（便携 ZIP、单文件、缓存修复、HTTP/STDIO、17 工具）；截图在 `build/theme-captures/`。
+- 范围：只发布 GitHub Release；网站与国内镜像未更新；未把 `deepseek-dev` 合并到 `main`。`main` 仍为 v0.15.32。
+- Codex 下一步：fetch 后审查 `origin/main..origin/deepseek-dev`（含本发布提交与 tag），在从 `main` 建立的临时分支集成并保留提交历史；运行原生/主题/安装/发布验证；确认后将 `main` 普通推送并同步回 `deepseek-dev`；保留 v0.15.33 tag 与 Release 资产。网站/镜像如需更新须另行授权。
+- 风险：背景图检查使用应用截图作测试背景，真实素材、真实串口与外部 SSH 仍需用户环境验证；安装器从 `deepseek-dev` 构建，`main` 在合并前仍是旧版。
+- 提交与同步：本记录随发布提交；推送 `deepseek-dev` 与 tag `v0.15.33`。
+
 ## 2026-10-19 — 主题色验收、细节修复与 0.15.33 测试安装包
 
 - 执行者：DeepSeek；分支 `deepseek-dev`，起点 `7ea6ab7`。
