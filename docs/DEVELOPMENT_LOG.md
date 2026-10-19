@@ -2,6 +2,16 @@
 
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
 
+## 2026-10-19 — v0.15.35 已发布，MCP 手动上传网站镜像
+
+- GitHub：正式 [v0.15.35](https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.35) 已公开，非 draft / prerelease；tag 指向 `f9adb02`。`main` 与 `deepseek-dev` 普通推送到该发行提交，保留 DS 和网站提交历史，没有强推或删除分支。安装包、单文件 EXE、便携 ZIP、SHA256SUMS 四个远端资产的大小与 GitHub SHA-256 digest 全部匹配本地；从公开 GitHub 链接完成整个 setup 下载并复核摘要。
+- 用户补充国内服务器拉取 GitHub 会超时，要求手动传文件。已通过 MCP 的 `t_ecs` SSH 创建只监听服务器回环地址的一次性接收端；本地 SSH 仅做端口转发，将正式本地 setup 原样上传。网站控制、校验、远端发布及页面切换均走 Serial Workbench MCP，没有通过本地 SSH 执行网站命令。接收端按 15,477,900 字节及 `deef435aa71f1f12ca787dd170dd5b4ea15685e73f9dee0aa4420ac94e3b3ac6` 验收。
+- 此前手动触发的自动同步从 17:02:42 持续到 17:12:42，因既有 `TimeoutStartSec=10min` 超时退出。手动发布任务使用同一个 flock 等待释放，没有关闭定时器；之后用已上传文件发布，显式禁止手动发布函数再从 GitHub 下载。setup 先就位并校验，再原子更新 `latest.json`、单包 `.sha256` 和 `SHA256SUMS.txt`。
+- 网站：五页 HTML 经校验后，`current` 原子切到 `releases/20261019-release-01535`；旧 `releases/20261019-icons-motion`、旧安装包和摘要资源保留。HTML 后备版本、安装包链接、大小、日期、摘要均为 0.15.35，动态更新说明与 GitHub 一致。备案号及工信部链接保留。
+- 公网验收：`https://www.lilinng.cn/updates/latest.json` 与 `https://162.14.72.194/updates/latest.json` 均返回 0.15.35，大小与 SHA-256 一致；从域名 HTTPS 完整下载 setup，逐字节摘要匹配本地/GitHub。五个 HTML（含实际 404）与五个 CSS/JS/SVG/PNG 资源的公开响应摘要匹配本次构建；两个校验文件内容准确。实际浏览器显示 v0.15.35、正确下载链接、摘要及新说明。公开验证记录、完整下载与页面截图在 `build/release-0.15.35-verification/`。
+- 服务器留存：`/srv/lilinng-web/deployments/release-0.15.35-manual-upload.json` 记录来源 `manual-local-upload`；发布记录标明当前/回退路径。一次性接收端已退出，无新增公网上传端口；临时传输文件清理，发布日志留在 deployments。`lilinng-release-sync.timer` 仍 enabled + active，后续定时检查保留；不保证国内 GitHub 下载一定及时完成，手动发布步骤已补充到镜像说明。
+- 完成状态：GitHub 正式发行、主线/DeepSeek 分支同步、MCP 手动上传网站镜像和公网验证均完成；当前用户工作台及 SSH 会话保留。本次未更改设备协议或进行真实 MCU 联调。
+
 ## 2026-10-19 — 0.15.35 正式发行验证与主线集成
 
 - 用户授权：将本次主题修复推送 GitHub 并更新网站；网站/服务器操作必须走 Serial Workbench MCP。
