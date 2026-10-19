@@ -9,6 +9,7 @@ add_library(workbench_ui OBJECT
     background_image.cpp
     background_image.h
     background_settings.cpp
+    theme_settings.cpp
     window_chrome.cpp
     window_chrome.h
     control_card.cpp

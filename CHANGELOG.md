@@ -1,6 +1,12 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # 更新记录
 
+## 0.15.33 — 开发版
+
+- 设置 → 外观新增主题色，支持选色盘、`#RRGGBB` 与 `#RGB` 输入、格式提示和恢复默认；立即保存并在重启后恢复。
+- 自定义颜色同步浅色/深色背景、按钮、选中状态、标题栏、收发小窗及分离窗口，按钮文字按颜色明暗自动选择黑白。
+- English: add a theme color picker and hex input, persistent custom light/dark palettes, readable button text and synchronized detached windows.
+
 ## 0.15.32 — 2026-10-17
 
 - 移除脚本编辑器的 AI 提示词窗口，skill 要求修改代码时同时更新匹配当前协议的试解析 HEX 样本。

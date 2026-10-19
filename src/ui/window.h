@@ -157,6 +157,7 @@ public:
     Engine *engine;
     McpServer *mcp;
     Theme theme;
+    QColor themeColor;
     QFont dataFont;
     BackgroundSpec windowBackground;
     BackgroundSpec receiveBackground;
@@ -265,6 +266,9 @@ public:
     void saveSettings();
     void applyTheme(bool dark);
     void applyLocalTheme(bool dark);
+    void setThemeColor(const QColor &color);
+    void syncThemeColorControls();
+    QWidget *themeColorSettingsPanel();
     QString workspaceStyle() const;
     bool importBackground(bool receive, const QString &path, QString *error = nullptr);
     void applyBackgrounds();

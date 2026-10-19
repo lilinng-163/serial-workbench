@@ -175,7 +175,14 @@ QFont Theme::defaultDataFont()
     return font;
 }
 
-Theme Theme::make(bool dark)
+QColor Theme::parseColor(const QString &text)
+{
+    const auto value = text.trimmed();
+    static const QRegularExpression format("^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$");
+    return format.match(value).hasMatch() ? QColor(value) : QColor();
+}
+
+Theme Theme::make(bool dark, const QColor &color)
 {
     Theme t;
     t.dark = dark;
@@ -194,6 +201,37 @@ Theme Theme::make(bool dark)
         t.amber = "#edaa50";
         t.edge = "#71826a";
         t.rail = "#17231d";
+    }
+    if (color.isValid())
+    {
+        // Tint surfaces gently; the chosen RGB value stays exact on accents.
+        const qreal hue = qMax(0.0, color.hslHueF());
+        const qreal saturation = color.hslSaturationF() * 0.32;
+        const auto tint = [hue, saturation](qreal lightness)
+        {
+            return QColor::fromHslF(hue, saturation, lightness);
+        };
+        t.background = tint(dark ? 0.11 : 0.88);
+        t.panel = tint(dark ? 0.15 : 0.97);
+        t.sidebar = tint(dark ? 0.19 : 0.93);
+        t.text = tint(dark ? 0.91 : 0.16);
+        t.muted = tint(dark ? 0.70 : 0.39);
+        t.line = tint(dark ? 0.33 : 0.73);
+        t.edge = tint(dark ? 0.49 : 0.51);
+        t.hover = tint(dark ? 0.25 : 0.86);
+        t.rail = tint(0.10);
+        t.accent = color.toRgb();
+        t.accent.setAlpha(255);
+        t.railAccent = QColor::fromHslF(hue, color.hslSaturationF(), qMax(0.65, color.lightnessF()));
+
+        // Pick black or white using relative luminance, including extreme colors.
+        const auto linear = [](qreal channel)
+        {
+            return channel <= 0.04045 ? channel / 12.92 : std::pow((channel + 0.055) / 1.055, 2.4);
+        };
+        const qreal luminance = 0.2126 * linear(color.redF())
+            + 0.7152 * linear(color.greenF()) + 0.0722 * linear(color.blueF());
+        t.onAccent = luminance > 0.179 ? QColor(Qt::black) : QColor(Qt::white);
     }
     return t;
 }
@@ -809,7 +847,7 @@ void IconButton::paintEvent(QPaintEvent *)
     QPainter p(this);
     const bool onRail = parentWidget() && parentWidget()->objectName() == "rail";
     const QColor foreground = onRail ? QColor("#d7dfc4") : theme.text;
-    const QColor active = onRail ? QColor("#edaa50") : theme.accent;
+    const QColor active = onRail ? theme.railAccent : theme.accent;
     const bool selected = isChecked() || (hasFocus() && property("keyboardFocus").toBool());
     const qreal amount = selected ? 1.0 : progress;
     const qreal colorAmount = qBound(0.0, amount, 1.0);

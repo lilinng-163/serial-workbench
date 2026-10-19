@@ -35,7 +35,7 @@ Built with **Qt 6 and C++17**. The Windows application and its native MCP bridge
 | 🎛️ **Serial controls** | Sliders, numeric inputs, switches, buttons and choices; groups, draggable/resizable cards that follow window width, presets and per-control automatic sending. |
 | 📦 **Files & protocols** | Raw-byte and XMODEM-CRC file transfer; C-style frame scripts with persistent state and checksum helpers. |
 | 🤖 **AI collaboration** | Streamable HTTP and STDIO MCP, protocol-level access switches, read-only defaults and an explicit AI control permission. |
-| 🎨 **Workspace** | Detachable tabs, light/dark themes, custom backgrounds, data fonts and per-page clear actions. |
+| 🎨 **Workspace** | Detachable tabs, light/dark themes, a color picker and hex theme colors, custom backgrounds, data fonts and per-page clear actions. |
 
 ## 📸 Screenshots
 
@@ -91,6 +91,10 @@ No device nearby? Select **Demo · 演示波形** as a waveform data source, or 
 MCP clients can call `list_search_views` and `search_logs` to use the actual GUI filters, and `get_frame_script`, `validate_frame_script`, `set_frame_script` to inspect, test and apply serial parsers. Writes require AI control permission and a current revision; unsaved GUI edits are protected. The installer preselects skill components for detected Agents; Settings → AI / MCP → Agent 接入 → 配置 skill can install or update them later. Startup and port changes check Agent MCP addresses without rewriting configuration. See [Agent integration](docs/agent-integration.md).
 
 When changing a parser through MCP, include matching HEX `sample_chunks` in `set_frame_script` to update the GUI trial inputs too. Validate them offline first; unsaved trial edits are protected. The script editor uses the shared skill/guide workflow and no longer has a separate AI prompt window.
+
+### Theme color
+
+Open **Settings → Appearance → Theme color** to choose a color from the picker or enter `#RRGGBB` / `#RGB` (for example, `#4080E0`). Apply the value or leave the field to save it immediately. Invalid values leave the current color intact. Light/dark surfaces, buttons, selections, window captions and detached windows follow the color; button text automatically chooses a readable black or white. **Restore default theme color** returns to the original palette. Background images and data fonts retain their own settings.
 
 ### Terminal and workspace shortcuts
 

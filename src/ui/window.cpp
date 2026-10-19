@@ -1656,7 +1656,8 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     templates = saved["templates"].toArray();
     const auto appearance = saved["appearance"].toObject();
     parameterWidth = qBound(220, appearance["parameter_width"].toInt(246), 4096);
-    theme = Theme::make(appearance["theme"] == "dark");
+    themeColor = Theme::parseColor(appearance["theme_color"].toString());
+    theme = Theme::make(appearance["theme"] == "dark", themeColor);
     dataFont = Theme::defaultDataFont();
     const auto savedFamily = appearance["font_family"].toString();
     const bool previousDefault = !appearance["readable_type"].toBool()
@@ -1686,6 +1687,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     {
         setAttribute(Qt::WA_DeleteOnClose);
         theme = primary->theme;
+        themeColor = primary->themeColor;
         dataFont = primary->dataFont;
         templates = primary->templates;
         viewSettings = primary->viewSettings;
@@ -3302,15 +3304,18 @@ void Window::applyTheme(bool dark)
     }
     for (auto widget : QApplication::topLevelWidgets())
     {
-        auto floating = qobject_cast<FloatingPage *>(widget);
-        if (!floating)
+        if (qobject_cast<QFileDialog *>(widget))
         {
             continue;
         }
-        floating->setStyleSheet(theme.stylesheet());
-        floating->setPalette(palette());
-        floating->setFont(Theme::interfaceFont());
-        for (auto control : floating->findChildren<IconButton *>())
+        if (!qobject_cast<FloatingPage *>(widget) && !qobject_cast<QDialog *>(widget))
+        {
+            continue;
+        }
+        widget->setStyleSheet(theme.stylesheet());
+        widget->setPalette(palette());
+        widget->setFont(Theme::interfaceFont());
+        for (auto control : widget->findChildren<IconButton *>())
         {
             control->theme = theme;
             control->update();
@@ -3320,7 +3325,8 @@ void Window::applyTheme(bool dark)
 
 void Window::applyLocalTheme(bool dark)
 {
-    theme = Theme::make(dark);
+    themeColor = rootWindow()->themeColor;
+    theme = Theme::make(dark, themeColor);
     connectionLed->theme = theme;
     connectionLed->update();
     setStyleSheet(workspaceStyle());
@@ -3337,6 +3343,8 @@ void Window::applyLocalTheme(bool dark)
     palette.setColor(QPalette::ButtonText, theme.text);
     palette.setColor(QPalette::Highlight, theme.accent);
     palette.setColor(QPalette::HighlightedText, theme.onAccent);
+    palette.setColor(QPalette::Link, theme.accent);
+    palette.setColor(QPalette::LinkVisited, theme.accent);
     palette.setColor(QPalette::PlaceholderText, theme.muted);
     palette.setColor(QPalette::Mid, theme.muted);
     setPalette(palette);
@@ -3351,6 +3359,7 @@ void Window::applyLocalTheme(bool dark)
         pane->replay();
     }
     syncConnections();
+    syncThemeColorControls();
 }
 
 void Window::setDataFont(const QFont &font)
@@ -3532,6 +3541,14 @@ void Window::saveSettings()
     QJsonObject appearance = receivePage ? receivePage->settings() : saved["appearance"].toObject();
     appearance.remove("instruments");
     appearance["theme"] = theme.dark ? "dark" : "light";
+    if (themeColor.isValid())
+    {
+        appearance["theme_color"] = themeColor.name(QColor::HexRgb);
+    }
+    else
+    {
+        appearance.remove("theme_color");
+    }
     appearance["pixel_theme"] = true;
     appearance["readable_type"] = true;
     appearance["font_spec"] = dataFont.toString();
@@ -3781,7 +3798,11 @@ void Window::openSettings()
     auto themeChoice = combo({"浅色主题", "深色主题"});
     themeChoice->setObjectName("themeChoice");
     themeChoice->setCurrentIndex(theme.dark ? 1 : 0);
-    connect(themeChoice, &QComboBox::currentIndexChanged, this, [this](int index) { applyTheme(index == 1); });
+    connect(themeChoice, &QComboBox::currentIndexChanged, this, [this](int index)
+    {
+        applyTheme(index == 1);
+        saveSettings();
+    });
     auto font = button(dataFont.family(), "outline");
     font->setObjectName("dataFontChoice");
     connect(font, &QPushButton::clicked, this, [this, font]
@@ -3829,6 +3850,7 @@ void Window::openSettings()
     formLayout->addRow("数据字体", font);
     formLayout->addRow("数据字号", size);
     appearanceBody->addLayout(formLayout);
+    appearanceBody->addWidget(themeColorSettingsPanel());
     auto resetFont = button("恢复推荐字体", "outline");
     connect(resetFont, &QPushButton::clicked, this, [this, font, size]
     {
@@ -3999,11 +4021,10 @@ void Window::openSettings()
     aboutBody->addWidget(aboutText("Serial Workbench", "aboutTitle"));
     aboutBody->addWidget(aboutText(QString("版本 %1 · Qt %2 / C++17")
                                      .arg(Version, QString::fromLatin1(qVersion())), "aboutVersion"));
-    auto sources = new QLabel(QString(
-        "<a href=\"https://github.com/lilinng-163/serial-workbench\" style=\"color:%1;\">GitHub 仓库</a>"
+    auto sources = new QLabel(
+        "<a href=\"https://github.com/lilinng-163/serial-workbench\">GitHub 仓库</a>"
         " &nbsp;·&nbsp; "
-        "<a href=\"https://162.14.72.194/\" style=\"color:%1;\">项目主页 / 镜像站</a>")
-        .arg(theme.accent.name()));
+        "<a href=\"https://162.14.72.194/\">项目主页 / 镜像站</a>");
     sources->setObjectName("aboutSources");
     sources->setTextFormat(Qt::RichText);
     sources->setTextInteractionFlags(Qt::TextBrowserInteraction);

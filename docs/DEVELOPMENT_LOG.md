@@ -2,6 +2,29 @@
 
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
 
+## 2026-10-19 — 自定义主题色开发中，交接 DeepSeek
+
+- 执行者：Codex；开发分支 `codex/theme-color-20261019`，起点 `2df9506`；用户要求额度耗尽前同步 `deepseek-dev`，由 DS 继续。
+- 用户目标：软件设置提供换主题色，支持选色盘及 `#` 十六进制输入。延续用户要求：功能完成后必须提供 Windows 安装包。
+- 已实现但尚未验收：
+  - `src/ui/theme_settings.cpp`：设置 → 外观 → 主题色，选色盘、`#RRGGBB` / `#RGB` 输入、无效格式提示、恢复默认；离开输入框/应用/回车保存，回车不关闭设置；色盘取消不应用。
+  - `Theme::make(bool, QColor)`：自定义浅深背景和强调色，按钮文字按相对亮度选黑白，侧栏活动图标同步。无自定义色时保留原有配色。
+  - `Window`：保存/恢复 `appearance.theme_color`，分离窗口及设置控件同步；更新弹窗和标题栏，避开系统文件选择窗口。关于页链接改用 Palette Link 以跟随换色。
+  - 新增 `tests/native/theme_color_tests.cpp` 和 CTest 注册：格式/对比度、输入保存恢复重置、色盘接受/取消、分离窗口同步、错误存储回退；支持环境变量 `SW_THEME_CAPTURE_DIR` 保存实窗截图。
+  - CMake 版本已升到 `0.15.33`，CHANGELOG 标记开发版，中英 README 已补使用说明；没有创建或发布正式 Release。
+- 实际验证与准确停点：
+  - `git diff --check` 通过。
+  - 首次构建因 Qt moc 未识别内联测试类而链接失败；将测试函数实现移到类外后，手工 moc 生成成功，第二次构建完成（含 theme_color_tests.exe）。
+  - **最后一次修改 window.cpp（关于页链接 / Palette Link）发生在其目标文件生成后：window.cpp 12:57:38，window.cpp.obj 12:57:19。必须再增量构建一次，不能视作最终源码已编译通过。**
+  - 尚未运行新增测试、完整 18 组 CTest 或 Windows 实窗检查；未制作/验证安装包。当前代码属于待验证开发进度，不是已完成成品。
+- DS 下一步：
+  1. 阅读本记录及 DEEPSEEK.md，检查源码 diff；在 `deepseek-dev` 接续，不覆盖用户配置和连接。
+  2. Qt/MinGW 路径：`D:/lib/Qt/6.11.1/mingw_64`、`D:/lib/Qt/Tools/mingw1310_64/bin`；将二者 bin 加到 PATH，执行 `cmake --build build/native-release --parallel 4`，随后运行 `ctest --test-dir build/native-release --output-on-failure`；保留并修复首次失败证据。
+  3. 用 Windows 平台运行 theme_color_tests（不带 offscreen），设置 `SW_THEME_CAPTURE_DIR` 到 build 下，检查浅深主题、色盘、窄设置窗口、分离窗口和收发小窗；核查极浅/极深颜色的可读性及背景图兼容。
+  4. 使用独立分发目录制作 0.15.33 测试安装包，避免覆盖已运行的程序或原有正式包。`scripts/package-release.ps1` 可用 QtSourceRoot `D:/lib/Qt/6.11.1/Src`、MakeNSIS `E:/MinGW/w64devkit/bin/makensis.exe`、`-InstallerOnly`；按 docs/windows-installer.md 执行隔离安装/升级/卸载检查并提供安装包和校验值。
+  5. 更新本日志写清真实验证结果，提交并推送 deepseek-dev；用户本次要求交接，不授权发布正式 Release 或合并 main。
+- 范围：只包含桌面程序主题色开发；网站改动保留在独立 `codex/website-ui-20261019`（903e853），没有带入本分支，也不需要更改服务器。
+
 ## 2026-10-17 — 发送区底部按实际宽度换行，保持发送框比例
 
 - 执行者：DeepSeek。

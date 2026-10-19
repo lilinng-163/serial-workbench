@@ -215,3 +215,14 @@ add_test(NAME release_history_tests COMMAND "${CMAKE_COMMAND}" -E env
     -o "${PROJECT_BINARY_DIR}/release-history-tests.txt,txt"
 )
 set_tests_properties(release_history_tests PROPERTIES TIMEOUT 30)
+
+qt_add_executable(theme_color_tests theme_color_tests.cpp)
+workbench_configure_target(theme_color_tests)
+target_link_libraries(theme_color_tests PRIVATE workbench_ui Qt6::Test)
+add_test(NAME theme_color_tests COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=${workbench_test_path}"
+    $<TARGET_FILE:theme_color_tests>
+    -platform offscreen
+    -o "${PROJECT_BINARY_DIR}/theme-color-tests.txt,txt"
+)
+set_tests_properties(theme_color_tests PROPERTIES TIMEOUT 30)
