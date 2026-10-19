@@ -98,7 +98,7 @@ def configure(job):
 
 def update_html(text, info, downloads=False):
     version = info['version']
-    text = re.sub(r'(data-release-version\b[^>]*>)[^<]*(<)',
+    text = re.sub(r'(data-release-version(?=[\s=>])[^>]*>)[^<]*(<)',
                   lambda match: match[1] + 'v' + version + match[2], text)
     if not downloads:
         return text
@@ -114,8 +114,11 @@ def update_html(text, info, downloads=False):
         'checksum': info['sha256'],
     }
     for name, value in fields.items():
-        text = re.sub(r'(data-release-' + name + r'\b[^>]*>)[^<]*(<)',
+        text = re.sub(r'(data-release-' + name + r'(?=[\s=>])[^>]*>)[^<]*(<)',
                       lambda match: match[1] + html.escape(value) + match[2], text)
+    # Recover the label if a previous publisher matched the checksum-file prefix.
+    text = re.sub(r'(<a\b[^>]*\bdata-release-checksum-file(?=[\s=>])[^>]*>)[0-9a-fA-F]{64}(</a>)',
+                  lambda match: match[1] + '校验文件' + match[2], text)
     summary = html.escape(info['title'] + ' · 完整更新说明自动加载。')
     return re.sub(r'(<div data-release-notes>).*?(</div>)',
                   lambda match: match[1] + summary + match[2], text, flags=re.S)

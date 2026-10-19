@@ -73,6 +73,16 @@ class MirrorTests(unittest.TestCase):
         self.assertNotIn('>old<', updated)
         self.assertEqual(manual.update_html(updated, info, True), updated)
 
+    def test_checksum_file_link_label_is_not_a_checksum_value(self):
+        info = mirror.release_info(release('0.15.35'), 'https://162.14.72.194')
+        source = (ROOT / 'deploy/website/site/downloads/index.html').read_text(encoding='utf-8')
+        updated = manual.update_html(source, info, True)
+        self.assertIn('download>校验文件</a>', updated)
+        broken = source.replace('download>校验文件</a>', 'download>' + info['sha256'] + '</a>')
+        repaired = manual.update_html(broken, info, True)
+        self.assertIn('download>校验文件</a>', repaired)
+        self.assertIn('data-release-checksum>' + info['sha256'], repaired)
+
     def test_job_path_rejects_other_directories(self):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaises(ValueError):
