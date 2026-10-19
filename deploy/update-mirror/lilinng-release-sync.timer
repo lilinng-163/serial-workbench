@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 [Unit]
-Description=Check for new Serial Workbench releases every ten minutes
+Description=Check for new Serial Workbench releases every five minutes
 
 [Timer]
-OnBootSec=2min
-OnUnitActiveSec=10min
-RandomizedDelaySec=1min
+OnActiveSec=30s
+OnUnitInactiveSec=5min
+RandomizedDelaySec=30s
 Persistent=true
 
 [Install]

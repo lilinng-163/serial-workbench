@@ -6,7 +6,7 @@
 
 ## 自动发布与维护冻结
 
-服务器同步器 `deploy/update-mirror/sync_github_release.py` 每五分钟左右读取 GitHub 最新正式 Release，使用 ETag 避免重复读取；下载并校验安装包后，以原子重命名更新清单。错误或校验失败时保留上一个可用版本。网站读取相同清单，自动显示版本、下载地址和说明；网页进入、回到前台及前台每 60 秒刷新清单。
+服务器同步器 `deploy/update-mirror/sync_github_release.py` 每轮结束五分钟后读取（随机延迟最多 30 秒） GitHub 最新正式 Release，使用 ETag 避免重复读取；下载并校验安装包后，以原子重命名更新清单。错误或校验失败时保留上一个可用版本。网站读取相同清单，自动显示版本、下载地址和说明；网页进入、回到前台及前台每 60 秒刷新清单。
 
 **2026-10-19：用户已明确允许发布新版本并更新网站/镜像。`lilinng-release-sync.timer` 当前为 enabled + active；本次先上传安装包，再由同步器以 flock/原子重命名更新清单。若备案或维护期间需要冻结，请手动停用 timer，并在恢复前确认清单与安装包一致。**
 
@@ -14,13 +14,14 @@
 
 恢复后，只需发布 `v<版本>` 正式 Release，附上 `SerialWorkbench-<版本>-windows-x64-setup.exe`，并在 Release 正文填写更新说明，服务器和网站即可自动更新。同步器不需要 GitHub 密钥。
 
-检查冻结状态：
+检查运行状态：
 
 ```powershell
 ssh t_ecs 'sudo systemctl is-enabled lilinng-release-sync.timer'
 ssh t_ecs 'sudo systemctl is-active lilinng-release-sync.timer'
+ssh t_ecs 'systemctl --no-pager --full list-timers lilinng-release-sync.timer'
 ```
 
-安装包位于 `/srv/lilinng-web/www/shared/updates`，与网站 `current` 发布目录独立。HTTPS 证书的自动续期继续运行，续期不修改网站内容。域名备案期间使用约六天有效的 IP 证书，`lilinng-cert-renew.timer` 每天检查两次并在到期前续期。
+安装包位于 `/srv/lilinng-web/www/shared/updates`，与网站 `current` 发布目录独立。现有桌面客户端校验清单中的安装包主机必须与既有 IP 镜像一致，因此同步器的 `--base-url` 保持 `https://162.14.72.194`。网站将验证过的安装包路径映射为同源域名 HTTPS 下载，不改变客户端信任规则。域名证书已部署；原 IP 证书的自动续期继续保留，供既有客户端访问。
 
 0.15.12 及更早版本内置 GitHub 更新地址，需要手动安装一次较新版本；0.15.13 已支持国内镜像。
