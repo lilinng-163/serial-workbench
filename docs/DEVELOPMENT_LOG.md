@@ -2,6 +2,25 @@
 
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
 
+## 2026-10-19 — 发布 v0.15.34：双色主题与网站镜像
+
+- 执行者：DeepSeek；分支 `deepseek-dev`；发布提交 `e323f0a`；tag `v0.15.34`。
+- 用户目标：主题色拆分为主色/自定义撞色，修正撞色组件与默认主题的一致性，然后发布新版 Release 并更新网站/镜像。
+- 实现：
+  - 主色只负责背景、面板、文字和 rail 底色的色相；撞色接管默认橙色强调色所在的组件：主按钮、工具栏动作图标、链接、选中、焦点、勾选、滑块、进度、发送、TX、关于页链接、rail 激活图标、波形第一条线。
+  - 设置 → 外观 → 主题色提供“主色（背景/面板）”和“撞色（按钮/链接/选中）”两行，均支持选色盘、`#RRGGBB`/`#RGB`、应用和恢复默认；撞色未设置时使用浅色 `#DC8C38` / 深色 `#EDAA50`，不再自动计算互补色。
+  - 菜单、列表、页签、下拉项、树形项的悬停/预选背景统一使用撞色浅色；选中页签底色/文字、勾选文字、描边按钮悬停/焦点恢复默认角色。
+  - 颜色输入框右侧清除按钮上移；新增 13 项主题测试，覆盖双色持久化/恢复、撞色组件、预选颜色、窄设置和选择器。
+- 发布：GitHub Release [v0.15.34](https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.34)，非 draft、非 prerelease；tag `v0.15.34` 指向 `e323f0a`。资产：
+  - `SerialWorkbench-0.15.34-windows-x64-setup.exe`（15,481,362 字节），SHA-256 `871b35fc9c4413fb98d7ce2fc10ced9f390bb2da5d79b28070f8d3379e3dd224`
+  - `SerialWorkbench-0.15.34-windows-x64.exe`（15,010,868 字节），SHA-256 `92d2908b8828c220a1fd1af313df99aa172d1fe2715a6da56558d5ab432225fc`
+  - `SerialWorkbench-0.15.34-windows-x64-portable.zip`（20,594,727 字节），SHA-256 `0cdb0ed2da09efdfe2cb7fb84909c69c2d9aab1a0d060db2f75c12394dd3a1ed`
+  - `SHA256SUMS.txt`
+- 验证：完整 **18/18 CTest**、Windows 实平 `theme_color_tests` **13/13**；`.venv` 下 `smoke_installer.py` 全过（安装/升级/自定义 Unicode 路径/保留设置/运行中阻止覆盖/HTTP/STDIO/MCP 权限/17 工具/卸载），`smoke_release.py` 全过（便携 ZIP、单文件首次/缓存启动、MCP、损坏缓存修复）。
+- 国内镜像：`t_ecs` 的 `/srv/lilinng-web/www/shared/updates` 已发布 `0.15.34` setup、`.sha256`、`SHA256SUMS.txt` 和完整 `latest.json`；`https://162.14.72.194/updates/latest.json` 与 `https://www.lilinng.cn/updates/latest.json` 均返回 `0.15.34`，公网完整下载 SHA-256 与本地一致。同步 timer 已恢复为 enabled + active，`.github-etag` 已更新，旧版本安装包保留。
+- 范围/风险：`main` 仍停留在 v0.15.32，未合并；网站静态 fallback 仍可能显示旧版本，下载页通过 `/updates/latest.json` 动态更新；Codex 仍需审查 `origin/main..origin/deepseek-dev` 并集成主线。
+- 下一步：Codex 审查提交、tag 和 Release 资产，确认后合并 `main`；本记录提交晚于发布 tag，保留在 `deepseek-dev`。
+
 ## 2026-10-19 — 发布 v0.15.33 并交接 Codex
 
 - 执行者：DeepSeek；分支 `deepseek-dev`，起点 `7ea6ab7`。
