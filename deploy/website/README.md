@@ -11,7 +11,9 @@ python deploy/website/build.py --output build/website-preview
 python -m http.server 8026 --bind 127.0.0.1 --directory build/website-preview
 ```
 
-打开 `http://127.0.0.1:8026/`。CSS 和 JavaScript 按内容摘要生成文件名，避免旧缓存混入新页面。备案区域在构建时写入 HTML，关闭 JavaScript 后仍可见。
+打开 `http://127.0.0.1:8026/`。CSS、JavaScript、SVG 标志和软件展示 PNG 均按内容摘要生成文件名，避免旧缓存混入新页面。备案区域在构建时写入 HTML，关闭 JavaScript 后仍可见。
+
+当前软件展示图来自正式 v0.15.32 程序，以独立设置、`--demo --view waveform --mcp-port 0 --screenshot ...` 捕获 1400×960 实际界面；页面明确标注演示数据。更新展示图时同步修改版本标注、图片尺寸和替代文本，再重新构建。
 
 ## 备案信息
 

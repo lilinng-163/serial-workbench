@@ -44,17 +44,13 @@ def prepare(payload: Path) -> None:
     files = {}
     for name, encoded in bundle['files'].items():
         path = PurePosixPath(name)
-        if path.is_absolute() or '..' in path.parts or path.suffix not in {'.html', '.css', '.js', '.svg', '.txt'}:
+        if path.is_absolute() or '..' in path.parts or path.suffix not in {'.html', '.css', '.js', '.svg', '.png', '.txt'}:
             raise ValueError(f'Invalid static asset path: {name}')
         files[name] = base64.b64decode(encoded, validate=True)
     for name in ('index.html', 'projects/index.html', 'downloads/index.html', 'about/index.html', '404.html'):
         text = files[name].decode('utf-8')
         if 'https://beian.miit.gov.cn/' not in text or '公安备案办理中' not in text:
             raise ValueError(f'Missing registration footer: {name}')
-
-    image = source / 'assets/workbench-preview.9c2a8cfd07.png'
-    if digest(image) != bundle['image_sha256']:
-        raise ValueError('Existing preview image differs from the reviewed source')
 
     # Copy downloads and old hashed assets as well, so cached pages remain usable.
     shutil.copytree(source, destination, symlinks=True)
@@ -65,10 +61,7 @@ def prepare(payload: Path) -> None:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(data)
         target.chmod(0o644)
-    shutil.copyfile(image, destination / 'assets/workbench-preview.png')
-    (destination / 'assets/workbench-preview.png').chmod(0o644)
     hashes = {name: digest(destination / name) for name in files}
-    hashes['assets/workbench-preview.png'] = bundle['image_sha256']
     data = {'release': release, 'previous': previous, 'hashes': hashes, 'activated': False}
     RECORDS.mkdir(exist_ok=True)
     record.write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')

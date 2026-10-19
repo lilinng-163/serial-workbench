@@ -144,32 +144,30 @@
   const motionAllowed = matchMedia('(prefers-reduced-motion: no-preference) and (pointer: fine)');
   if (stage) {
     let frame = 0;
-    let tiltX = 0;
-    let tiltY = 0;
     let lightX = 25;
     let lightY = 10;
     stage.addEventListener('pointermove', event => {
       if (!motionAllowed.matches) return;
       const rect = stage.getBoundingClientRect();
-      tiltY = ((event.clientX - rect.left) / rect.width - .5) * 5;
-      tiltX = -((event.clientY - rect.top) / rect.height - .5) * 4;
-      lightX = (event.clientX - rect.left) / rect.width * 100;
-      lightY = (event.clientY - rect.top) / rect.height * 100;
+      // The hit area never transforms. Only decoration follows the pointer.
+      lightX = Math.max(0, Math.min(100, (event.clientX - rect.left) / rect.width * 100));
+      lightY = Math.max(0, Math.min(100, (event.clientY - rect.top) / rect.height * 100));
       if (!frame) frame = requestAnimationFrame(() => {
-        stage.style.setProperty('--tilt-x', tiltX + 'deg');
-        stage.style.setProperty('--tilt-y', tiltY + 'deg');
         stage.style.setProperty('--light-x', lightX + '%');
         stage.style.setProperty('--light-y', lightY + '%');
+        stage.style.setProperty('--glow-x', Math.round((lightX - 50) * .6) + 'px');
+        stage.style.setProperty('--glow-y', Math.round((lightY - 50) * .5) + 'px');
+        stage.style.setProperty('--ring-x', Math.round((lightX - 50) * .16) + 'px');
+        stage.style.setProperty('--ring-y', Math.round((lightY - 50) * .12) + 'px');
         frame = 0;
       });
     });
     const resetStage = () => {
       cancelAnimationFrame(frame);
       frame = 0;
-      stage.style.setProperty('--tilt-x', '0deg');
-      stage.style.setProperty('--tilt-y', '0deg');
-      stage.style.removeProperty('--light-x');
-      stage.style.removeProperty('--light-y');
+      for (const name of ['--light-x', '--light-y', '--glow-x', '--glow-y', '--ring-x', '--ring-y']) {
+        stage.style.removeProperty(name);
+      }
     };
     stage.addEventListener('pointerleave', resetStage);
     motionAllowed.addEventListener('change', resetStage);

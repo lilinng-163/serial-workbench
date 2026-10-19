@@ -61,7 +61,7 @@ def build(output: Path) -> None:
     if not config['icp_number'].strip():
         raise ValueError('ICP registration number must not be empty')
     assets = {}
-    for filename in ('site.css', 'app.js'):
+    for filename in ('site.css', 'app.js', 'favicon.svg', 'serial-workbench.svg', 'workbench-preview.png'):
         data = (source / 'assets' / filename).read_bytes()
         stem, extension = filename.rsplit('.', 1)
         assets[filename] = f'{stem}.{hashlib.sha256(data).hexdigest()[:12]}.{extension}'
