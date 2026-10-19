@@ -259,7 +259,7 @@ $env:MINGW_BIN = 'C:/Qt/Tools/mingw1310_64/bin'
 .\scripts\build.ps1
 ```
 
-The build script compiles the application, runs native tests and deploys Qt libraries to `dist/SerialWorkbenchNative`. Python is used for optional integration tests and release maintenance scripts:
+The build script compiles the application, runs native tests and deploys Qt libraries to `dist/SerialWorkbenchNative`. Python is used only for optional integration tests:
 
 ```powershell
 python -m venv .venv
@@ -274,8 +274,6 @@ To create the installer, single-file launcher and portable ZIP, install NSIS and
 ```
 
 Artifacts and SHA-256 checksums are written to `dist/releases/`. Developer/test utilities, personal settings and custom background images are excluded from the release payload.
-
-Website maintainers: run `./scripts/publish-update-mirror.ps1` after publishing a Release. It downloads and verifies the latest installer locally, uploads through the shared MCP SSH session, updates the website and verifies the public download. The server timer checks local integrity only. See [mirror deployment](docs/update-mirror.md).
 
 ## Contributing
 

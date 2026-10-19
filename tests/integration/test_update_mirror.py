@@ -12,9 +12,6 @@ ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('mirror', ROOT / 'deploy/update-mirror/sync_github_release.py')
 mirror = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mirror)
-manual_spec = importlib.util.spec_from_file_location('manual', ROOT / 'deploy/update-mirror/manual_receive.py')
-manual = importlib.util.module_from_spec(manual_spec)
-manual_spec.loader.exec_module(manual)
 PAYLOAD = b'MZ verified installer fixture'
 
 
@@ -53,40 +50,6 @@ class MirrorTests(unittest.TestCase):
             (root / 'SHA256SUMS.txt').write_text('incorrect')
             with self.assertRaises(ValueError):
                 mirror.check_local(root)
-
-    def test_html_update_keeps_screenshot_version_and_registration(self):
-        text = '''<span data-release-version>v0.15.32</span>
-<p>v0.15.32 实际界面 · 演示数据</p>
-<a href="https://beian.miit.gov.cn/">蜀ICP备2026062713号</a>
-<a data-release-download href="/updates/SerialWorkbench-0.15.32-windows-x64-setup.exe">下载</a>
-<a data-release-page href="https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.32">Release</a>
-<span data-release-size>old</span><span data-release-date>old</span>
-<code data-release-checksum>old</code><div data-release-notes>old</div>'''
-        info = mirror.release_info(release('0.15.35'), 'https://162.14.72.194')
-        updated = manual.update_html(text, info, True)
-        self.assertIn('data-release-version>v0.15.35', updated)
-        self.assertIn('v0.15.32 实际界面', updated)
-        self.assertIn('https://beian.miit.gov.cn/', updated)
-        self.assertIn(info['filename'], updated)
-        self.assertIn('/tag/v0.15.35', updated)
-        self.assertIn(info['sha256'], updated)
-        self.assertNotIn('>old<', updated)
-        self.assertEqual(manual.update_html(updated, info, True), updated)
-
-    def test_checksum_file_link_label_is_not_a_checksum_value(self):
-        info = mirror.release_info(release('0.15.35'), 'https://162.14.72.194')
-        source = (ROOT / 'deploy/website/site/downloads/index.html').read_text(encoding='utf-8')
-        updated = manual.update_html(source, info, True)
-        self.assertIn('download>校验文件</a>', updated)
-        broken = source.replace('download>校验文件</a>', 'download>' + info['sha256'] + '</a>')
-        repaired = manual.update_html(broken, info, True)
-        self.assertIn('download>校验文件</a>', repaired)
-        self.assertIn('data-release-checksum>' + info['sha256'], repaired)
-
-    def test_job_path_rejects_other_directories(self):
-        with tempfile.TemporaryDirectory() as directory:
-            with self.assertRaises(ValueError):
-                manual.job_path(directory)
 
     def test_verified_download_and_notes_update(self):
         calls = []

@@ -153,7 +153,7 @@ python -m venv .venv
   --screenshot build/preview.png --quit-after 2200
 ```
 
-发布步骤见 [安装器说明](docs/windows-installer.md)。网站为“透明实验室”玻璃主题，当前已校验同步 v0.15.35。2026-10-19 用户要求避免国内服务器拉取 GitHub 超时：今后发布 Release 后在本机运行 `./scripts/publish-update-mirror.ps1`，本机下载最新正式安装包，经工作台 MCP 手动上传、校验、更新网站并完成公网验证；服务器定时任务仅运行 `--check-local` 本地完整性检查，不再访问 GitHub。详见 [镜像说明](docs/update-mirror.md) 和最新开发记录。
+发布步骤见 [安装器说明](docs/windows-installer.md)。网站维护使用本机私有工具，通过 Serial Workbench MCP 完成远端控制与验证。专用网站维护脚本仅保留本地，不得重新提交到公共仓库，除非用户明确改变此要求。服务器定时任务仅校验已有镜像，不再从 GitHub 下载新版本。详见最新开发记录和 [镜像说明](docs/update-mirror.md)。
 
 ## 8. DeepSeek 开发流程
 

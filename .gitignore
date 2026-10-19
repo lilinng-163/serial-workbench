@@ -10,3 +10,8 @@ dist/
 *.log
 settings.json
 CMakeUserPresets.json
+
+# Local-only website maintenance tools. Never publish without explicit permission.
+/scripts/publish-update-mirror.ps1
+/scripts/sync-website-release.py
+/deploy/update-mirror/manual_receive.py

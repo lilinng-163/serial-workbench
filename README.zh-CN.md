@@ -257,7 +257,7 @@ $env:MINGW_BIN = 'C:/Qt/Tools/mingw1310_64/bin'
 .\scripts\build.ps1
 ```
 
-构建脚本会编译应用、运行原生测试，并将 Qt 运行库部署到 `dist/SerialWorkbenchNative`。Python 用于可选集成测试及发布维护脚本：
+构建脚本会编译应用、运行原生测试，并将 Qt 运行库部署到 `dist/SerialWorkbenchNative`。Python 仅用于可选集成测试：
 
 ```powershell
 python -m venv .venv
@@ -272,8 +272,6 @@ python -m venv .venv
 ```
 
 分发文件与 SHA-256 校验文件位于 `dist/releases/`。开发测试工具、个人配置和自定义背景图片不会进入发行包。
-
-网站维护：发布 Release 后运行 `./scripts/publish-update-mirror.ps1`，在本机下载并校验最新安装包，经共享 MCP SSH 上传、更新网站并核对公网下载。服务器定时器只校验本地文件。详见 [镜像部署](docs/update-mirror.md)。
 
 ## 参与贡献
 

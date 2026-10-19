@@ -34,6 +34,6 @@ python -m http.server 8026 --bind 127.0.0.1 --directory build/website-preview
 
 下载页面读取 `/updates/latest.json`，只接受可信来源的有效版本、文件名、摘要和大小；安装包链接转换为同源 `/updates/`，沿用域名 HTTPS。进入页面、切回前台时立即刷新，前台停留期间每 60 秒刷新；失败时保留现有版本和已读取的说明。HTML 的当前后备版本为 v0.15.35；展示截图仍明确标注实际捕获的 v0.15.32。
 
-2026-10-19 改为本机手动同步：发布 GitHub Release 后运行 `./scripts/publish-update-mirror.ps1`，本机下载校验最新版，经 Serial Workbench MCP 上传并更新网站清单及 HTML 后备版本，最后从公网完整下载验证。服务器定时任务仅检查本地文件，不再请求 GitHub；网站进入、回到前台和每 60 秒读取清单的行为保留。详见 [镜像说明](../../docs/update-mirror.md)。
+网站版本由维护者通过本机私有工具发布，仓库不包含专用同步脚本。远端操作通过 Serial Workbench MCP 完成；服务器定时任务仅检查已有本地文件，不再请求 GitHub。网站进入、回到前台和每 60 秒读取清单的行为保留。
 
 页面不新增搜索、留言、注册、评论或聊天服务。主题切换只保存在浏览器本地。
