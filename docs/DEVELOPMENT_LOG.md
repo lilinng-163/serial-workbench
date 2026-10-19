@@ -2,6 +2,14 @@
 
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
 
+## 2026-10-19 — 协议下拉框底色与输入框统一
+
+- 用户反馈：“串口”协议下拉框始终单独一块颜色。
+- 原因与修复：`QComboBox#protocolSelector` 单独指定 `$hover` 背景和 `$edge` 边框；移除这两项覆盖，沿用所有输入框的 `$panel` 背景、普通/悬停/焦点边框，仅保留原内边距和尺寸。
+- 验证：增量构建成功；Windows 实平台主题测试 16/16 通过，实际查看浅色与深色工作区截图；最终打包 payload 的 smoke_native.py 通过 HTTP/STDIO、17 个工具、独立读取、权限与原生搜索/脚本工作流。打包 EXE 与构建 EXE 的 SHA-256 一致。未重复前一版安装器逻辑未变的升级/卸载全套测试。
+- 测试安装包：`dist/local/0.15.35-protocol-color/SerialWorkbench-0.15.35-windows-x64-setup.exe`，15,479,278 字节；SHA-256 `66be1e86aeb5f0f1f0394907d637413437e7bd5349eca21e744d8091270fa046`。同目录有校验文件，截图和验证记录在 `build/protocol-color-0.15.35/`。
+- 范围：仍为 0.15.35 本地开发包，没有修改协议连接行为或发布正式 Release。
+
 ## 2026-10-19 — 从 v0.15.34 重建主题修复，0.15.35 测试安装包
 
 - 执行者：Codex；分支 `codex/theme-polish-0.15.34`，严格从 `v0.15.34` / `e323f0a` 创建。按用户要求丢弃 DS 的四个未提交文件改动（controls.cpp / controls.h / theme_settings.cpp / theme_color_tests.cpp）；原远端开发历史和发布标签保留。

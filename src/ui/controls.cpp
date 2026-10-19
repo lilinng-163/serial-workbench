@@ -468,7 +468,7 @@ QString Theme::stylesheet() const
         QLineEdit QToolButton { background: transparent; border: none; padding: 0; margin: 0 4px 3px 0; }
         QLineEdit:hover, QComboBox:hover, QAbstractSpinBox:hover { border-color: $edge; }
         QLineEdit:focus, QComboBox:focus, QAbstractSpinBox:focus { border-color: $stroke; }
-        QComboBox#protocolSelector { background: $hover; border-color: $edge; padding: 8px 28px 8px 10px; }
+        QComboBox#protocolSelector { padding: 8px 28px 8px 10px; }
         QComboBox#protocolSelector:focus { border-color: $stroke; }
         QLineEdit#searchBox { padding: 5px 8px; background: $panel; }
         QLineEdit#searchBox[invalidFilter="true"] { border-color: $red; }
