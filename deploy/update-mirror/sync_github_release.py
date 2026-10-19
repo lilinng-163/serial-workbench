@@ -131,11 +131,35 @@ def publish(release: dict, root: Path, base_url: str, opener=urlopen) -> dict:
     return info
 
 
+def check_local(root: Path) -> dict:
+    """Validate the published mirror without any GitHub or network access."""
+    info = json.loads((root / 'latest.json').read_text(encoding='utf-8'))
+    version = info.get('version', '')
+    if (not re.fullmatch(r'\d+\.\d+\.\d+', version)
+            or info.get('filename') != f'SerialWorkbench-{version}-windows-x64-setup.exe'
+            or not re.fullmatch(r'[0-9a-f]{64}', info.get('sha256', ''))
+            or type(info.get('size')) is not int or not 0 < info['size'] <= MAXIMUM_BYTES
+            or not verified_file(root / info['filename'], info)):
+        raise ValueError('Local mirror manifest or installer failed verification')
+
+    expected = f'{info["sha256"]}  {info["filename"]}\n'
+    for name in ('SHA256SUMS.txt', f'{info["filename"]}.sha256'):
+        if (root / name).read_text(encoding='utf-8') != expected:
+            raise ValueError(f'Local checksum file does not match: {name}')
+    return info
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument('--root', type=Path, default=Path('/srv/lilinng-web/www/shared/updates'))
     parser.add_argument('--base-url', default='https://162.14.72.194')
+    parser.add_argument('--check-local', action='store_true',
+                        help='Verify existing mirror files only; never contact GitHub')
     args = parser.parse_args()
+    if args.check_local:
+        info = check_local(args.root)
+        print(f'Verified local release {info["version"]}; no GitHub request performed')
+        return
     args.root.mkdir(parents=True, exist_ok=True)
     etag_file = args.root / '.github-etag'
     headers = {'User-Agent': 'SerialWorkbench-Mirror', 'Accept': 'application/vnd.github+json'}

@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 [Unit]
-Description=Mirror the latest Serial Workbench GitHub release
+Description=Verify the locally published Serial Workbench mirror
 Wants=network-online.target
 After=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/flock -n /srv/lilinng-web/release-sync.lock /usr/bin/python3 /srv/lilinng-web/sync_github_release.py
-TimeoutStartSec=10min
+ExecStart=/usr/bin/flock -n /srv/lilinng-web/release-sync.lock /usr/bin/python3 /srv/lilinng-web/sync_github_release.py --check-local
+TimeoutStartSec=30s
 Nice=10
 NoNewPrivileges=true
 PrivateTmp=true

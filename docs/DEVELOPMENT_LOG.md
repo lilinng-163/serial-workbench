@@ -2,6 +2,18 @@
 
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
 
+## 2026-10-19 — 本机获取最新 Release，一键经 MCP 手动同步网站
+
+- 用户要求：以后由本机脚本获取最新 Release 并手动同步网站，不再等待国内服务器拉取 GitHub 超时。
+- 新入口：`./scripts/publish-update-mirror.ps1`，不再必填安装包。默认本机获取最新正式 Release 并下载；优先使用已登录 `gh api`，没有 gh 时使用匿名 API。`-Installer` 可复用与最新 Release 摘要一致的已有文件，`-DownloadOnly` 只下载验证。底层 `scripts/sync-website-release.py` 与既有测试复用 MCP SDK 1.30.0，缓存和验证记录在 `dist/website-sync/<版本>/`。
+- 共享 MCP：只选择目标 SSH host 对应 channel，权限关闭、channel 不匹配或多个目标会话时拒绝混用；保留 session/cursor 与缺口检测。缺少会话时通过 MCP 打开，认证由工作台完成。远端控制、分块辅助文件上传、安装包验收与发布都经 MCP；本机 OpenSSH 只转发端口，不运行网站命令。
+- 大文件：`deploy/update-mirror/manual_receive.py` 提供一次性回环 HTTP 接收端，校验完整字节数及 GitHub SHA-256 后退出，成功清理自己的临时目录。发布使用非阻塞 flock，占锁立即失败，不再等待十分钟；拒绝降级，先安装包后原子清单/校验文件，禁止服务器下载。复制网站后更新五页的版本/链接/大小/日期/摘要，备案与真实截图标注保留；相同 HTML 再次同步不复制新网站目录，旧发布保留。
+- 服务器模式已实际调整：生产 service 使用 `sync_github_release.py --check-local`，仅核验本地 manifest、setup、两个 checksum 文件；超时从 10min 改为 30s，不访问 GitHub。定时器保留 enabled + active，没有 stop、disable 或 restart；仅替换 service 并 daemon-reload。实际执行检查后 journal 显示 `Verified local release 0.15.35; no GitHub request performed`，成功退出。当前镜像版本只能由本机手动脚本更新，网站仍每 60 秒刷新清单。
+- 验证：镜像/HTML/本地无网络检查 **7/7**；MCP 目标与权限隔离、真实回环接收器的正常/错误摘要与退出 **6/6**，合计 **13/13**。Python 编译与 diff 检查通过。实际运行默认本机下载模式、默认缓存完整同步，以及指定本地 setup 的重复完整同步，全部通过；每次完成公开 HTTPS 全量下载校验。重复运行的 `website` 与 `previous_website` 均为 `releases/20261019-manual-0-15-35-e6809264`，没有重复复制页面。
+- 公网安装包仍为正式 0.15.35：15,477,900 字节，SHA-256 `deef435aa71f1f12ca787dd170dd5b4ea15685e73f9dee0aa4420ac94e3b3ac6`，与 GitHub/本地一致；`publication.json` 明确 `source=manual-local-upload`、`server_network_download=false`。真实运行日志保存在 `build/release-0.15.35-verification/script-sync-live.txt` 与 `script-sync-final.txt`。
+- 文档：中英 README、DEEPSEEK、网站维护说明和镜像指南同步新流程。后续发布包含网站同步时运行此脚本并验证结果，不能仅等待服务器 timer。此次只改维护脚本/文档与 service，不改桌面程序或已发布 tag/二进制资产，因此未重复构建 Qt 安装包。
+- 完成状态：脚本、实际服务器本地检查模式及网站公网验证已完成；正常推送 main 与保留的 deepseek-dev。GUI / AI 权限、独立读取及 SSH 会话保留。
+
 ## 2026-10-19 — v0.15.35 已发布，MCP 手动上传网站镜像
 
 - GitHub：正式 [v0.15.35](https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.35) 已公开，非 draft / prerelease；tag 指向 `f9adb02`。`main` 与 `deepseek-dev` 普通推送到该发行提交，保留 DS 和网站提交历史，没有强推或删除分支。安装包、单文件 EXE、便携 ZIP、SHA256SUMS 四个远端资产的大小与 GitHub SHA-256 digest 全部匹配本地；从公开 GitHub 链接完成整个 setup 下载并复核摘要。
