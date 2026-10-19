@@ -3321,6 +3321,12 @@ void Window::applyTheme(bool dark)
             control->update();
         }
     }
+    // Styling a top-level dialog can reset child palettes; reapply the
+    // theme-color controls (including the About Link color) afterwards.
+    for (auto hostWindow : hosts)
+    {
+        if (hostWindow) { hostWindow->syncThemeColorControls(); }
+    }
 }
 
 void Window::applyLocalTheme(bool dark)

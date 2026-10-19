@@ -2,6 +2,23 @@
 
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
 
+## 2026-10-19 — 主题色验收、细节修复与 0.15.33 测试安装包
+
+- 执行者：DeepSeek；分支 `deepseek-dev`，起点 `7ea6ab7`。
+- 用户目标：接替 Codex 继续完善主题开发；功能完成后提供 Windows 安装包。
+- 已完成：
+  - 重新增量构建（含交接时尚未编译的 `window.cpp`）；完整 **18/18 CTest** 通过。
+  - Windows 实平台 `theme_color_tests` **11/11** 通过；新增验收：极端浅/深色可读性、深色选色盘、窄设置主题行、关于页链接跟随强调色、串口小窗同步。
+  - 修复：`QColorDialog` 增加父设置窗口的 palette 和界面字体，深色主题不再弹出浅色选色盘；`applyTheme` 在给顶层对话框应用 stylesheet 后再次同步主题色控件；`syncThemeColorControls` 显式设置 `aboutSources` 的 `Link`/`LinkVisited`，避免滚动区沿用系统链接色。
+  - 截图：`build/theme-captures/theme-color-picker-dark.png`、`theme-about-links.png`、`theme-settings-narrow.png`、`theme-serial-monitor.png`、浅/深设置与工作区；另以背景图 + `#814fc4` 做了实窗兼容检查。
+- 安装包：
+  - `dist/local/theme-color-0.15.33/SerialWorkbench-0.15.33-windows-x64-setup.exe`
+  - SHA-256：`43fada7ceffe0bdbc3ed15b586e745b30ab777a21b2fbe0e22195ae938af43f2`
+  - `smoke_installer.py` 全部通过：透明双层图标、Agent skill 组件、Unicode 自定义路径与品牌卸载器、升级发现原路径并保留设置/用户文件、无 SDK 启动与运行中保护、HTTP/STDIO 共享独立读取与写权限、原生搜索/脚本同步/17 工具、卸载清理并保留个人设置和用户文件。
+- 未完成/范围：未创建或发布正式 Release，未合并 `main`，未改网站或国内镜像；安装包为隔离测试用途。背景图检查使用应用截图作测试背景；真实素材与真实串口/SSH 仍需用户环境验证。
+- 提交与同步：见交接回复中的提交哈希；推送 `deepseek-dev`。
+- 下一步：Codex 审查主题色与安装包，决定是否发布 0.15.33。
+
 ## 2026-10-19 — 自定义主题色开发中，交接 DeepSeek
 
 - 执行者：Codex；开发分支 `codex/theme-color-20261019`，起点 `2df9506`；用户要求额度耗尽前同步 `deepseek-dev`，由 DS 继续。

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "window.h"
 #include "window_chrome.h"
+#include "serial_control_panel.h"
+#include "serial_monitor_dialog.h"
 #include <QtTest>
 #include <cmath>
 
@@ -22,6 +24,16 @@ private slots:
     void pickerAcceptCancelAndDetachedSync();
 
     void malformedSavedColorFallsBack();
+
+    void extremeColorsRemainReadable();
+
+    void darkPickerUsesThemePalette();
+
+    void narrowSettingsThemeRowFits();
+
+    void aboutLinksFollowAccent();
+
+    void serialMonitorFollowsCustomAccent();
 };
 
 QJsonObject ThemeColorTests::appearance(const QString &path)
@@ -190,6 +202,140 @@ void ThemeColorTests::malformedSavedColorFallsBack()
     sw::McpServer server(&engine);
     sw::Window window(&engine, &server, path);
     QCOMPARE(window.theme.accent, sw::Theme::make(false).accent);
+    window.close();
+}
+
+namespace
+{
+qreal relativeLuminance(const QColor &color)
+{
+    const auto linear = [](qreal value)
+    {
+        return value <= 0.04045 ? value / 12.92 : std::pow((value + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * linear(color.redF()) + 0.7152 * linear(color.greenF()) + 0.0722 * linear(color.blueF());
+}
+
+qreal contrastRatio(const QColor &a, const QColor &b)
+{
+    const qreal first = relativeLuminance(a);
+    const qreal second = relativeLuminance(b);
+    return (qMax(first, second) + 0.05) / (qMin(first, second) + 0.05);
+}
+}
+
+void ThemeColorTests::extremeColorsRemainReadable()
+{
+    for (bool dark : {false, true})
+    {
+        for (const auto &accent : {"#000000", "#ffffff", "#ff0000", "#00ff00", "#0000ff", "#808080", "#4488ee", "#ff77cc"})
+        {
+            const auto theme = sw::Theme::make(dark, QColor(accent));
+            QVERIFY2(contrastRatio(theme.text, theme.background) >= 4.5, accent);
+            QVERIFY2(contrastRatio(theme.text, theme.panel) >= 4.5, accent);
+            QVERIFY2(contrastRatio(theme.onAccent, theme.accent) >= 4.5, accent);
+        }
+    }
+}
+
+void ThemeColorTests::darkPickerUsesThemePalette()
+{
+    QTemporaryDir directory;
+    sw::Engine engine;
+    sw::McpServer server(&engine);
+    sw::Window window(&engine, &server, directory.filePath("settings.json"));
+    window.applyTheme(true);
+    window.show();
+    window.openSettings();
+    auto choose = window.settingsDialog->findChild<QPushButton *>("themeColorChoose");
+    QVERIFY(choose);
+    bool checked = false;
+    QTimer::singleShot(0, [&]
+    {
+        auto dialog = window.settingsDialog->findChild<QColorDialog *>("themeColorDialog");
+        if (!dialog)
+        {
+            if (auto modal = QApplication::activeModalWidget()) { modal->close(); }
+            return;
+        }
+        checked = true;
+        QVERIFY2(dialog->palette().color(QPalette::Window).lightnessF() < 0.5,
+            qPrintable(dialog->palette().color(QPalette::Window).name()));
+        capture(dialog, "theme-color-picker-dark");
+        dialog->reject();
+    });
+    choose->click();
+    QVERIFY(checked);
+    window.close();
+}
+
+void ThemeColorTests::narrowSettingsThemeRowFits()
+{
+    QTemporaryDir directory;
+    sw::Engine engine;
+    sw::McpServer server(&engine);
+    sw::Window window(&engine, &server, directory.filePath("settings.json"));
+    window.show();
+    window.openSettings();
+    auto dialog = window.settingsDialog;
+    dialog->resize(520, 380);
+    QTest::qWait(60);
+    auto scroll = dialog->findChild<QScrollArea *>("appearanceScroll");
+    auto input = dialog->findChild<QLineEdit *>("themeColorHex");
+    auto choose = dialog->findChild<QPushButton *>("themeColorChoose");
+    auto apply = dialog->findChild<QPushButton *>("themeColorApply");
+    QVERIFY(scroll && input && choose && apply);
+    scroll->ensureWidgetVisible(input);
+    QApplication::processEvents();
+    for (auto widget : {static_cast<QWidget *>(choose), static_cast<QWidget *>(input), static_cast<QWidget *>(apply)})
+    {
+        const auto bounds = QRect(widget->mapTo(dialog, QPoint(0, 0)), widget->size());
+        QVERIFY2(dialog->rect().contains(bounds), widget->objectName().toUtf8());
+    }
+    capture(dialog, "theme-settings-narrow");
+    window.close();
+}
+
+void ThemeColorTests::aboutLinksFollowAccent()
+{
+    QTemporaryDir directory;
+    sw::Engine engine;
+    sw::McpServer server(&engine);
+    sw::Window window(&engine, &server, directory.filePath("settings.json"));
+    window.show();
+    window.openSettings();
+    window.setThemeColor(QColor("#814fc4"));
+    auto pages = window.settingsDialog->findChild<sw::DetachableTabs *>("settingsPages");
+    auto sources = window.settingsDialog->findChild<QLabel *>("aboutSources");
+    QVERIFY(pages && sources);
+    pages->setCurrentIndex(2);
+    QApplication::processEvents();
+    QCOMPARE(sources->palette().color(QPalette::Link), QColor("#814fc4"));
+    capture(window.settingsDialog, "theme-about-links");
+    window.close();
+}
+
+void ThemeColorTests::serialMonitorFollowsCustomAccent()
+{
+    QTemporaryDir directory;
+    sw::Engine engine;
+    sw::McpServer server(&engine);
+    sw::Window window(&engine, &server, directory.filePath("settings.json"));
+    window.show();
+    sw::Config config;
+    config.port = "loop://";
+    auto channel = engine.open(config);
+    auto control = window.newInstrument("control", channel);
+    QVERIFY(control && control->instrument && control->instrument->controls);
+    auto toggle = control->instrument->controls->findChild<QPushButton *>("controlMonitorToggle");
+    QVERIFY(toggle);
+    toggle->setChecked(true);
+    auto monitor = control->instrument->controls->receiveMonitor();
+    QVERIFY(monitor);
+    window.setThemeColor(QColor("#814fc4"));
+    QTRY_COMPARE(monitor->logView()->theme.accent, QColor("#814fc4"));
+    capture(monitor, "theme-serial-monitor");
+    monitor->close();
     window.close();
 }
 

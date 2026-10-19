@@ -73,6 +73,14 @@ void Window::syncThemeColorControls()
         painter.end();
         choose->setIcon(QIcon(swatch));
     }
+    if (auto sources = settingsDialog->findChild<QLabel *>("aboutSources"))
+    {
+        // Scroll-area viewports otherwise keep the system Link color.
+        auto palette = sources->palette();
+        palette.setColor(QPalette::Link, theme.accent);
+        palette.setColor(QPalette::LinkVisited, theme.accent);
+        sources->setPalette(palette);
+    }
 }
 
 QWidget *Window::themeColorSettingsPanel()
@@ -145,6 +153,8 @@ QWidget *Window::themeColorSettingsPanel()
         dialog.setWindowTitle("选择主题色");
         dialog.setOption(QColorDialog::DontUseNativeDialog);
         dialog.setStyleSheet(theme.stylesheet());
+        dialog.setPalette(settingsDialog->palette());
+        dialog.setFont(Theme::interfaceFont());
         dialog.setMinimumSize(560, 480);
         if (dialog.exec() == QDialog::Accepted)
         {
