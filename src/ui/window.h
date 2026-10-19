@@ -158,6 +158,7 @@ public:
     McpServer *mcp;
     Theme theme;
     QColor themeColor;
+    QColor themeContrast;
     QFont dataFont;
     BackgroundSpec windowBackground;
     BackgroundSpec receiveBackground;
@@ -267,6 +268,7 @@ public:
     void applyTheme(bool dark);
     void applyLocalTheme(bool dark);
     void setThemeColor(const QColor &color);
+    void setThemeContrast(const QColor &color);
     void syncThemeColorControls();
     QWidget *themeColorSettingsPanel();
     QString workspaceStyle() const;

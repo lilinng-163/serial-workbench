@@ -60,7 +60,7 @@
 
 **[下载最新版本 →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.33 新增主题色选色盘与十六进制输入，自定义色同步浅色/深色界面、分离窗口和串口小窗，并自动保证按钮文字可读。[查看更新说明](docs/releases/0.15.33.md)。
+v0.15.34 将主题拆成主色与撞色：主色负责背景、面板和文字，撞色负责按钮、链接、选中、焦点等强调组件；列表、菜单和悬停预选背景统一使用撞色浅色。[查看更新说明](docs/releases/0.15.34.md)。
 
 | 文件 | 适合的使用方式 |
 | --- | --- |
@@ -262,7 +262,7 @@ $env:MINGW_BIN = 'C:/Qt/Tools/mingw1310_64/bin'
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r tests/integration/requirements.txt
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.33
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.34
 ```
 
 安装 NSIS，并提供匹配的 Qt 源码目录收集许可证，即可生成安装包、单文件启动器和便携 ZIP：

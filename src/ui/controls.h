@@ -25,7 +25,7 @@ struct Theme
     QColor rail = "#293e35";
     QColor onAccent = "#28392f";
     QColor railAccent = "#edaa50";
-    static Theme make(bool dark, const QColor &color = {});
+    static Theme make(bool dark, const QColor &color = {}, const QColor &contrast = {});
     static QColor parseColor(const QString &text);
     static QString fontFamily(int pixels = 8);
     static QFont interfaceFont();

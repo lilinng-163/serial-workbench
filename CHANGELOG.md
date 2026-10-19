@@ -1,6 +1,14 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # 更新记录
 
+## 0.15.34 — 2026-10-19
+
+- 主题色拆分为主色与撞色：主色只改变背景、面板和文字色相，撞色接管默认橙色强调色所在的按钮、链接、选中、焦点、勾选、滑块、进度和 rail 激活图标。
+- 主色和撞色分别支持选色盘、`#RRGGBB` / `#RGB` 输入、应用和恢复默认；撞色未单独设置时使用暖橙色，不再自动生成互补色。
+- 菜单、列表、页签、下拉项和树形项的悬停/预选背景统一使用撞色浅色；选中页签、勾选文字和描边按钮恢复默认角色。
+- 上移颜色输入框右侧的清除按钮，修正窄设置窗口中的对齐。
+- English: split the theme color into a main surface color and a user-selected contrast color for accent controls; unify hover/preselection surfaces and fix the clear-button alignment.
+
 ## 0.15.33 — 2026-10-19
 
 - 设置 → 外观新增主题色，支持选色盘、`#RRGGBB` 与 `#RGB` 输入、格式提示和恢复默认；立即保存并在重启后恢复。

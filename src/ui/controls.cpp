@@ -182,7 +182,7 @@ QColor Theme::parseColor(const QString &text)
     return format.match(value).hasMatch() ? QColor(value) : QColor();
 }
 
-Theme Theme::make(bool dark, const QColor &color)
+Theme Theme::make(bool dark, const QColor &color, const QColor &contrast)
 {
     Theme t;
     t.dark = dark;
@@ -204,7 +204,8 @@ Theme Theme::make(bool dark, const QColor &color)
     }
     if (color.isValid())
     {
-        // Tint surfaces gently; the chosen RGB value stays exact on accents.
+        // The main color tints surfaces only. Default accent components keep
+        // their own role and are set from the contrast color below.
         const qreal hue = qMax(0.0, color.hslHueF());
         const qreal saturation = color.hslSaturationF() * 0.32;
         const auto tint = [hue, saturation](qreal lightness)
@@ -220,18 +221,38 @@ Theme Theme::make(bool dark, const QColor &color)
         t.edge = tint(dark ? 0.49 : 0.51);
         t.hover = tint(dark ? 0.25 : 0.86);
         t.rail = tint(0.10);
-        t.accent = color.toRgb();
+    }
+    if (color.isValid() || contrast.isValid())
+    {
+        // Default theme roles: the contrast color is the accent used by
+        // buttons, links, selection, focus, checkboxes, sliders, progress and
+        // the active rail icon. The warm default accent is the fallback.
+        const QColor fallbackAccent = dark ? QColor("#edaa50") : QColor("#dc8c38");
+        t.accent = contrast.isValid() ? QColor(contrast.toRgb()) : fallbackAccent;
         t.accent.setAlpha(255);
-        t.railAccent = QColor::fromHslF(hue, color.hslSaturationF(), qMax(0.65, color.lightnessF()));
 
-        // Pick black or white using relative luminance, including extreme colors.
         const auto linear = [](qreal channel)
         {
             return channel <= 0.04045 ? channel / 12.92 : std::pow((channel + 0.055) / 1.055, 2.4);
         };
-        const qreal luminance = 0.2126 * linear(color.redF())
-            + 0.7152 * linear(color.greenF()) + 0.0722 * linear(color.blueF());
+        const qreal luminance = 0.2126 * linear(t.accent.redF())
+            + 0.7152 * linear(t.accent.greenF()) + 0.0722 * linear(t.accent.blueF());
         t.onAccent = luminance > 0.179 ? QColor(Qt::black) : QColor(Qt::white);
+        const qreal accentHue = qMax(0.0, t.accent.hslHueF());
+        t.railAccent = QColor::fromHslF(accentHue, t.accent.hslSaturationF(),
+            qMax(0.65, t.accent.lightnessF()));
+        if (color.isValid())
+        {
+            // All hover/list/menu preselection surfaces use the same accent
+            // family as checked/focused controls, rather than the main tint.
+            const auto blend = [](const QColor &from, const QColor &to, qreal amount)
+            {
+                return QColor(qRound(from.red() + (to.red() - from.red()) * amount),
+                    qRound(from.green() + (to.green() - from.green()) * amount),
+                    qRound(from.blue() + (to.blue() - from.blue()) * amount));
+            };
+            t.hover = blend(t.panel, t.accent, dark ? 0.22 : 0.16);
+        }
     }
     return t;
 }
@@ -358,6 +379,7 @@ QString Theme::stylesheet() const
         QLabel#senderLabel { color: $muted; font-size: 13px; }
         QLabel#connectionHint { color: $muted; padding: 10px 0 0 0; border-top: 1px solid $line; }
         QLineEdit, QComboBox, QAbstractSpinBox { background: $panel; border: 1px solid $line; border-radius: 8px; padding: 6px 10px; min-height: 24px; selection-background-color: $accent; selection-color: $onaccent; }
+        QLineEdit QToolButton { background: transparent; border: none; padding: 0; margin: 0 4px 3px 0; }
         QLineEdit:hover, QComboBox:hover, QAbstractSpinBox:hover { border-color: $edge; }
         QLineEdit:focus, QComboBox:focus, QAbstractSpinBox:focus { border-color: $accent; }
         QComboBox#protocolSelector { background: $hover; border-color: $edge; padding: 8px 28px 8px 10px; }

@@ -60,7 +60,7 @@ Screenshots are captured from the application using generated example data and l
 
 **[Download the latest release →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.33 adds custom theme colors with a picker and hex input, synchronized light/dark surfaces, detached windows and readable button text. [Release notes](docs/releases/0.15.33.md).
+v0.15.34 separates the custom main color (backgrounds and text) from a user-selected contrast color for buttons, links, selection and focus, with unified hover/preselection surfaces. [Release notes](docs/releases/0.15.34.md).
 
 | Package | Use it when… |
 | --- | --- |
@@ -264,7 +264,7 @@ The build script compiles the application, runs native tests and deploys Qt libr
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r tests/integration/requirements.txt
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.33
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.34
 ```
 
 To create the installer, single-file launcher and portable ZIP, install NSIS and provide the matching Qt source tree for license notices:

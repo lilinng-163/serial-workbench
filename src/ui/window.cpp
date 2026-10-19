@@ -1657,7 +1657,8 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     const auto appearance = saved["appearance"].toObject();
     parameterWidth = qBound(220, appearance["parameter_width"].toInt(246), 4096);
     themeColor = Theme::parseColor(appearance["theme_color"].toString());
-    theme = Theme::make(appearance["theme"] == "dark", themeColor);
+    themeContrast = Theme::parseColor(appearance["contrast_color"].toString());
+    theme = Theme::make(appearance["theme"] == "dark", themeColor, themeContrast);
     dataFont = Theme::defaultDataFont();
     const auto savedFamily = appearance["font_family"].toString();
     const bool previousDefault = !appearance["readable_type"].toBool()
@@ -1688,6 +1689,7 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
         setAttribute(Qt::WA_DeleteOnClose);
         theme = primary->theme;
         themeColor = primary->themeColor;
+        themeContrast = primary->themeContrast;
         dataFont = primary->dataFont;
         templates = primary->templates;
         viewSettings = primary->viewSettings;
@@ -3332,7 +3334,8 @@ void Window::applyTheme(bool dark)
 void Window::applyLocalTheme(bool dark)
 {
     themeColor = rootWindow()->themeColor;
-    theme = Theme::make(dark, themeColor);
+    themeContrast = rootWindow()->themeContrast;
+    theme = Theme::make(dark, themeColor, themeContrast);
     connectionLed->theme = theme;
     connectionLed->update();
     setStyleSheet(workspaceStyle());
@@ -3554,6 +3557,14 @@ void Window::saveSettings()
     else
     {
         appearance.remove("theme_color");
+    }
+    if (themeContrast.isValid())
+    {
+        appearance["contrast_color"] = themeContrast.name(QColor::HexRgb);
+    }
+    else
+    {
+        appearance.remove("contrast_color");
     }
     appearance["pixel_theme"] = true;
     appearance["readable_type"] = true;

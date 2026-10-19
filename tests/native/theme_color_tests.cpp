@@ -27,6 +27,10 @@ private slots:
 
     void extremeColorsRemainReadable();
 
+    void customContrastColor();
+
+    void presetHoverUsesContrast();
+
     void darkPickerUsesThemePalette();
 
     void narrowSettingsThemeRowFits();
@@ -82,7 +86,7 @@ void ThemeColorTests::contrastAndParsing()
     {
         for (const auto &name : {"#000000", "#ffffff", "#ff0000", "#00ff00", "#0000ff", "#4488ee", "#ff77cc"})
         {
-            const auto theme = sw::Theme::make(dark, QColor(name));
+            const auto theme = sw::Theme::make(dark, QColor("#3c4cdc"), QColor(name));
             QCOMPARE(theme.accent, QColor(name));
             const qreal a = luminance(theme.accent);
             const qreal b = luminance(theme.onAccent);
@@ -104,22 +108,30 @@ void ThemeColorTests::editPersistRestoreAndReset()
         window.openSettings();
         auto input = window.settingsDialog->findChild<QLineEdit *>("themeColorHex");
         auto apply = window.settingsDialog->findChild<QPushButton *>("themeColorApply");
+        auto contrastInput = window.settingsDialog->findChild<QLineEdit *>("themeContrastHex");
+        auto contrastApply = window.settingsDialog->findChild<QPushButton *>("themeContrastApply");
         auto hint = window.settingsDialog->findChild<QLabel *>("themeColorHint");
-        QVERIFY(input && apply && hint);
+        QVERIFY(input && apply && contrastInput && contrastApply && hint);
         input->setText("#48e");
         input->setFocus();
         QTest::keyClick(input, Qt::Key_Return);
         QVERIFY(window.settingsDialog->isVisible());
-        QCOMPARE(window.theme.accent, QColor("#4488ee"));
+        QCOMPARE(window.themeColor, QColor("#4488ee"));
+        QCOMPARE(window.theme.accent, QColor("#dc8c38"));
         QCOMPARE(input->text(), QString("#4488EE"));
         QCOMPARE(appearance(path)["theme_color"].toString(), QString("#4488ee"));
         input->setText("#invalid");
         apply->click();
         QVERIFY(hint->text().contains("无效"));
-        QCOMPARE(window.theme.accent, QColor("#4488ee"));
+        QCOMPARE(window.themeColor, QColor("#4488ee"));
+        QCOMPARE(window.theme.accent, QColor("#dc8c38"));
         QCOMPARE(appearance(path)["theme_color"].toString(), QString("#4488ee"));
         input->setText("#4488EE");
         apply->click();
+        contrastInput->setText("#e06030");
+        contrastApply->click();
+        QCOMPARE(window.theme.accent, QColor("#e06030"));
+        QCOMPARE(appearance(path)["contrast_color"].toString(), QString("#e06030"));
         auto scroll = window.settingsDialog->findChild<QScrollArea *>("appearanceScroll");
         scroll->ensureWidgetVisible(input);
         QApplication::processEvents();
@@ -127,7 +139,7 @@ void ThemeColorTests::editPersistRestoreAndReset()
         capture(&window, "theme-workspace-light");
         window.applyTheme(true);
         window.saveSettings();
-        QCOMPARE(window.theme.accent, QColor("#4488ee"));
+        QCOMPARE(window.theme.accent, QColor("#e06030"));
         capture(window.settingsDialog, "theme-settings-dark");
         capture(&window, "theme-workspace-dark");
         window.settingsDialog->accept();
@@ -135,11 +147,13 @@ void ThemeColorTests::editPersistRestoreAndReset()
     }
     sw::Window restored(&engine, &server, path);
     QVERIFY(restored.theme.dark);
-    QCOMPARE(restored.theme.accent, QColor("#4488ee"));
+    QCOMPARE(restored.themeColor, QColor("#4488ee"));
+    QCOMPARE(restored.theme.accent, QColor("#e06030"));
     restored.openSettings();
     restored.settingsDialog->findChild<QPushButton *>("themeColorReset")->click();
     QCOMPARE(restored.theme.accent, sw::Theme::make(true).accent);
     QVERIFY(!appearance(path).contains("theme_color"));
+    QVERIFY(!appearance(path).contains("contrast_color"));
     restored.close();
 }
 
@@ -169,7 +183,9 @@ void ThemeColorTests::pickerAcceptCancelAndDetachedSync()
     });
     choose->click();
     QVERIFY(pickerFound);
-    QCOMPARE(window.theme.accent, QColor("#814fc4"));
+    QCOMPARE(window.themeColor, QColor("#814fc4"));
+    QCOMPARE(window.theme.accent, QColor("#dc8c38"));
+    QCOMPARE(detached->themeColor, window.themeColor);
     QCOMPARE(detached->theme.accent, window.theme.accent);
     QCOMPARE(window.active->log->theme.accent, window.theme.accent);
     QCOMPARE(detached->settingsDialog->palette().color(QPalette::Highlight), window.theme.accent);
@@ -182,10 +198,28 @@ void ThemeColorTests::pickerAcceptCancelAndDetachedSync()
         dialog->reject();
     });
     choose->click();
-    QCOMPARE(window.theme.accent, QColor("#814fc4"));
+    QCOMPARE(window.themeColor, QColor("#814fc4"));
+    QCOMPARE(window.theme.accent, QColor("#dc8c38"));
+
+    auto contrastChoose = detached->settingsDialog->findChild<QPushButton *>("themeContrastChoose");
+    QVERIFY(contrastChoose);
+    bool contrastPickerFound = false;
+    QTimer::singleShot(0, [&]
+    {
+        auto dialog = detached->settingsDialog->findChild<QColorDialog *>("themeContrastDialog");
+        if (!dialog) { return; }
+        contrastPickerFound = true;
+        dialog->setCurrentColor(QColor("#f2a33a"));
+        capture(dialog, "theme-contrast-picker");
+        dialog->accept();
+    });
+    contrastChoose->click();
+    QVERIFY(contrastPickerFound);
+    QCOMPARE(window.theme.accent, QColor("#f2a33a"));
+    QCOMPARE(detached->theme.accent, window.theme.accent);
     window.applyTheme(true);
     QVERIFY(detached->theme.dark);
-    QCOMPARE(detached->theme.accent, QColor("#814fc4"));
+    QCOMPARE(detached->theme.accent, QColor("#f2a33a"));
     detached->close();
     window.close();
 }
@@ -228,14 +262,73 @@ void ThemeColorTests::extremeColorsRemainReadable()
 {
     for (bool dark : {false, true})
     {
+        for (const auto &main : {"#000000", "#ffffff", "#ff0000", "#00ff00", "#0000ff", "#808080", "#4488ee", "#ff77cc"})
+        {
+            const auto surfaces = sw::Theme::make(dark, QColor(main), QColor("#e06030"));
+            QVERIFY2(contrastRatio(surfaces.text, surfaces.background) >= 4.5, main);
+            QVERIFY2(contrastRatio(surfaces.text, surfaces.panel) >= 4.5, main);
+        }
         for (const auto &accent : {"#000000", "#ffffff", "#ff0000", "#00ff00", "#0000ff", "#808080", "#4488ee", "#ff77cc"})
         {
-            const auto theme = sw::Theme::make(dark, QColor(accent));
-            QVERIFY2(contrastRatio(theme.text, theme.background) >= 4.5, accent);
-            QVERIFY2(contrastRatio(theme.text, theme.panel) >= 4.5, accent);
+            const auto theme = sw::Theme::make(dark, QColor("#3c4cdc"), QColor(accent));
             QVERIFY2(contrastRatio(theme.onAccent, theme.accent) >= 4.5, accent);
         }
     }
+}
+
+void ThemeColorTests::customContrastColor()
+{
+    for (bool dark : {false, true})
+    {
+        const QColor main("#3c4cdc");
+        const QColor fallback = dark ? QColor("#edaa50") : QColor("#dc8c38");
+        const auto plain = sw::Theme::make(dark);
+        QCOMPARE(plain.accent, fallback);
+
+        const auto surfaces = sw::Theme::make(dark, main);
+        QCOMPARE(surfaces.accent, fallback);
+        QVERIFY(surfaces.background != plain.background);
+        QVERIFY(surfaces.panel != plain.panel);
+
+        for (const auto &name : {"#000000", "#ffffff", "#808080", "#4488ee", "#ff77cc"})
+        {
+            const auto chosen = sw::Theme::make(dark, main, QColor(name));
+            QCOMPARE(chosen.accent, QColor(name));
+            QVERIFY2(chosen.railAccent.lightnessF() >= 0.65, name);
+            QVERIFY2(chosen.stylesheet().contains(QColor(name).name()), name);
+            QVERIFY2(contrastRatio(chosen.onAccent, chosen.accent) >= 4.5, name);
+            QVERIFY2(contrastRatio(chosen.text, chosen.panel) >= 4.5, name);
+        }
+    }
+}
+
+void ThemeColorTests::presetHoverUsesContrast()
+{
+    QTemporaryDir directory;
+    sw::Engine engine;
+    sw::McpServer server(&engine);
+    sw::Window window(&engine, &server, directory.filePath("settings.json"));
+    window.show();
+    window.setThemeColor(QColor("#4488ee"));
+    window.setThemeContrast(QColor("#e06030"));
+
+    const qreal hoverHue = window.theme.hover.hslHueF();
+    const qreal accentHue = window.theme.accent.hslHueF();
+    const qreal separation = qAbs(hoverHue - accentHue);
+    QVERIFY2(qMin(separation, 1.0 - separation) < 0.08, qPrintable(window.theme.hover.name()));
+
+    auto menu = window.newPageMenu();
+    menu->show();
+    QTest::qWait(50);
+    for (auto action : menu->actions())
+    {
+        if (action->objectName() == "newWidgetPage") { menu->setActiveAction(action); }
+    }
+    QTest::qWait(50);
+    capture(menu, "theme-new-page-menu");
+    menu->close();
+    delete menu;
+    window.close();
 }
 
 void ThemeColorTests::darkPickerUsesThemePalette()
@@ -284,10 +377,21 @@ void ThemeColorTests::narrowSettingsThemeRowFits()
     auto input = dialog->findChild<QLineEdit *>("themeColorHex");
     auto choose = dialog->findChild<QPushButton *>("themeColorChoose");
     auto apply = dialog->findChild<QPushButton *>("themeColorApply");
-    QVERIFY(scroll && input && choose && apply);
+    auto contrastInput = dialog->findChild<QLineEdit *>("themeContrastHex");
+    auto contrastChoose = dialog->findChild<QPushButton *>("themeContrastChoose");
+    auto contrastApply = dialog->findChild<QPushButton *>("themeContrastApply");
+    QVERIFY(scroll && input && choose && apply && contrastInput && contrastChoose && contrastApply);
     scroll->ensureWidgetVisible(input);
     QApplication::processEvents();
     for (auto widget : {static_cast<QWidget *>(choose), static_cast<QWidget *>(input), static_cast<QWidget *>(apply)})
+    {
+        const auto bounds = QRect(widget->mapTo(dialog, QPoint(0, 0)), widget->size());
+        QVERIFY2(dialog->rect().contains(bounds), widget->objectName().toUtf8());
+    }
+    scroll->ensureWidgetVisible(contrastInput);
+    QApplication::processEvents();
+    for (auto widget : {static_cast<QWidget *>(contrastChoose), static_cast<QWidget *>(contrastInput),
+             static_cast<QWidget *>(contrastApply)})
     {
         const auto bounds = QRect(widget->mapTo(dialog, QPoint(0, 0)), widget->size());
         QVERIFY2(dialog->rect().contains(bounds), widget->objectName().toUtf8());
@@ -305,6 +409,7 @@ void ThemeColorTests::aboutLinksFollowAccent()
     window.show();
     window.openSettings();
     window.setThemeColor(QColor("#814fc4"));
+    window.setThemeContrast(QColor("#814fc4"));
     auto pages = window.settingsDialog->findChild<sw::DetachableTabs *>("settingsPages");
     auto sources = window.settingsDialog->findChild<QLabel *>("aboutSources");
     QVERIFY(pages && sources);
@@ -333,6 +438,7 @@ void ThemeColorTests::serialMonitorFollowsCustomAccent()
     auto monitor = control->instrument->controls->receiveMonitor();
     QVERIFY(monitor);
     window.setThemeColor(QColor("#814fc4"));
+    window.setThemeContrast(QColor("#814fc4"));
     QTRY_COMPARE(monitor->logView()->theme.accent, QColor("#814fc4"));
     capture(monitor, "theme-serial-monitor");
     monitor->close();
