@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN" data-base="./">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="lilinng 的个人主页。嵌入式、C / C++ 与开发工具，提供 Serial Workbench 的介绍和下载。">
+  <meta name="author" content="lilinng">
+  <meta name="theme-color" content="#f5f7fa">
+  <meta property="og:title" content="lilinng 的个人主页">
+  <meta property="og:description" content="lilinng 的个人主页。嵌入式、C / C++ 与开发工具，提供 Serial Workbench 的介绍和下载。">
+  <meta property="og:type" content="website">
+  <title>lilinng 的个人主页</title>
+
+  <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg">
+  <link rel="stylesheet" href="./assets/site.css">
+  <script defer src="./assets/app.js"></script>
+</head>
+<body>
+  <a href="#main" class="skip-link">跳到正文</a>
+  <header class="site-header"><div class="container header-inner">
+    <a class="brand" href="./index.html" aria-label="lilinng 首页"><img src="./assets/favicon.svg" width="34" height="34" alt=""><span>lilinng</span></a>
+    <nav class="desktop-nav" aria-label="主导航"><a class="nav-link" href="./index.html" aria-current="page">首页</a><a class="nav-link" href="./projects/index.html">项目</a><a class="nav-link" href="./downloads/index.html">下载</a><a class="nav-link" href="./about/index.html">关于</a></nav>
+    <div class="header-actions">
+      <button class="icon-button" data-theme-toggle aria-label="切换深色主题" title="切换深色主题"><svg class="icon moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14a8 8 0 0 1-10-10 8.5 8.5 0 1 0 10 10Z"/></svg><svg class="icon sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg></button>
+      <details class="mobile-menu"><summary aria-label="导航菜单"><svg class="icon " viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></summary><nav class="mobile-nav" aria-label="手机导航"><a class="nav-link" href="./index.html" aria-current="page">首页</a><a class="nav-link" href="./projects/index.html">项目</a><a class="nav-link" href="./downloads/index.html">下载</a><a class="nav-link" href="./about/index.html">关于</a></nav></details>
+    </div>
+  </div></header>
+  <main id="main"><div class="container"><section class="hero"><div>
+  <p class="hello">你好，我是 lilinng</p><h1><span>从设备到界面，</span><span>把数据看清楚。</span></h1>
+  <p class="hero-copy">我做嵌入式开发，也用 C / C++ 写调试工具。这里有我正在做的项目，也能下载 Serial Workbench。</p>
+  <div class="hero-actions"><a class="button button-primary" href="./projects/index.html">看看我的项目 <svg class="icon " viewBox="0 0 24 24" aria-hidden="true"><path d="m7 6-5 6 5 6m10-12 5 6-5 6M14 3 10 21"/></svg></a><a class="button button-secondary" href="./downloads/index.html">下载 Serial Workbench <svg class="icon " viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v5h14v-5"/></svg></a></div>
+  <p class="hero-tags"><span>嵌入式开发</span><span>C / C++</span><span>软件与硬件</span></p>
+  </div><div class="hero-art"><svg class="bench" viewBox="0 0 500 365" role="img" aria-label="电路连接到串口波形的示意图">
+  <defs><pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="currentColor" opacity=".12"/></pattern><clipPath id="board-outline"><path d="M100 40h335q30 0 30 30v215q0 32-32 32H58q-25 0-25-25V115q0-25 25-25h15q27 0 27-27Z"/></clipPath></defs>
+  <path class="ghost" d="M100 40h335q30 0 30 30v215q0 32-32 32H58q-25 0-25-25V115q0-25 25-25h15q27 0 27-27Z"/>
+  <rect x="38" y="45" width="427" height="275" fill="url(#dots)" clip-path="url(#board-outline)"/>
+  <path class="trace" d="M44 107h64v42m-37 153h72v-49M149 38v75m59-29v29M245 48v90h50m132-54v55M339 268v35h76m-123-16v-55"/>
+  <path class="signal" d="M43 184h70m94 0h48q18 0 18-18v-9h27m58 79v42h59"/>
+  <circle class="node" cx="43" cy="184" r="5"/><circle class="node" cx="417" cy="278" r="5"/>
+  <rect class="chip" x="113" y="128" width="104" height="111" rx="12"/>
+  <path class="trace" d="M130 119v9m23-9v9m23-9v9m23-9v9M130 239v9m23-9v9m23-9v9m23-9v9M104 145h9m-9 20h9m-9 20h9m-9 20h9m104-60h9m-9 20h9m-9 20h9m-9 20h9"/>
+  <text class="chip-title" x="165" y="172" text-anchor="middle">lilinng</text><text class="small-label chip-subtitle" x="165" y="198" text-anchor="middle">build &amp; learn</text>
+  <circle class="accent" cx="194" cy="221" r="3"/>
+  <rect class="chip" x="300" y="112" width="155" height="128" rx="10"/>
+  <path class="trace" d="M300 140h155M318 157v63h121m-121-21h121m-121-20h121"/>
+  <circle cx="315" cy="126" r="2" fill="#edc66c"/><circle cx="323" cy="126" r="2" fill="#317564"/>
+  <text class="small-label" x="387" y="130" text-anchor="middle">serial / wave</text>
+  <path class="signal" d="m319 191 9 0 9-19 9 32 9-19 9 0 9-15 9 34 9-16 9-9 10 10 9-18 9 11"/>
+  <text class="small-label" x="57" y="167">TX</text><text class="small-label" x="256" y="201">RX</text>
+  <text class="label" x="165" y="287" text-anchor="middle">把想法接上电。</text>
+</svg></div></section>
+  <section class="section interest-section"><div class="section-head"><h2>平时在做什么</h2></div><div class="interests">
+  <div class="interest-item"><svg class="icon " viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4m6-4v4M9 18v4m6-4v4M2 9h4m-4 6h4m12-6h4m-4 6h4"/></svg><h3>嵌入式开发</h3><p>从外设和通信协议入手，弄清设备实际发出了什么。</p></div>
+  <div class="interest-item"><svg class="icon " viewBox="0 0 24 24" aria-hidden="true"><path d="m7 6-5 6 5 6m10-12 5 6-5 6M14 3 10 21"/></svg><h3>开发调试工具</h3><p>用 C / C++ 和 Qt，解决调试时反复遇到的问题。</p></div>
+  <div class="interest-item"><svg class="icon " viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-2 5 3 3 5-2a7 7 0 0 1-9 8l-6 3-3-3 3-6a7 7 0 0 1 9-8Z"/></svg><h3>连接 AI 与设备</h3><p>通过 MCP，让 AI 读取当前会话的数据和解析结果。</p></div>
+  </div></section>
+  <section class="section"><div class="section-head"><h2>正在维护的工具</h2><a class="text-link" href="./projects/index.html">项目介绍 <svg class="icon " viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a></div><div class="project-feature"><div class="project-feature-text">
+  <div class="project-brand"><img class="project-icon" src="./assets/serial-workbench.svg" width="48" height="48" alt=""><div><h2>Serial Workbench</h2><span class="project-version" data-release-version>v0.15.13</span></div></div><p>串口、网络和 SSH 调试工具。可以查看原始数据、绘制波形，并通过 MCP 让 AI 读取当前会话。</p>
+  <div class="feature-tags"><span>Qt / C++</span><span>自定义帧脚本</span><span>AI / MCP</span></div>
+  <a class="button button-secondary" href="./downloads/index.html">下载 Windows 安装包 <svg class="icon " viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v5h14v-5"/></svg></a>
+  </div><div class="project-feature-image"><img src="./assets/workbench-preview.png" width="1400" height="900" loading="lazy" alt="Serial Workbench 波形页面，可按通道查看数值曲线"></div></div>
+  <p class="small-note"><svg class="icon " viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4m6-4v4M9 18v4m6-4v4M2 9h4m-4 6h4m12-6h4m-4 6h4"/></svg>Serial Workbench 从实际调试问题出发，持续更新。</p></section></div></main>
+  <!-- SITE_FOOTER -->
+  <div id="toast" role="status" hidden></div>
+</body></html>

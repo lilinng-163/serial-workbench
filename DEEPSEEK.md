@@ -151,7 +151,7 @@ python -m venv .venv
   --screenshot build/preview.png --quit-after 2200
 ```
 
-发布步骤见 [安装器说明](docs/windows-installer.md)。网站与国内镜像在本次交接时保持冻结；v0.15.32 只发布 GitHub，不能擅自更新服务器或镜像。
+发布步骤见 [安装器说明](docs/windows-installer.md)。v0.15.32 仅发布 GitHub；2026-10-19 用户确认 ICP 已通过并授权更新网站 UI 与备案页脚，本次页面更新已完成。国内镜像及自动同步仍冻结，不随网站 UI 更新而自动恢复；详见最新开发记录和 [镜像说明](docs/update-mirror.md)。
 
 ## 8. DeepSeek 开发流程
 
