@@ -3315,7 +3315,7 @@ void Window::applyTheme(bool dark)
             continue;
         }
         widget->setStyleSheet(theme.stylesheet());
-        widget->setPalette(palette());
+        widget->setPalette(theme.palette());
         widget->setFont(Theme::interfaceFont());
         for (auto control : widget->findChildren<IconButton *>())
         {
@@ -3343,20 +3343,7 @@ void Window::applyLocalTheme(bool dark)
     backgroundSurface->background.set(windowBackground, windowBackgroundImage);
     backgroundSurface->update();
     if (!primary) { updateWindowChrome(theme, windowBackground, windowBackgroundImage); }
-    QPalette palette;
-    palette.setColor(QPalette::Window, theme.background);
-    palette.setColor(QPalette::Base, theme.panel);
-    palette.setColor(QPalette::Button, theme.panel);
-    palette.setColor(QPalette::Text, theme.text);
-    palette.setColor(QPalette::WindowText, theme.text);
-    palette.setColor(QPalette::ButtonText, theme.text);
-    palette.setColor(QPalette::Highlight, theme.accent);
-    palette.setColor(QPalette::HighlightedText, theme.onAccent);
-    palette.setColor(QPalette::Link, theme.accent);
-    palette.setColor(QPalette::LinkVisited, theme.accent);
-    palette.setColor(QPalette::PlaceholderText, theme.muted);
-    palette.setColor(QPalette::Mid, theme.muted);
-    setPalette(palette);
+    setPalette(theme.palette());
     for (auto control : findChildren<IconButton *>())
     {
         control->theme = theme;

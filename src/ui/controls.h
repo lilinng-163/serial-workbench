@@ -17,6 +17,8 @@ struct Theme
     QColor muted = "#647360";
     QColor line = "#b7c2ac";
     QColor accent = "#dc8c38";
+    QColor accentText = "#935a1c";
+    QColor accentStroke = "#b26a25";
     QColor hover = "#dce4cd";
     QColor green = "#477255";
     QColor red = "#b85845";
@@ -31,6 +33,7 @@ struct Theme
     static QFont interfaceFont();
     static QFont defaultDataFont();
     QString stylesheet() const;
+    QPalette palette() const;
 };
 
 QIcon icon(const QString &name, const QColor &color, int size = 20);

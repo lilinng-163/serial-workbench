@@ -15,6 +15,9 @@ private:
     void capture(QWidget *widget, const QString &name);
 
 private slots:
+    void accentTextAndSelectionStayReadable();
+    void accentCanChangeWithoutMainColor();
+    void extremeThemeWidgets();
     void initTestCase();
 
     void contrastAndParsing();
@@ -294,7 +297,7 @@ void ThemeColorTests::customContrastColor()
         {
             const auto chosen = sw::Theme::make(dark, main, QColor(name));
             QCOMPARE(chosen.accent, QColor(name));
-            QVERIFY2(chosen.railAccent.lightnessF() >= 0.65, name);
+            QVERIFY2(contrastRatio(chosen.railAccent, chosen.rail) >= 3.0, name);
             QVERIFY2(chosen.stylesheet().contains(QColor(name).name()), name);
             QVERIFY2(contrastRatio(chosen.onAccent, chosen.accent) >= 4.5, name);
             QVERIFY2(contrastRatio(chosen.text, chosen.panel) >= 4.5, name);
@@ -415,7 +418,8 @@ void ThemeColorTests::aboutLinksFollowAccent()
     QVERIFY(pages && sources);
     pages->setCurrentIndex(2);
     QApplication::processEvents();
-    QCOMPARE(sources->palette().color(QPalette::Link), QColor("#814fc4"));
+    QCOMPARE(sources->palette().color(QPalette::Link), window.theme.accentText);
+    QVERIFY(contrastRatio(window.theme.accentText, window.theme.panel) >= 4.5);
     capture(window.settingsDialog, "theme-about-links");
     window.close();
 }
@@ -442,6 +446,87 @@ void ThemeColorTests::serialMonitorFollowsCustomAccent()
     QTRY_COMPARE(monitor->logView()->theme.accent, QColor("#814fc4"));
     capture(monitor, "theme-serial-monitor");
     monitor->close();
+    window.close();
+}
+
+void ThemeColorTests::accentTextAndSelectionStayReadable()
+{
+    for (bool dark : {false, true})
+    {
+        for (const auto &main : {"", "#4488ee", "#ffffff", "#000000", "#ff77cc"})
+        {
+            for (const auto &accent : {"#000000", "#ffffff", "#808080", "#4488ee", "#ff0000", "#00ff00", "#ffff00"})
+            {
+                const auto theme = sw::Theme::make(dark, sw::Theme::parseColor(main), QColor(accent));
+                const auto palette = theme.palette();
+                QCOMPARE(theme.accent, QColor(accent));
+                for (const auto &surface : {theme.background, theme.panel, theme.sidebar, theme.hover})
+                {
+                    QVERIFY2(contrastRatio(theme.accentText, surface) >= 4.5, accent);
+                    QVERIFY2(contrastRatio(theme.accentStroke, surface) >= 3.0, accent);
+                    QVERIFY2(contrastRatio(theme.muted, surface) >= 4.5, accent);
+                    QVERIFY2(contrastRatio(palette.color(QPalette::Highlight), surface) >= 1.5, accent);
+                }
+                QVERIFY(contrastRatio(palette.color(QPalette::Highlight), palette.color(QPalette::HighlightedText)) >= 4.5);
+                QCOMPARE(palette.color(QPalette::Link), theme.accentText);
+                QCOMPARE(palette.color(QPalette::Disabled, QPalette::Text), theme.muted);
+                QCOMPARE(palette.color(QPalette::ToolTipBase), theme.panel);
+                QVERIFY(!theme.stylesheet().contains('$'));
+            }
+        }
+    }
+}
+
+void ThemeColorTests::accentCanChangeWithoutMainColor()
+{
+    QTemporaryDir directory;
+    sw::Engine engine;
+    sw::McpServer server(&engine);
+    sw::Window window(&engine, &server, directory.filePath("settings.json"));
+    const auto background = window.theme.background;
+    window.openSettings();
+    auto input = window.settingsDialog->findChild<QLineEdit *>("themeContrastHex");
+    auto apply = window.settingsDialog->findChild<QPushButton *>("themeContrastApply");
+    QVERIFY(input && apply && input->isEnabled() && apply->isEnabled());
+    input->setText("#4488ee");
+    apply->click();
+    QVERIFY(!window.themeColor.isValid());
+    QCOMPARE(window.theme.background, background);
+    QCOMPARE(window.theme.accent, QColor("#4488ee"));
+    QVERIFY(window.theme.hover != sw::Theme::make(false).hover);
+    QCOMPARE(appearance(window.settingsPath)["contrast_color"].toString(), QString("#4488ee"));
+    window.close();
+}
+
+void ThemeColorTests::extremeThemeWidgets()
+{
+    QTemporaryDir directory;
+    sw::Engine engine;
+    sw::McpServer server(&engine);
+    sw::Window window(&engine, &server, directory.filePath("settings.json"));
+    window.show();
+    window.setThemeColor(QColor("#4488ee"));
+    window.openSettings();
+    auto sources = window.settingsDialog->findChild<QLabel *>("aboutSources");
+    QVERIFY(sources);
+    for (bool dark : {false, true})
+    {
+        window.applyTheme(dark);
+        window.setThemeContrast(dark ? QColor(Qt::black) : QColor(Qt::white));
+        QCOMPARE(sources->palette().color(QPalette::Link), window.theme.accentText);
+        auto scroll = window.settingsDialog->findChild<QScrollArea *>("appearanceScroll");
+        auto input = window.settingsDialog->findChild<QLineEdit *>("themeContrastHex");
+        scroll->ensureWidgetVisible(input);
+        QTest::qWait(60);
+        capture(window.settingsDialog, dark ? "theme-black-accent-dark" : "theme-white-accent-light");
+        capture(&window, dark ? "theme-workspace-black-dark" : "theme-workspace-white-light");
+        sw::LogView log;
+        log.theme = window.theme;
+        log.feed({{"direction", "tx"}, {"hex", QString::fromLatin1(QByteArray("SET speed 1200").toHex())}});
+        QTextCursor cursor(log.document());
+        cursor.movePosition(QTextCursor::End);
+        QCOMPARE(cursor.charFormat().foreground().color(), window.theme.accentText);
+    }
     window.close();
 }
 

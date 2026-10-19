@@ -22,7 +22,7 @@ void ParameterGrip::paintEvent(QPaintEvent *)
     auto color = window->theme.muted;
     const bool active = dragging || underMouse() || hasFocus();
     color.setAlpha(active ? 200 : 120);
-    if (active) { color = window->theme.accent; }
+    if (active) { color = window->theme.accentStroke; }
     painter.setPen(QPen(color, 1));
     // Draw the divider against the parameter panel, then a small grip dot
     // column inside the workspace side so the two never look like one control.

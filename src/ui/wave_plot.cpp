@@ -228,7 +228,7 @@ QColor WavePlot::curveColor(const QString &name) const
 {
     const auto style = curveStyle(name);
     if (style.color.isValid()) { return style.color; }
-    const QList<QColor> colors {theme.accent, theme.green, QColor("#6c92a0"), QColor("#b0839a"), theme.red, QColor("#9e9a52")};
+    const QList<QColor> colors {theme.accentStroke, theme.green, QColor("#6c92a0"), QColor("#b0839a"), theme.red, QColor("#9e9a52")};
     return colors[colorSlots.value(name, 0) % colors.size()];
 }
 
@@ -467,7 +467,7 @@ void WavePlot::updateLegend()
         button->setChecked(isCurveVisible(name));
         button->setToolTip(curveLabel(name) + " = " + value + "\n点击显示或隐藏曲线；右键设置颜色、线宽和线型");
         const QString style = QString("QToolButton { border: none; padding: 2px 8px; background: transparent; color: %1; } QToolButton:hover { color: %2; }")
-            .arg(isCurveVisible(name) ? theme.text.name() : theme.muted.name(), theme.accent.name());
+            .arg(isCurveVisible(name) ? theme.text.name() : theme.muted.name(), theme.accentText.name());
         if (button->styleSheet() != style) { button->setStyleSheet(style); }
         const QColor color = isCurveVisible(name) ? curveColor(name) : theme.line;
         const auto appearance = curveStyle(name);
@@ -647,7 +647,7 @@ void WavePlot::rebuildImage()
     }
     imageDirty = false;
     imageFont = font();
-    imageColors = {theme.panel, theme.line, theme.text, theme.accent, theme.green, theme.red, theme.muted};
+    imageColors = {theme.panel, theme.line, theme.text, theme.accentStroke, theme.green, theme.red, theme.muted};
 }
 
 QJsonObject WavePlot::inspect(const QPointF &position) const
@@ -736,7 +736,7 @@ void WavePlot::drawInspection(QPainter &painter)
 
 void WavePlot::paintEvent(QPaintEvent *)
 {
-    const QList<QColor> colors {theme.panel, theme.line, theme.text, theme.accent, theme.green, theme.red, theme.muted};
+    const QList<QColor> colors {theme.panel, theme.line, theme.text, theme.accentStroke, theme.green, theme.red, theme.muted};
     if (imageColors != colors || imageFont != font()) { updateLegend(); imageDirty = true; }
     if (imageDirty || image.size() != QSize(qCeil(width() * devicePixelRatioF()), qCeil(height() * devicePixelRatioF()))
         || image.devicePixelRatioF() != devicePixelRatioF())

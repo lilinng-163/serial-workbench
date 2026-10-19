@@ -3,6 +3,7 @@
 #include "controls.h"
 #include "button_motion.h"
 #include <QSvgRenderer>
+#include <algorithm>
 #include <cmath>
 #include <numeric>
 
@@ -10,6 +11,66 @@ namespace sw
 {
 namespace
 {
+qreal relativeLuminance(const QColor &color)
+{
+    const auto linear = [](qreal value)
+    {
+        return value <= 0.04045 ? value / 12.92 : std::pow((value + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * linear(color.redF()) + 0.7152 * linear(color.greenF())
+        + 0.0722 * linear(color.blueF());
+}
+
+qreal contrastRatio(const QColor &first, const QColor &second)
+{
+    const qreal a = relativeLuminance(first);
+    const qreal b = relativeLuminance(second);
+    return (qMax(a, b) + 0.05) / (qMin(a, b) + 0.05);
+}
+
+QColor blendColor(const QColor &from, const QColor &to, qreal amount)
+{
+    return QColor(qRound(from.red() + (to.red() - from.red()) * amount),
+        qRound(from.green() + (to.green() - from.green()) * amount),
+        qRound(from.blue() + (to.blue() - from.blue()) * amount));
+}
+
+QColor textOn(const QColor &background)
+{
+    return relativeLuminance(background) > 0.179 ? QColor(Qt::black) : QColor(Qt::white);
+}
+
+QColor readableColor(const QColor &color, const QList<QColor> &surfaces, qreal minimum, bool dark)
+{
+    const auto readable = [&](const QColor &candidate)
+    {
+        return std::all_of(surfaces.cbegin(), surfaces.cend(), [&](const QColor &surface)
+        {
+            return contrastRatio(candidate, surface) >= minimum;
+        });
+    };
+    if (readable(color))
+    {
+        return color;
+    }
+    const QColor target = dark ? QColor(Qt::white) : QColor(Qt::black);
+    int low = 0;
+    int high = 255;
+    while (low < high)
+    {
+        const int middle = (low + high) / 2;
+        if (readable(blendColor(color, target, middle / 255.0)))
+        {
+            high = middle;
+        }
+        else
+        {
+            low = middle + 1;
+        }
+    }
+    return blendColor(color, target, high / 255.0);
+}
+
 // Mouse focus must not look like a selected action. Keep a separate cue for
 // keyboard navigation, including buttons supplied by Qt dialogs.
 class ButtonFocusFeedback : public QObject
@@ -231,30 +292,54 @@ Theme Theme::make(bool dark, const QColor &color, const QColor &contrast)
         t.accent = contrast.isValid() ? QColor(contrast.toRgb()) : fallbackAccent;
         t.accent.setAlpha(255);
 
-        const auto linear = [](qreal channel)
-        {
-            return channel <= 0.04045 ? channel / 12.92 : std::pow((channel + 0.055) / 1.055, 2.4);
-        };
-        const qreal luminance = 0.2126 * linear(t.accent.redF())
-            + 0.7152 * linear(t.accent.greenF()) + 0.0722 * linear(t.accent.blueF());
-        t.onAccent = luminance > 0.179 ? QColor(Qt::black) : QColor(Qt::white);
-        const qreal accentHue = qMax(0.0, t.accent.hslHueF());
-        t.railAccent = QColor::fromHslF(accentHue, t.accent.hslSaturationF(),
-            qMax(0.65, t.accent.lightnessF()));
-        if (color.isValid())
-        {
-            // All hover/list/menu preselection surfaces use the same accent
-            // family as checked/focused controls, rather than the main tint.
-            const auto blend = [](const QColor &from, const QColor &to, qreal amount)
-            {
-                return QColor(qRound(from.red() + (to.red() - from.red()) * amount),
-                    qRound(from.green() + (to.green() - from.green()) * amount),
-                    qRound(from.blue() + (to.blue() - from.blue()) * amount));
-            };
-            t.hover = blend(t.panel, t.accent, dark ? 0.22 : 0.16);
-        }
+        t.railAccent = readableColor(t.accent, {t.rail}, 3.0, true);
+        t.hover = blendColor(t.panel, t.accent, dark ? 0.22 : 0.16);
     }
+    const QList<QColor> surfaces {t.background, t.panel, t.sidebar, t.hover};
+    // Preserve the selected fill, while giving text and small marks enough
+    // contrast on every workspace surface (including hovered menu items).
+    t.onAccent = textOn(t.accent);
+    t.accentText = readableColor(t.accent, surfaces, 4.5, dark);
+    t.accentStroke = readableColor(t.accent, surfaces, 3.0, dark);
+    t.muted = readableColor(t.muted, surfaces, 4.5, dark);
+    t.red = readableColor(t.red, surfaces, 4.5, dark);
+    t.amber = readableColor(t.amber, surfaces, 4.5, dark);
     return t;
+}
+
+QPalette Theme::palette() const
+{
+    const QList<QColor> surfaces {background, panel, sidebar, hover};
+    const bool distinct = std::all_of(surfaces.cbegin(), surfaces.cend(), [&](const QColor &surface)
+    {
+        return contrastRatio(accent, surface) >= 1.5;
+    });
+    const QColor highlight = distinct ? accent : accentStroke;
+    QPalette result;
+    result.setColor(QPalette::Window, background);
+    result.setColor(QPalette::Base, panel);
+    result.setColor(QPalette::AlternateBase, sidebar);
+    result.setColor(QPalette::Button, panel);
+    result.setColor(QPalette::Text, text);
+    result.setColor(QPalette::WindowText, text);
+    result.setColor(QPalette::ButtonText, text);
+    result.setColor(QPalette::Highlight, highlight);
+    result.setColor(QPalette::HighlightedText, textOn(highlight));
+    result.setColor(QPalette::Link, accentText);
+    result.setColor(QPalette::LinkVisited, accentText);
+    result.setColor(QPalette::PlaceholderText, muted);
+    result.setColor(QPalette::ToolTipBase, panel);
+    result.setColor(QPalette::ToolTipText, text);
+    result.setColor(QPalette::Light, line);
+    result.setColor(QPalette::Midlight, line);
+    result.setColor(QPalette::Mid, muted);
+    result.setColor(QPalette::Dark, edge);
+    result.setColor(QPalette::Shadow, rail);
+    for (auto role : {QPalette::Text, QPalette::WindowText, QPalette::ButtonText, QPalette::PlaceholderText})
+    {
+        result.setColor(QPalette::Disabled, role, muted);
+    }
+    return result;
 }
 
 QScrollArea *scrollPanel(QWidget *content, const QString &name)
@@ -312,6 +397,7 @@ QString Theme::stylesheet() const
 {
     installButtonFocusFeedback();
     installButtonMotion(*this);
+    const auto colorsPalette = palette();
     QString s = R"(
         QWidget { color: $text; font-family: "$font"; font-size: 14px; font-weight: normal; }
         QMainWindow, QDialog, QWidget#root { background: $bg; }
@@ -325,7 +411,7 @@ QString Theme::stylesheet() const
         QFrame#controlToolbar QComboBox { min-height: 24px; padding-top: 2px; padding-bottom: 2px; }
         QLabel#controlGroupLabel { color: $muted; font-size: 12px; font-weight: 600; }
         QPushButton#addSerialControl { background: $accent; color: $onaccent; border: 1px solid $edge; font-weight: 600; }
-        QPushButton#controlMonitorToggle:checked { background: $hover; border: 1px solid $accent; }
+        QPushButton#controlMonitorToggle:checked { background: $hover; border: 1px solid $stroke; }
         QFrame#serialControlCard { background: $panel; border: 1px solid $line; border-radius: 12px; }
         QWidget#controlDragHandle { background: $side; border: none; border-radius: 6px; }
         QLabel#controlCardTitle { font-weight: 600; }
@@ -346,11 +432,11 @@ QString Theme::stylesheet() const
         QFrame#serialControlCard QAbstractSpinBox, QFrame#serialControlCard QComboBox { min-height: 22px; padding-top: 2px; padding-bottom: 2px; }
         QSlider { min-height: 24px; background: transparent; }
         QSlider::groove:horizontal { height: 6px; background: $line; border: none; border-radius: 3px; }
-        QSlider::sub-page:horizontal { background: $accent; border: none; border-radius: 3px; }
+        QSlider::sub-page:horizontal { background: $stroke; border: none; border-radius: 3px; }
         QSlider::add-page:horizontal { background: $line; border: none; border-radius: 3px; }
         QSlider::handle:horizontal { width: 12px; margin: -5px 0; background: $panel; border: 2px solid $edge; border-radius: 8px; }
-        QSlider::handle:horizontal:hover, QSlider::handle:horizontal:focus { background: $hover; border-color: $accent; }
-        QSlider::handle:horizontal:pressed { background: $accent; border-color: $accent; }
+        QSlider::handle:horizontal:hover, QSlider::handle:horizontal:focus { background: $hover; border-color: $stroke; }
+        QSlider::handle:horizontal:pressed { background: $accent; border-color: $stroke; }
         QSlider::sub-page:horizontal:disabled { background: $muted; }
         QSlider::handle:horizontal:disabled { background: $side; border-color: $line; }
         QLabel#controlValidation { color: $red; }
@@ -378,17 +464,17 @@ QString Theme::stylesheet() const
         QLabel#brandSubtitle { color: #d7dfc4; font-size: 13px; }
         QLabel#senderLabel { color: $muted; font-size: 13px; }
         QLabel#connectionHint { color: $muted; padding: 10px 0 0 0; border-top: 1px solid $line; }
-        QLineEdit, QComboBox, QAbstractSpinBox { background: $panel; border: 1px solid $line; border-radius: 8px; padding: 6px 10px; min-height: 24px; selection-background-color: $accent; selection-color: $onaccent; }
+        QLineEdit, QComboBox, QAbstractSpinBox { background: $panel; border: 1px solid $line; border-radius: 8px; padding: 6px 10px; min-height: 24px; selection-background-color: $selectbg; selection-color: $selectfg; }
         QLineEdit QToolButton { background: transparent; border: none; padding: 0; margin: 0 4px 3px 0; }
         QLineEdit:hover, QComboBox:hover, QAbstractSpinBox:hover { border-color: $edge; }
-        QLineEdit:focus, QComboBox:focus, QAbstractSpinBox:focus { border-color: $accent; }
+        QLineEdit:focus, QComboBox:focus, QAbstractSpinBox:focus { border-color: $stroke; }
         QComboBox#protocolSelector { background: $hover; border-color: $edge; padding: 8px 28px 8px 10px; }
-        QComboBox#protocolSelector:focus { border-color: $accent; }
+        QComboBox#protocolSelector:focus { border-color: $stroke; }
         QLineEdit#searchBox { padding: 5px 8px; background: $panel; }
         QLineEdit#searchBox[invalidFilter="true"] { border-color: $red; }
         QToolButton[searchOption="true"] { padding: 0; min-height: 0; border-radius: 4px; font-family: 'Segoe UI'; font-size: 12px; color: $muted; }
         QToolButton[searchOption="true"]:hover { background: $hover; color: $text; }
-        QToolButton[searchOption="true"]:checked { background: $hover; color: $accent; border-color: $accent; }
+        QToolButton[searchOption="true"]:checked { background: $hover; color: $ink; border-color: $stroke; }
         QLineEdit#tabTitleEditor, QLineEdit#tabTitleEditor:focus, QLineEdit#tabTitleEditor:hover { background: $panel; color: $text; border: none; border-bottom: 1px solid $edge; border-radius: 0; padding: 0 3px; min-height: 0; }
         QComboBox { padding-right: 28px; combobox-popup: 0; }
         QComboBox::drop-down { border: none; width: 28px; }
@@ -399,32 +485,32 @@ QString Theme::stylesheet() const
         QComboBox QAbstractItemView::item:selected { background: $hover; color: $text; }
         QAbstractSpinBox { padding-right: 26px; }
         QAbstractSpinBox::up-button, QAbstractSpinBox::down-button { width: 24px; border: none; }
-        QAbstractSpinBox::up-arrow { image: url(:/icons/chevron-up.svg); width: 10px; height: 6px; }
-        QAbstractSpinBox::down-arrow { image: url(:/icons/chevron-down.svg); width: 10px; height: 6px; }
+        QAbstractSpinBox::up-arrow { image: url($uparrow); width: 10px; height: 6px; }
+        QAbstractSpinBox::down-arrow { image: url($downarrow); width: 10px; height: 6px; }
         QPushButton, QToolButton { outline: none; background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 6px 12px; min-height: 24px; }
-        QPushButton:hover, QToolButton:hover { color: $accent; }
-        QPushButton:checked { color: $accent; font-weight: 600; }
-        QPushButton[keyboardFocus="true"]:focus, QToolButton[keyboardFocus="true"]:focus { color: $accent; }
+        QPushButton:hover, QToolButton:hover { color: $ink; }
+        QPushButton:checked { color: $ink; font-weight: 600; }
+        QPushButton[keyboardFocus="true"]:focus, QToolButton[keyboardFocus="true"]:focus { color: $ink; }
         QPushButton:pressed, QToolButton:pressed { color: $text; }
         QPushButton#primary, QPushButton#releaseHistoryDownload { background: $accent; color: $onaccent; border: 1px solid $edge; padding: 6px 16px; }
         QPushButton#primary:hover, QPushButton#primary[keyboardFocus="true"]:focus, QPushButton#releaseHistoryDownload:hover, QPushButton#releaseHistoryDownload[keyboardFocus="true"]:focus { background: $accent; color: $onaccent; }
         QPushButton#primary:pressed, QPushButton#releaseHistoryDownload:pressed { color: $onaccent; }
         QPushButton#primary:disabled, QPushButton#releaseHistoryDownload:disabled { background: $line; color: $muted; border-color: $edge; }
         QPushButton#outline, QPushButton[variant="outline"] { color: $text; border: 1px solid $line; background: $panel; }
-        QPushButton#outline[keyboardFocus="true"]:focus, QPushButton[variant="outline"][keyboardFocus="true"]:focus { border-color: $accent; color: $accent; }
-        QPushButton#outline:hover, QPushButton[variant="outline"]:hover { color: $accent; border-color: $accent; }
-        QPushButton#updateButton { color: $accent; border: none; padding: 1px 5px; min-height: 18px; font-weight: 600; }
+        QPushButton#outline[keyboardFocus="true"]:focus, QPushButton[variant="outline"][keyboardFocus="true"]:focus { border-color: $stroke; color: $ink; }
+        QPushButton#outline:hover, QPushButton[variant="outline"]:hover { color: $ink; border-color: $stroke; }
+        QPushButton#updateButton { color: $ink; border: none; padding: 1px 5px; min-height: 18px; font-weight: 600; }
         QPushButton#updateButton:hover { color: $text; }
         QPushButton#updateButton:pressed { color: $muted; }
         QProgressBar#updateProgress { border-radius: 6px; border: 1px solid $edge; background: $panel; padding: 0; }
-        QProgressBar#updateProgress::chunk { background: $accent; border-radius: 5px; }
+        QProgressBar#updateProgress::chunk { background: $stroke; border-radius: 5px; }
         QProgressBar#updateDialogProgress { border-radius: 6px; border: 1px solid $edge; background: $panel; min-height: 20px; text-align: center; }
-        QProgressBar#updateDialogProgress::chunk { background: $accent; border-radius: 5px; }
+        QProgressBar#updateDialogProgress::chunk { background: $stroke; border-radius: 5px; }
         QPushButton:disabled, QToolButton:disabled { color: $muted; }
         QToolButton[unitPreset="true"] { background: $panel; border: 1px solid $line; padding: 2px 8px; min-height: 22px; }
-        QToolButton[unitPreset="true"]:hover { border-color: $accent; background: $hover; }
-        QPlainTextEdit, QTextEdit { border: 1px solid $edge; border-radius: 8px; background: $panel; padding: 8px; selection-background-color: $accent; selection-color: $onaccent; }
-        QPlainTextEdit:focus { border-color: $accent; }
+        QToolButton[unitPreset="true"]:hover { border-color: $stroke; background: $hover; }
+        QPlainTextEdit, QTextEdit { border: 1px solid $edge; border-radius: 8px; background: $panel; padding: 8px; selection-background-color: $selectbg; selection-color: $selectfg; }
+        QPlainTextEdit:focus { border-color: $stroke; }
         QTextEdit#monitor { border: none; padding: 16px 18px; }
         QFontDialog QListView { border-radius: 8px; padding: 4px; color: $text; background: $panel; border: 1px solid $line; selection-background-color: $hover; selection-color: $text; outline: none; }
         QFontDialog QListView::item { padding: 3px 6px; }
@@ -454,11 +540,11 @@ QString Theme::stylesheet() const
         QMenu::icon { subcontrol-origin: padding; subcontrol-position: center left; left: 10px; }
         QMenu::separator { height: 1px; background: $line; margin: 5px 8px; }
         QMenu::indicator { width: 18px; height: 18px; margin-left: 8px; subcontrol-origin: padding; subcontrol-position: center left; image: none; background: transparent; }
-        QMenu::indicator:checked { image: url(:/icons/check.svg); background: $accent; border: 1px solid $edge; border-radius: 4px; }
+        QMenu::indicator:checked { image: url($checkmark); background: $accent; border: 1px solid $edge; border-radius: 4px; }
         QCheckBox { spacing: 7px; background: transparent; }
         QCheckBox::indicator { border-radius: 4px; width: 16px; height: 16px; border: 1px solid $edge; background: $panel; }
-        QCheckBox::indicator:hover { border-color: $accent; }
-        QCheckBox::indicator:checked { border-color: $text; background: $accent; image: url(:/icons/check.svg); }
+        QCheckBox::indicator:hover { border-color: $stroke; }
+        QCheckBox::indicator:checked { border-color: $text; background: $accent; image: url($checkmark); }
         QCheckBox[animatedCheck="true"]::indicator,
         QCheckBox[animatedCheck="true"]::indicator:checked,
         QCheckBox[animatedCheck="true"]::indicator:indeterminate { border: 1px solid transparent; background: transparent; image: none; }
@@ -484,6 +570,13 @@ QString Theme::stylesheet() const
                                         {"$line", line.name()},
                                         {"$edge", edge.name()},
                                         {"$accent", accent.name()},
+                                        {"$ink", accentText.name()},
+                                        {"$stroke", accentStroke.name()},
+                                        {"$selectbg", colorsPalette.color(QPalette::Highlight).name()},
+                                        {"$selectfg", colorsPalette.color(QPalette::HighlightedText).name()},
+                                        {"$uparrow", dark ? ":/icons/chevron-up-dark.svg" : ":/icons/chevron-up.svg"},
+                                        {"$downarrow", dark ? ":/icons/chevron-down-dark.svg" : ":/icons/chevron-down.svg"},
+                                        {"$checkmark", onAccent == QColor(Qt::white) ? ":/icons/check-white.svg" : ":/icons/check.svg"},
                                         {"$hover", hover.name()},
                                         {"$onaccent", onAccent.name()},
                                         {"$primarytop", dark ? "#ffd48d" : "#f4b765"},
@@ -869,7 +962,7 @@ void IconButton::paintEvent(QPaintEvent *)
     QPainter p(this);
     const bool onRail = parentWidget() && parentWidget()->objectName() == "rail";
     const QColor foreground = onRail ? QColor("#d7dfc4") : theme.text;
-    const QColor active = onRail ? theme.railAccent : theme.accent;
+    const QColor active = onRail ? theme.railAccent : theme.accentText;
     const bool selected = isChecked() || (hasFocus() && property("keyboardFocus").toBool());
     const qreal amount = selected ? 1.0 : progress;
     const qreal colorAmount = qBound(0.0, amount, 1.0);

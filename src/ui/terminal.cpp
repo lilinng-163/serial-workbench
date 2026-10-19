@@ -289,7 +289,7 @@ void LogView::feed(const QJsonObject &event)
         QTextCursor cursor(stream.block);
         cursor.movePosition(QTextCursor::EndOfBlock);
         QTextCharFormat format;
-        format.setForeground(state.foreground.isValid() ? state.foreground : direction == "tx" ? theme.accent : direction == "status" ? theme.amber : theme.text);
+        format.setForeground(state.foreground.isValid() ? state.foreground : direction == "tx" ? theme.accentText : direction == "status" ? theme.amber : theme.text);
         if (state.background.isValid())
         {
             format.setBackground(state.background);
@@ -757,6 +757,9 @@ void TerminalView::paintEvent(QPaintEvent *)
     const bool atLiveScreen = alternateScreen || top == historyLineCount();
     const auto [selectionStart, selectionEnd] = selectionRange();
     const bool highlightSelection = hasSelection();
+    const auto colors = theme.palette();
+    const QColor selectionBackground = colors.color(QPalette::Highlight);
+    const QColor selectionForeground = colors.color(QPalette::HighlightedText);
     for (int row = 0; row < rows; ++row)
     {
         for (int col = 0; col < columns; ++col)
@@ -771,7 +774,7 @@ void TerminalView::paintEvent(QPaintEvent *)
             }
             if (selected)
             {
-                p.fillRect(box, theme.accent);
+                p.fillRect(box, selectionBackground);
             }
         }
         // Paint all cell backgrounds first so a wide glyph's second cell cannot erase it.
@@ -782,7 +785,7 @@ void TerminalView::paintEvent(QPaintEvent *)
             const int position = (top + row) * columns + col;
             const bool selected = highlightSelection && selectionStart <= position && position < selectionEnd;
             const QRectF box(16 + col * width, 12 + row * height, width, height);
-            p.setPen(selected ? theme.onAccent : cell.foreground.isValid() ? cell.foreground : theme.text);
+            p.setPen(selected ? selectionForeground : cell.foreground.isValid() ? cell.foreground : theme.text);
             QFont current = font();
             current.setBold(cell.bold || font().bold());
             p.setFont(current);
@@ -791,7 +794,7 @@ void TerminalView::paintEvent(QPaintEvent *)
     }
     if (atLiveScreen && caret && cursorVisible && hasFocus() && enabledInput)
     {
-        QColor color = theme.accent;
+        QColor color = theme.accentText;
         color.setAlpha(150);
         p.fillRect(QRectF(16 + std::min(columns - 1, x) * width, 12 + y * height,
             blockCursor ? width : 2, height), color);
@@ -800,10 +803,10 @@ void TerminalView::paintEvent(QPaintEvent *)
     {
         const qreal left = 16 + std::min(columns - 1, x) * width;
         const qreal top = 12 + y * height;
-        p.setPen(theme.accent);
+        p.setPen(theme.accentText);
         p.setFont(font());
         p.drawText(QPointF(left, top + metrics.ascent()), preeditText);
-        p.fillRect(QRectF(left, top + metrics.height(), metrics.horizontalAdvance(preeditText), 1), theme.accent);
+        p.fillRect(QRectF(left, top + metrics.height(), metrics.horizontalAdvance(preeditText), 1), theme.accentText);
     }
 }
 

@@ -1,6 +1,13 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # 更新记录
 
+## 0.15.35 — 开发版
+
+- 基于 v0.15.34 修复极浅/极深撞色下链接、图标、TX 日志、波形、焦点边框和选区难以辨认的问题；保留用户所选按钮填充与保存值，为文字和图形生成同色系可读颜色。
+- 统一工作台、弹窗、分离窗口和收发小窗的调色板，包括禁用文字、工具提示和选区；深色数字箭头与黑白勾选标记跟随主题。
+- 撞色可在保持默认背景的情况下独立设置，悬停预选颜色同步。
+- English: improve contrast for accent text, icons, logs, waveforms, focus and selection; unify light/dark palettes and allow an accent without changing the main color.
+
 ## 0.15.34 — 2026-10-19
 
 - 主题色拆分为主色与撞色：主色只改变背景、面板和文字色相，撞色接管默认橙色强调色所在的按钮、链接、选中、焦点、勾选、滑块、进度和 rail 激活图标。

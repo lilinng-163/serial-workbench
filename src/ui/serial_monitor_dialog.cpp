@@ -138,6 +138,7 @@ void SerialMonitorDialog::setAppearance(const Theme &theme, const QFont &font)
     appearance = theme;
     dataFont = font;
     setStyleSheet(theme.stylesheet());
+    setPalette(theme.palette());
     for (auto button : findChildren<IconButton *>())
     {
         button->theme = theme;

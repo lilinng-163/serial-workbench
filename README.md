@@ -94,7 +94,7 @@ When changing a parser through MCP, include matching HEX `sample_chunks` in `set
 
 ### Theme color
 
-Open **Settings → Appearance → Theme color** to choose a color from the picker or enter `#RRGGBB` / `#RGB` (for example, `#4080E0`). Apply the value or leave the field to save it immediately. Invalid values leave the current color intact. Light/dark surfaces, buttons, selections, window captions and detached windows follow the color; button text automatically chooses a readable black or white. **Restore default theme color** returns to the original palette. Background images and data fonts retain their own settings.
+Open **Settings → Appearance → Theme color** to tint surfaces with the main color or independently choose a contrast color. Both accept the picker and `#RRGGBB` / `#RGB` (for example, `#4080E0`). Apply, Return or leaving the field saves immediately; invalid input leaves the current color intact. Buttons retain the selected fill. Links, icons, TX logs, waveforms, borders and selections adjust their brightness for readable light/dark themes, including black and white accents. The original color values are saved, with consistent detached windows and receive monitors. **Restore default theme color/contrast** restores the original palette. Background images and data fonts retain their own settings.
 
 ### Terminal and workspace shortcuts
 

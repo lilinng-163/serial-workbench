@@ -136,7 +136,9 @@ private slots:
     void functionReferenceIsReadable()
     {
         QWidget parent;
-        parent.setStyleSheet(sw::Theme::make(false).stylesheet());
+        const auto light = sw::Theme::make(false);
+        parent.setStyleSheet(light.stylesheet());
+        parent.setPalette(light.palette());
         auto dialog = sw::showJsonAssistant(&parent);
         auto tabs = dialog->findChild<QTabWidget *>("jsonAssistantTabs");
         tabs->setCurrentIndex(3);
@@ -149,10 +151,16 @@ private slots:
         {
             return reference->document()->find("查看 cJSON 开源项目").charFormat().foreground().color();
         };
-        QTRY_COMPARE(linkColor(), QColor("#477255"));
+        QTRY_COMPARE(linkColor(), light.accentText);
         capture(dialog, "cjson-reference-light");
-        parent.setStyleSheet(sw::Theme::make(true).stylesheet());
-        QTRY_COMPARE(linkColor(), QColor("#edaa50"));
+        const auto dark = sw::Theme::make(true);
+        parent.setStyleSheet(dark.stylesheet());
+        parent.setPalette(dark.palette());
+        QTRY_COMPARE(linkColor(), dark.accentText);
+        const auto custom = sw::Theme::make(false, QColor("#4488ee"), QColor(Qt::white));
+        parent.setStyleSheet(custom.stylesheet());
+        parent.setPalette(custom.palette());
+        QTRY_COMPARE(linkColor(), custom.accentText);
         capture(dialog, "cjson-reference-dark");
         dialog->close();
     }

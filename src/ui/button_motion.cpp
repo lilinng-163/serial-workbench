@@ -461,7 +461,7 @@ void CheckBoxMotion::paintEvent(QPaintEvent *)
             qRound(from.blue() + (to.blue() - from.blue()) * amount));
     };
     const bool keyboard = source->hasFocus() && source->property("keyboardFocus").toBool();
-    const auto edge = keyboard || source->underMouse() ? motionTheme.accent : motionTheme.edge;
+    const auto edge = keyboard || source->underMouse() ? motionTheme.accentStroke : motionTheme.edge;
     // Programmatic state changes can arrive with signals blocked (for example
     // when AI-synchronized scripts update the toggle), so fall back to the
     // actual check state whenever no animation is running.

@@ -2,6 +2,18 @@
 
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
 
+## 2026-10-19 — 从 v0.15.34 重建主题修复，0.15.35 测试安装包
+
+- 执行者：Codex；分支 `codex/theme-polish-0.15.34`，严格从 `v0.15.34` / `e323f0a` 创建。按用户要求丢弃 DS 的四个未提交文件改动（controls.cpp / controls.h / theme_settings.cpp / theme_color_tests.cpp）；原远端开发历史和发布标签保留。
+- 用户目标：在 0.15.34 基础上优化配色一致性、文字清晰度和浅深主题，并提供安装包。
+- 修复：所选撞色继续作为按钮填充和保存原值；为链接、图标、TX 日志、波形、焦点边框生成同色系的可读颜色，避免白色撞色在浅主题、黑色撞色在深主题中消失。跨背景/面板/侧栏/悬停表面校验文字与图形对比；选区同时保证背景区分和文字可读。统一工作台、弹窗、分离窗口、工具提示、禁用文字和收发小窗的 QPalette；深色数字箭头、菜单黑白勾选同步。撞色可以不更改主色而独立设置，悬停同步。
+- JSON 助手：原说明链接写死绿/橙色，改为读取根窗口主题 Link；通过根窗口事件监听解决 QTextBrowser 样式调色板屏蔽父 Link 的问题。首次针对测试发现系统蓝色回退，失败证据保留为 `build/theme-polish-0.15.35/json-before-palette-source-fix.txt`；修复后 JSON 测试通过。
+- 验证：最终原生 Release 构建完成且增量检查无待编译文件。完整 CTest 18/18 通过；随后 JSON 链接修复已重新构建，并重跑 json_tools_tests 通过。Windows 实平台 theme_color_tests 16/16，通过颜色矩阵、双色持久化/恢复、无主色独立撞色、浅深极端颜色、选色盘、窄设置、链接与收发小窗；实际查看白色浅主题、黑色深主题、窄窗口和深色选色盘截图。证据 `build/theme-polish-0.15.35/`。
+- 安装验证：最终 payload 运行 `smoke_installer.py` 全通过：隔离 Unicode 路径安装、原路径升级、配置/用户文件保留、无 SDK 启动、运行中保护、HTTP/STDIO、17 个 MCP 工具、共享独立读取、原生搜索/脚本及卸载。构建 EXE、部署 EXE、打包 payload EXE 的 SHA-256 一致。使用测试注册项和临时配置，没有覆盖正式安装或真实 Agent 配置。
+- 产物：`dist/local/0.15.35-theme-polish/SerialWorkbench-0.15.35-windows-x64-setup.exe`，15,486,853 字节；SHA-256 `26634c79dba14823813d33388c01f9b55451825eaae536dc0d6a8a21228fd7fa`；同目录 `SHA256SUMS.txt`。最终 payload `build/release-0.15.35-55c1cf44/SerialWorkbench/`。
+- 范围：0.15.35 为本地开发测试包，没有创建正式 Release、改动网站或合并 main；未同步 deepseek-dev。未进行真实硬件联调（本次是主题修复）。
+- 下一步：用户试用安装包；如要求发布，再按发行流程审查并发布。
+
 ## 2026-10-19 — 发布 v0.15.33 并交接 Codex
 
 - 执行者：DeepSeek；分支 `deepseek-dev`，起点 `7ea6ab7`。

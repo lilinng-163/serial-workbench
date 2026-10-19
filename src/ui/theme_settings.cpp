@@ -93,7 +93,6 @@ void Window::syncThemeColorControls()
         const QSignalBlocker blocker(choice);
         choice->setCurrentIndex(theme.dark ? 1 : 0);
     }
-    const bool custom = themeColor.isValid();
     const QColor mainColor = themeColor.isValid() ? themeColor : theme.background;
     if (auto input = settingsDialog->findChild<QLineEdit *>("themeColorHex"))
     {
@@ -104,13 +103,11 @@ void Window::syncThemeColorControls()
     {
         const QSignalBlocker blocker(input);
         input->setText(theme.accent.name(QColor::HexRgb).toUpper());
-        input->setEnabled(custom);
+        input->setEnabled(true);
     }
     if (auto hint = settingsDialog->findChild<QLabel *>("themeColorHint"))
     {
-        hint->setText(custom
-            ? "主色只改变背景、面板和文字的色相；撞色用于按钮、链接、选中、焦点、勾选、滑块、进度和 rail 激活图标。未设置撞色时使用默认橙色。"
-            : "主色决定背景、面板和文字的色相；设置主色后可单独选择撞色。默认撞色是暖橙色。");
+        hint->setText("主色调整背景和面板，撞色可独立设置。按钮保留所选撞色，文字、图标和边框自动调整明暗，保持浅深主题清晰可读。");
         hint->setStyleSheet(QString("color: %1;").arg(theme.muted.name()));
     }
     if (auto choose = settingsDialog->findChild<QPushButton *>("themeColorChoose"))
@@ -124,26 +121,26 @@ void Window::syncThemeColorControls()
         choose->setIcon(colorSwatch(theme.accent, theme.accent, false));
         choose->setIconSize(QSize(20, 20));
         choose->setToolTip("当前撞色（按钮/链接/选中）");
-        choose->setEnabled(custom);
+        choose->setEnabled(true);
     }
     if (auto apply = settingsDialog->findChild<QPushButton *>("themeContrastApply"))
     {
-        apply->setEnabled(custom);
+        apply->setEnabled(true);
     }
     if (auto reset = settingsDialog->findChild<QPushButton *>("themeContrastReset"))
     {
-        reset->setEnabled(custom && themeContrast.isValid());
+        reset->setEnabled(themeContrast.isValid());
     }
     if (auto label = settingsDialog->findChild<QLabel *>("themeContrastLabel"))
     {
-        label->setEnabled(custom);
+        label->setEnabled(true);
     }
     if (auto sources = settingsDialog->findChild<QLabel *>("aboutSources"))
     {
         // Scroll-area viewports otherwise keep the system Link color.
         auto palette = sources->palette();
-        palette.setColor(QPalette::Link, theme.accent);
-        palette.setColor(QPalette::LinkVisited, theme.accent);
+        palette.setColor(QPalette::Link, theme.accentText);
+        palette.setColor(QPalette::LinkVisited, theme.accentText);
         sources->setPalette(palette);
     }
 }

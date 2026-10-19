@@ -359,19 +359,38 @@ QPlainTextEdit *codeEditor(const QString &name, bool readOnly, bool json)
 class CJsonReference : public QTextBrowser
 {
 public:
+    using QTextBrowser::QTextBrowser;
+    QPointer<QWidget> colorSource;
     QString content;
     QString currentStyle;
 
     void refreshColors()
     {
         if (content.isEmpty()) { return; }
-        const auto color = palette().color(QPalette::Base).lightness() < 128 ? "#edaa50" : "#477255";
+        auto source = parentWidget() ? parentWidget() : this;
+        while (source->parentWidget()) { source = source->parentWidget(); }
+        if (colorSource != source)
+        {
+            if (colorSource) { colorSource->removeEventFilter(this); }
+            colorSource = source;
+            if (source != this) { source->installEventFilter(this); }
+        }
+        const auto color = source->palette().color(QPalette::Link).name();
         const QString style = QString("body { font-size: 14px; } code { font-family: Consolas; font-size: 14px; } "
             "h3 { font-size: 17px; } a { color: %1; text-decoration: underline; }").arg(color);
         if (currentStyle == style) { return; }
         currentStyle = style;
         document()->setDefaultStyleSheet(style);
         setHtml(content);
+    }
+
+    bool eventFilter(QObject *watched, QEvent *event) override
+    {
+        if (watched == colorSource && (event->type() == QEvent::PaletteChange || event->type() == QEvent::StyleChange))
+        {
+            refreshColors();
+        }
+        return QTextBrowser::eventFilter(watched, event);
     }
 
     void setReferenceHtml(const QString &html)
@@ -456,7 +475,7 @@ public:
         build = codeEditor("cjsonBuildCode", true, false);
         tabs->addTab(parse, "cJSON 解析");
         tabs->addTab(build, "cJSON 组装");
-        auto reference = new CJsonReference();
+        auto reference = new CJsonReference(this);
         reference->setObjectName("cjsonReference");
         reference->setOpenExternalLinks(true);
         reference->setReferenceHtml(R"(<p>本工具依据开源项目 cJSON 的函数生成 JSON 解析和组装示例。</p>
