@@ -2,6 +2,19 @@
 
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
 
+## 2026-10-19 — 0.15.35 正式发行验证与主线集成
+
+- 用户授权：将本次主题修复推送 GitHub 并更新网站；网站/服务器操作必须走 Serial Workbench MCP。
+- 集成：保留 `origin/main..origin/deepseek-dev` 已发布提交和 `6b445c7` 交接记录；在 v0.15.34 基础上加入 `df67a64` / `ec5b420` 主题修复。合并 `codex/website-ui-20261019` 的三项已部署网站提交及五分钟镜像定时器，冲突只涉及开发记录与镜像说明，保留双方历史。未重新引入用户要求丢弃的 DS 未提交改动。
+- 发行准备：中英文 README、CHANGELOG、DEEPSEEK 与 `docs/releases/0.15.35.md` 同步；离线版本回溯更新为已发布的 v0.15.34 / v0.15.33 / v0.15.32，避免在当前程序中嵌入自身安装包摘要。网站 HTML 后备版本、下载路径、大小、日期与 SHA-256 更新到 0.15.35；实际 v0.15.32 展示截图仍保留准确版本标注。
+- 最终验证：Release 构建成功，完整 CTest **18/18**；原生 Windows 主题 **16/16** 和浅深截图已在前两项记录验证。正式 payload 重新完成 `smoke_installer.py` 全部检查（隔离安装、原路径升级、配置/用户文件保留、运行中保护、Agent skill、HTTP/STDIO、17 工具、共享独立读取、权限、原生搜索/脚本及卸载）；`smoke_release.py` 全部通过（便携 ZIP 全文件清单、无 SDK、单文件 Unicode 路径首次/缓存启动、MCP 与缓存损坏修复）。构建 EXE 与正式 payload SHA-256 一致。镜像回归 **3/3**，网站五页备案页脚、资源引用和静态后备版本校验通过。
+- 正式产物 `dist/local/0.15.35/`：
+  - setup EXE：15,477,900 字节，SHA-256 `deef435aa71f1f12ca787dd170dd5b4ea15685e73f9dee0aa4420ac94e3b3ac6`。
+  - 单文件 EXE：15,006,786 字节，SHA-256 `668a28097ae9e3272b6c20584327be419a5bd1d2ae531d494e92d9a5692e3723`。
+  - 便携 ZIP：20,600,127 字节，SHA-256 `7ca66f90ef413ccea7c3a84b950c2a7e18549a6ab29058f715efc3657205ce25`。
+  - `SHA256SUMS.txt`。正式 payload：`build/release-0.15.35-fa59d3ce/SerialWorkbench/`；验证日志：`build/release-0.15.35-verification/`。
+- 当前停点：正式包验证完成；下一步普通推送 main/deepseek-dev 和 v0.15.35，上传并核验 Release 资产，通过 MCP 的 t_ecs SSH 同步网站镜像，再补记公网核验事实。当前运行中的用户工作台不受安装测试影响。
+
 ## 2026-10-19 — 协议下拉框底色与输入框统一
 
 - 用户反馈：“串口”协议下拉框始终单独一块颜色。
