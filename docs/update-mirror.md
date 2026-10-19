@@ -6,9 +6,9 @@
 
 ## 自动发布与维护冻结
 
-服务器同步器 `deploy/update-mirror/sync_github_release.py` 每十分钟读取 GitHub 最新正式 Release，使用 ETag 避免重复读取；下载并校验安装包后，以原子重命名更新清单。错误或校验失败时保留上一个可用版本。网站读取相同清单，自动显示版本、下载地址和说明。
+服务器同步器 `deploy/update-mirror/sync_github_release.py` 每五分钟左右读取 GitHub 最新正式 Release，使用 ETag 避免重复读取；下载并校验安装包后，以原子重命名更新清单。错误或校验失败时保留上一个可用版本。网站读取相同清单，自动显示版本、下载地址和说明；网页进入、回到前台及前台每 60 秒刷新清单。
 
-**2026-10-19：用户已明确允许发布 v0.15.34 并更新网站/镜像。`lilinng-release-sync.timer` 当前为 enabled + active；本次先上传安装包，再由同步器以 flock/原子重命名更新清单。若备案或维护期间需要冻结，请手动停用 timer，并在恢复前确认清单与安装包一致。**
+**2026-10-19：用户已明确允许发布新版本并更新网站/镜像。`lilinng-release-sync.timer` 当前为 enabled + active；本次先上传安装包，再由同步器以 flock/原子重命名更新清单。若备案或维护期间需要冻结，请手动停用 timer，并在恢复前确认清单与安装包一致。**
 
 0.15.14 仅发布至 GitHub Release，不上传国内镜像、不更新网站和版本清单。客户端从可用镜像读到旧版本时不会再查询 GitHub，因此此次升级需从 GitHub Release 手动下载安装。
 

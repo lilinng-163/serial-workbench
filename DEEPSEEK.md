@@ -10,8 +10,8 @@
 | 本机源码 | `E:/demo/serial`；其他机器以实际克隆目录为准 |
 | 正式主线 | `main` |
 | DeepSeek 开发分支 | `deepseek-dev` |
-| 交接基线 | 以 `v0.15.34` 标签及最新开发交接记录为准 |
-| 已发布版本 | [v0.15.34](https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.34)，2026-10-19 |
+| 交接基线 | 以 `v0.15.35` 标签及最新开发交接记录为准 |
+| 已发布版本 | [v0.15.35](https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.35)，2026-10-19 |
 | 技术栈 | C++17、Qt Widgets / Network / SerialPort / Core5Compat / Svg、CMake、Ninja |
 | 主要分发平台 | Windows x64；Docker 用于 Linux 开发构建 |
 | 用户文档 | [English](README.md) / [简体中文](README.zh-CN.md) |
@@ -22,7 +22,7 @@ v0.15.31 集成 MCP 原生搜索与 GUI 同步、脚本读写/离线验证、安
 
 v0.15.32 新增设置中的 skill 安装/更新、安装器按已检测 Agent 默认勾选、脚本试解析 HEX 的 MCP 同步与保存，并移除脚本 AI 提示词窗口。修复系统文件选择、控件组下拉/删除与自由布局宽度跟随，新增版本回溯和底部版本号，并统一清空入口、图层文字和主题滑块。正式安装包、单文件和便携包的验证与发布结果见最新开发日志；deepseek-dev 保留用于接续开发。
 
-`deepseek-dev` 当前包含 0.15.34 双色主题（设置 → 外观 → 主题色：主色控制背景/面板/文字，撞色控制按钮/链接/选中/焦点；两行均支持选色盘、`#RRGGBB`/`#RGB` 输入和恢复默认）及统一预选背景。v0.15.34 已作为 GitHub Release 发布，国内镜像/网站同步更新；`main` 仍停留在 v0.15.32，等待 Codex 审查并合并 `deepseek-dev`。
+v0.15.35 在 0.15.34 双色主题基础上修复极端撞色的文字、图标、选区和各窗口一致性；协议下拉框统一跟随输入框配色，撞色可独立设置。发布、主线集成及网站镜像核验状态见开发日志顶部。
 
 ## 2. 项目解决什么问题
 

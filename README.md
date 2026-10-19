@@ -60,7 +60,7 @@ Screenshots are captured from the application using generated example data and l
 
 **[Download the latest release →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.34 separates the custom main color (backgrounds and text) from a user-selected contrast color for buttons, links, selection and focus, with unified hover/preselection surfaces. [Release notes](docs/releases/0.15.34.md).
+v0.15.35 improves light/dark theme contrast, synchronizes window and link colors, unifies the protocol selector and supports an independent accent. [Release notes](docs/releases/0.15.35.md).
 
 | Package | Use it when… |
 | --- | --- |
