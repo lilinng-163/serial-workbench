@@ -26,6 +26,8 @@ python -m http.server 8026 --bind 127.0.0.1 --directory build/website-preview
 
 公安备案尚在办理时只显示办理状态，不生成虚构号码、图标或查询链接。
 
+当前已配置 **川公网安备51162302000307号**，链接到[官方备案查询页](https://beian.mps.gov.cn/#/query/webSearch?code=51162302000307)。号码前使用用户提供的备案图标 `site/assets/police.png`（36×40 原图，显示为 18×20），图标与号码同属一个链接。五个页面共用构建页脚，包括关闭 JavaScript 时和 404 页面。
+
 ## 部署边界
 
 通过 Serial Workbench MCP 的已确认 SSH 连接部署。先复制线上 release 至新目录，再覆盖本次构建文件；已有安装包、校验文件和旧摘要资源需保留，避免下载及缓存页面失效。核验上传文件摘要后，原子切换 `current` 软链接；旧 release 保留用于回退。
