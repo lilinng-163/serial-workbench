@@ -335,6 +335,8 @@ TerminalView::TerminalView(QWidget *parent) : QWidget(parent)
     scrollBar->setFocusPolicy(Qt::NoFocus);
     connect(scrollBar, &QScrollBar::valueChanged, this, [this] { update(); });
     setToolTip("滚轮查看历史 · Ctrl + 滚轮调整字号");
+    selectionScrollTimer.setInterval(40);
+    connect(&selectionScrollTimer, &QTimer::timeout, this, &TerminalView::scrollMouseSelection);
     blink.setInterval(500);
     connect(&blink, &QTimer::timeout, this, [this]
     {
@@ -350,6 +352,7 @@ TerminalView::TerminalView(QWidget *parent) : QWidget(parent)
 
 void TerminalView::reset(const QString &encoding)
 {
+    selectionScrollTimer.stop();
     auto codec = QTextCodec::codecForName(encoding.toLatin1());
     decoder.reset((codec ? codec : QTextCodec::codecForName("UTF-8"))->makeDecoder());
     ansi = {};
@@ -589,7 +592,7 @@ void TerminalView::csi(QChar command, const QString &parameters)
 
 void TerminalView::feed(const QByteArray &data)
 {
-    const bool followLatest = scrollBar->value() == scrollBar->maximum();
+    const bool followLatest = !selecting && scrollBar->value() == scrollBar->maximum();
     const bool wasAlternate = alternateScreen;
     // Output can redraw the command line without moving the cursor. Keep it copyable,
     // but do not apply an old selection to the new remote input.
@@ -872,6 +875,12 @@ void TerminalView::resizeGrid()
 
 bool TerminalView::event(QEvent *event)
 {
+    if (selecting && (event->type() == QEvent::UngrabMouse
+        || event->type() == QEvent::WindowDeactivate || event->type() == QEvent::Hide))
+    {
+        finishMouseSelection();
+    }
+
     if (enabledInput && event->type() == QEvent::KeyPress)
     {
         auto key = static_cast<QKeyEvent *>(event);
@@ -1061,6 +1070,7 @@ QPair<int, int> TerminalView::selectionRange() const
 
 void TerminalView::clearSelection()
 {
+    selectionScrollTimer.stop();
     selecting = false;
     selectionActive = false;
     keyboardSelection = false;
@@ -1295,6 +1305,55 @@ void TerminalView::pasteClipboard()
     }
 }
 
+int TerminalView::selectionScrollStep() const
+{
+    if (alternateScreen || scrollBar->maximum() == 0) { return 0; }
+    const qreal lineHeight = qMax<qreal>(1, QFontMetricsF(font()).height() * 1.15);
+    const qreal top = 12;
+    const qreal bottom = top + rows * lineHeight;
+    qreal distance = 0;
+    if (selectionPointer.y() < top) { distance = selectionPointer.y() - top; }
+    else if (selectionPointer.y() >= bottom) { distance = selectionPointer.y() - bottom + 1; }
+    else { return 0; }
+
+    const int step = qBound(1, int(qAbs(distance) / lineHeight) + 1, 10);
+    return distance < 0 ? -step : step;
+}
+
+void TerminalView::updateMouseSelection(const QPointF &position)
+{
+    selectionPointer = position;
+    selectionCursor = cellAt(position);
+    const int step = selectionScrollStep();
+    const bool canScroll = step < 0 ? scrollBar->value() > scrollBar->minimum()
+                                   : step > 0 && scrollBar->value() < scrollBar->maximum();
+    if (canScroll)
+    {
+        if (!selectionScrollTimer.isActive()) { selectionScrollTimer.start(); }
+    }
+    else { selectionScrollTimer.stop(); }
+    update();
+}
+
+void TerminalView::scrollMouseSelection()
+{
+    if (!selecting || !isVisible())
+    {
+        selectionScrollTimer.stop();
+        return;
+    }
+    scrollBar->setValue(scrollBar->value() + selectionScrollStep());
+    updateMouseSelection(selectionPointer);
+}
+
+void TerminalView::finishMouseSelection()
+{
+    selectionScrollTimer.stop();
+    selecting = false;
+    selectionActive = selectionAnchor != selectionCursor;
+    update();
+}
+
 void TerminalView::mousePressEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::RightButton)
@@ -1312,8 +1371,11 @@ void TerminalView::mousePressEvent(QMouseEvent *event)
     if (event->button() == Qt::LeftButton)
     {
         setFocus(Qt::MouseFocusReason);
+        selectionScrollTimer.stop();
         keyboardSelection = false;
-        selectionAnchor = cellAt(event->position());
+        selectionCanEdit = false;
+        selectionPointer = event->position();
+        selectionAnchor = cellAt(selectionPointer);
         selectionCursor = selectionAnchor;
         selecting = true;
         selectionActive = false;
@@ -1328,11 +1390,11 @@ void TerminalView::mouseMoveEvent(QMouseEvent *event)
 {
     if (selecting && (event->buttons() & Qt::LeftButton))
     {
-        selectionCursor = cellAt(event->position());
-        update();
+        updateMouseSelection(event->position());
         event->accept();
         return;
     }
+    if (selecting) { finishMouseSelection(); }
     QWidget::mouseMoveEvent(event);
 }
 
@@ -1341,9 +1403,7 @@ void TerminalView::mouseReleaseEvent(QMouseEvent *event)
     if (event->button() == Qt::LeftButton && selecting)
     {
         selectionCursor = cellAt(event->position());
-        selecting = false;
-        selectionActive = selectionAnchor != selectionCursor;
-        update();
+        finishMouseSelection();
         event->accept();
         return;
     }
@@ -1362,6 +1422,7 @@ void TerminalView::wheelEvent(QWheelEvent *event)
         const int steps = pixels ? (pixels > 0 ? 1 : -1) * qMax(1, qAbs(pixels) / qMax(1, fontMetrics().height()))
                                  : event->angleDelta().y() / 120 * 3;
         scrollBar->setValue(scrollBar->value() - steps);
+        if (selecting) { updateMouseSelection(event->position()); }
     }
     event->accept();
 }

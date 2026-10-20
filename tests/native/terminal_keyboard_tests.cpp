@@ -21,6 +21,32 @@ private:
         terminal.feed(text);
     }
 
+    static QPoint terminalCell(const sw::TerminalView &terminal, int column, int row)
+    {
+        const QFontMetricsF metrics(terminal.font());
+        return QPoint(int(16 + (column + 0.5) * metrics.horizontalAdvance('M')),
+            int(12 + (row + 0.5) * metrics.height() * 1.15));
+    }
+
+    static void dragSelectionTo(sw::TerminalView &terminal, const QPoint &position)
+    {
+        QMouseEvent move(QEvent::MouseMove, position, terminal.mapToGlobal(position),
+            Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(&terminal, &move);
+    }
+
+    void prepareHistory(sw::TerminalView &terminal)
+    {
+        prepare(terminal, {});
+        QByteArray output;
+        for (int line = 0; line < 300; ++line)
+        {
+            if (line > 0) { output += "\r\n"; }
+            output += "row-" + QByteArray::number(line).rightJustified(4, '0');
+        }
+        terminal.feed(output);
+    }
+
 private slots:
     void initTestCase()
     {
@@ -342,6 +368,151 @@ private slots:
         QVERIFY(!terminal.hasSelection());
     }
 
+    void draggingAboveScrollsAndCopiesManyHistoryLines()
+    {
+        sw::TerminalView terminal;
+        prepareHistory(terminal);
+        auto scroll = terminal.verticalScrollBar();
+        scroll->setValue(100);
+        QSignalSpy sent(&terminal, &sw::TerminalView::transmit);
+        QTest::mousePress(&terminal, Qt::LeftButton, {}, terminalCell(terminal, 7, 8));
+        const QPoint anchor = terminal.selectionAnchor;
+        const QPoint outside(terminalCell(terminal, 0, 0).x(), -80);
+        dragSelectionTo(terminal, outside);
+        // No more mouse moves: holding beyond the edge must keep scrolling.
+        QTRY_COMPARE_WITH_TIMEOUT(scroll->value(), 0, 3000);
+        QCOMPARE(terminal.selectionAnchor, anchor);
+        const auto lines = terminal.selectedText().split('\n');
+        QCOMPARE(lines.size(), 109);
+        QCOMPARE(lines.first(), QString("row-0000"));
+        QCOMPARE(lines.last(), QString("row-0108"));
+        const auto capture = qEnvironmentVariable("SW_TERMINAL_CAPTURE_DIR");
+        if (!capture.isEmpty())
+        {
+            QDir().mkpath(capture);
+            QVERIFY(terminal.grab().save(capture + "/ssh-drag-history-selection.png"));
+        }
+        QTest::mouseRelease(&terminal, Qt::LeftButton, {}, outside);
+        const auto selected = terminal.selectedText();
+        QTest::keyClick(&terminal, Qt::Key_C, Qt::ControlModifier);
+        QCOMPARE(QApplication::clipboard()->text(), selected);
+        QCOMPARE(sent.size(), 0);
+    }
+
+    void draggingBelowStopsOnRelease()
+    {
+        sw::TerminalView terminal;
+        prepareHistory(terminal);
+        auto scroll = terminal.verticalScrollBar();
+        scroll->setValue(20);
+        QSignalSpy sent(&terminal, &sw::TerminalView::transmit);
+        QTest::mousePress(&terminal, Qt::LeftButton, {}, terminalCell(terminal, 0, 2));
+        const QPoint outside(terminalCell(terminal, 7, 0).x(), terminal.height() + 80);
+        dragSelectionTo(terminal, outside);
+        QTRY_VERIFY_WITH_TIMEOUT(scroll->value() > 20, 1000);
+        QTest::mouseRelease(&terminal, Qt::LeftButton, {}, outside);
+        const int stopped = scroll->value();
+        const auto selected = terminal.selectedText();
+        QTest::qWait(160);
+        QCOMPARE(scroll->value(), stopped);
+        QCOMPARE(terminal.selectedText(), selected);
+        QCOMPARE(sent.size(), 0);
+    }
+
+    void draggingCanReturnInsideAndReverseScrollDirection()
+    {
+        sw::TerminalView terminal;
+        prepareHistory(terminal);
+        auto scroll = terminal.verticalScrollBar();
+        scroll->setValue(100);
+        QTest::mousePress(&terminal, Qt::LeftButton, {}, terminalCell(terminal, 7, 8));
+        const QPoint anchor = terminal.selectionAnchor;
+        dragSelectionTo(terminal, QPoint(30, -60));
+        QTRY_VERIFY_WITH_TIMEOUT(scroll->value() < 100, 1000);
+        dragSelectionTo(terminal, terminalCell(terminal, 0, 4));
+        const int stopped = scroll->value();
+        QTest::qWait(160);
+        QCOMPARE(scroll->value(), stopped);
+        const QPoint below(terminalCell(terminal, 7, 0).x(), terminal.height() + 60);
+        dragSelectionTo(terminal, below);
+        QTRY_COMPARE_WITH_TIMEOUT(scroll->value(), scroll->maximum(), 3000);
+        QCOMPARE(terminal.selectionAnchor, anchor);
+        QTest::mouseRelease(&terminal, Qt::LeftButton, {}, below);
+        QVERIFY(terminal.selectedText().contains("row-0299"));
+    }
+
+    void wheelWhileDraggingExtendsSelectionAtTheSamePointer()
+    {
+        sw::TerminalView terminal;
+        prepareHistory(terminal);
+        auto scroll = terminal.verticalScrollBar();
+        scroll->setValue(50);
+        QSignalSpy sent(&terminal, &sw::TerminalView::transmit);
+        QTest::mousePress(&terminal, Qt::LeftButton, {}, terminalCell(terminal, 7, 5));
+        const auto position = terminalCell(terminal, 0, 1);
+        dragSelectionTo(terminal, position);
+        QWheelEvent wheel(position, terminal.mapToGlobal(position), {}, QPoint(0, 120),
+            Qt::LeftButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+        QApplication::sendEvent(&terminal, &wheel);
+        QCOMPARE(scroll->value(), 47);
+        QCOMPARE(terminal.selectionCursor.y(), 48);
+        QCOMPARE(terminal.selectedText().split('\n').first(), QString("row-0048"));
+        QTest::mouseRelease(&terminal, Qt::LeftButton, {}, position);
+        QCOMPARE(sent.size(), 0);
+    }
+
+    void incomingOutputDoesNotPullAnActiveDragToTheBottom()
+    {
+        sw::TerminalView terminal;
+        prepareHistory(terminal);
+        auto scroll = terminal.verticalScrollBar();
+        QTest::mousePress(&terminal, Qt::LeftButton, {}, terminalCell(terminal, 7, 5));
+        dragSelectionTo(terminal, terminalCell(terminal, 0, 1));
+        const int reading = scroll->value();
+        const auto visible = terminal.visibleText();
+        terminal.feed("\r\nnew output\r\nmore output");
+        QCOMPARE(scroll->value(), reading);
+        QCOMPARE(terminal.visibleText(), visible);
+        QTest::mouseRelease(&terminal, Qt::LeftButton, {}, terminalCell(terminal, 0, 1));
+    }
+
+    void endingDragStopsAutomaticScrolling_data()
+    {
+        QTest::addColumn<int>("action");
+        QTest::newRow("clear-selection") << 0;
+        QTest::newRow("reset") << 1;
+        QTest::newRow("hidden") << 2;
+        QTest::newRow("lost-mouse-grab") << 3;
+        QTest::newRow("window-deactivated") << 4;
+        QTest::newRow("alternate-screen") << 5;
+    }
+
+    void endingDragStopsAutomaticScrolling()
+    {
+        QFETCH(int, action);
+        sw::TerminalView terminal;
+        prepareHistory(terminal);
+        auto scroll = terminal.verticalScrollBar();
+        scroll->setValue(100);
+        QTest::mousePress(&terminal, Qt::LeftButton, {}, terminalCell(terminal, 7, 5));
+        dragSelectionTo(terminal, QPoint(30, -60));
+        QTRY_VERIFY_WITH_TIMEOUT(scroll->value() < 100, 1000);
+        if (action == 0) { terminal.clearSelection(); }
+        else if (action == 1) { terminal.reset(); }
+        else if (action == 2) { terminal.hide(); }
+        else if (action == 5) { terminal.feed("\x1b[?1049h"); }
+        else
+        {
+            QEvent cancel(action == 3 ? QEvent::UngrabMouse : QEvent::WindowDeactivate);
+            QApplication::sendEvent(&terminal, &cancel);
+        }
+        QVERIFY(!terminal.selecting);
+        const int stopped = scroll->value();
+        QTest::qWait(160);
+        QCOMPARE(scroll->value(), stopped);
+        QTest::mouseRelease(&terminal, Qt::LeftButton, {}, QPoint(30, -60));
+    }
+
     void scrollbackRetainsOutputAndKeepsReadingPosition()
     {
         sw::TerminalView terminal;
@@ -482,6 +653,26 @@ private slots:
         {
             QVERIFY(window.grab().save(capture + "/ssh-terminal-history.png"));
         }
+        const auto firstHistoryLine = pane->terminal->visibleText().section('\n', 0, 0);
+        pane->terminal->verticalScrollBar()->setValue(200);
+        QSignalSpy sent(pane->terminal, &sw::TerminalView::transmit);
+        QTest::mousePress(pane->terminal, Qt::LeftButton, {}, terminalCell(*pane->terminal, 7, 7));
+        const QPoint outside(terminalCell(*pane->terminal, 0, 0).x(), -80);
+        dragSelectionTo(*pane->terminal, outside);
+        QTRY_COMPARE_WITH_TIMEOUT(pane->terminal->verticalScrollBar()->value(), 0, 5000);
+        const auto selectedLines = pane->terminal->selectedText().split('\n');
+        QCOMPARE(selectedLines.first(), firstHistoryLine);
+        QCOMPARE(selectedLines.size(), 208);
+        QVERIFY(pane->terminal->selectedText().contains("output 1:"));
+        if (!capture.isEmpty())
+        {
+            QVERIFY(window.grab().save(capture + "/ssh-workbench-drag-selection.png"));
+        }
+        QTest::mouseRelease(pane->terminal, Qt::LeftButton, {}, outside);
+        const auto selected = pane->terminal->selectedText();
+        QTest::keyClick(pane->terminal, Qt::Key_C, Qt::ControlModifier);
+        QCOMPARE(QApplication::clipboard()->text(), selected);
+        QCOMPARE(sent.size(), 0);
         pane->setTerminal(false);
         QVERIFY(pane->terminalMode);
         QVERIFY(pane->sender->isHidden());

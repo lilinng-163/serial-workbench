@@ -100,7 +100,7 @@ Open **Settings → Appearance → Theme color** to tint surfaces with the main 
 
 | Action | Shortcut / interaction |
 | --- | --- |
-| Browse terminal history | Mouse wheel or the terminal scrollbar |
+| Browse terminal history | Mouse wheel or the terminal scrollbar; hold the left button and drag past the top/bottom edge to select across pages |
 | Copy / interrupt | `Ctrl+C` copies a selection; without a selection it sends the interrupt character |
 | Copy / paste | `Ctrl+Shift+C` / `Ctrl+Shift+V`; right-click paste is configurable |
 | Select SSH text | `Shift` + arrows; `Ctrl+Shift` + left/right selects words |

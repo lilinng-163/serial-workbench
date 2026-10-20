@@ -1,6 +1,12 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # 更新记录
 
+## 0.15.36 — 开发版
+
+- SSH 终端按住左键拖过上/下边缘时持续滚动并扩展选区，可跨屏选中和复制大量历史行；拖得更远时滚动加快。
+- 拖拽期间滚轮同步扩展选区，新输出不再把正在选择的位置拉回底部；松开、清除、隐藏、失去鼠标捕获或切换屏幕后停止自动滚动。
+- English: add continuous edge scrolling for multi-page terminal selection, wheel-assisted dragging, stable selection during incoming output, and immediate cancellation when dragging ends.
+
 ## 0.15.35 — 2026-10-19
 
 - 协议下拉框取消独立高亮底色，与其他输入框统一跟随主题。

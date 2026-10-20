@@ -137,6 +137,12 @@ private:
     void setAlternateScreen(bool enabled);
     int documentRows() const { return (alternateScreen ? 0 : historyLineCount()) + rows; }
     const Cell &documentCell(int row, int column) const;
+    QTimer selectionScrollTimer;
+    QPointF selectionPointer;
+    int selectionScrollStep() const;
+    void updateMouseSelection(const QPointF &position);
+    void scrollMouseSelection();
+    void finishMouseSelection();
     bool copyHeld = false;
     bool selectionCanEdit = false;
     void csi(QChar command, const QString &parameters);
