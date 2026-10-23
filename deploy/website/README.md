@@ -42,8 +42,10 @@ python -m http.server 8026 --bind 127.0.0.1 --directory build/website-preview
 
 ## 校庆视频
 
-页脚右侧以小字显示“校庆视频链接 001 002”，不占用主导航或主页内容区。两个链接分别打开 `anniversary/001.html` 和 `anniversary/002.html`，支持切换编号、播放、全屏和下载；默认不自动播放，使用 `preload="metadata"`。
+页脚右侧以小字显示“校庆视频链接 001 002”，不占用主导航或主页内容区。两个链接分别打开 `anniversary/001.html` 和 `anniversary/002.html`，支持切换编号、播放、全屏和下载；默认不自动播放，使用 `preload="metadata"`。下载按钮明确显示“下载 4K 原片”及大小，指向 `media/original-001.mp4` / `original-002.mp4`，分别为 1,706,330,343 / 1,715,342,420 字节，与用户提供的 4K / 60fps HEVC 原文件逐字节一致；下载保存名称沿用原文件名。
 
-播放文件为 1080p / 30fps H.264 + AAC MP4，时长约 04:01 和 04:03，moov 位于文件前部，可边加载边播放。播放器通过相对路径 `anniversary/media/001.mp4`、`002.mp4` 及同名 JPG 封面读取媒体。视频和专用上传工具不提交 Git，原始视频保留在用户本机。
+在线播放使用 1080p / 30fps H.264 + AAC MP4，时长约 04:01 和 04:03，moov 位于文件前部，可边加载边播放。播放器通过相对路径 `anniversary/media/001.mp4`、`002.mp4` 及同名 JPG 封面读取媒体。在线播放与原片下载使用独立文件，原片只做原样上传、校验，不重新编码。视频和专用上传工具不提交 Git，本机原文件保留。
 
 线上媒体独立于页面 release 保存，通过 release 内的相对软链接提供访问；后续发布须保留现有软链接及媒体文件。通过 MCP 核验媒体大小和 SHA-256 后再启用入口，并验证 `video/mp4` 和 HTTP 206 Range，避免只能整文件下载或无法拖动进度。本地预览时可在构建输出的 `anniversary/media/` 放置播放版和封面。
+
+发布校验按 1 MiB 分块计算 SHA-256，避免把 GB 级原片读入服务器内存。运行 `python -m unittest discover -s deploy/website -p "test_*.py"` 可检查大文件摘要及内存上限回归。
