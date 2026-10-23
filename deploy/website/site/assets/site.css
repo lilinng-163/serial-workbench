@@ -160,6 +160,23 @@ h1, h2, h3 { line-height: 1.45; }
 .site-footer { border-top: 1px solid var(--glass-edge); padding: 32px 0 24px; color: var(--muted); font-size: 12px; background: var(--surface); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
 .footer-inner { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; }
 .footer-links { display: flex; gap: 24px; flex-wrap: wrap; }
+.footer-anniversary { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 10px; font-size: 11px; line-height: 1.8; }
+.footer-anniversary a { font-variant-numeric: tabular-nums; padding: 2px 3px; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 4px; }
+.footer-anniversary a:hover, .footer-anniversary a:focus-visible { color: var(--blue); text-decoration-color: currentColor; }
+.anniversary-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.anniversary-heading h1 { margin: 8px 0 0; }
+.anniversary-back { color: var(--muted); font-size: 13px; }
+.anniversary-tabs { display: flex; gap: 8px; font-variant-numeric: tabular-nums; }
+.anniversary-tabs a { padding: 6px 18px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--surface); }
+.anniversary-tabs a[aria-current="page"] { color: var(--blue); border-color: var(--blue); }
+.anniversary-player { margin: 0 0 40px; padding: 10px; border: 1px solid var(--glass-edge); border-radius: 24px; background: var(--surface); box-shadow: var(--glass-shadow); }
+.anniversary-player video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; border-radius: 16px; background: #10151e; }
+.anniversary-player figcaption { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 10px 4px; color: var(--muted); font-size: 12px; }
+@media (max-width: 760px) {
+  .footer-anniversary { justify-content: center; }
+  .anniversary-player { padding: 6px; border-radius: 18px; }
+  .anniversary-player video { border-radius: 12px; }
+}
 .registration { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 10px 24px; border-top: 1px solid var(--line); padding-top: 20px; margin-top: 24px; min-height: 44px; font-size: 12px; }
 .registration a, .registration span { display: inline-flex; gap: 6px; align-items: center; }
 .registration .icon { width: 15px; height: 15px; }
