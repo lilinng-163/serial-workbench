@@ -15,3 +15,6 @@ CMakeUserPresets.json
 /scripts/publish-update-mirror.ps1
 /scripts/sync-website-release.py
 /deploy/update-mirror/manual_receive.py
+
+# Website videos are hosted separately; keep media binaries out of Git.
+/deploy/website/site/anniversary/media/

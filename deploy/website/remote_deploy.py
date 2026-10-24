@@ -18,7 +18,11 @@ RECORDS = Path('/srv/lilinng-web/deployments')
 
 
 def digest(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    checksum = hashlib.sha256()
+    with path.open('rb') as source:
+        while chunk := source.read(1024 * 1024):
+            checksum.update(chunk)
+    return checksum.hexdigest()
 
 
 def record_path(release: str) -> Path:
@@ -49,7 +53,11 @@ def prepare(payload: Path) -> None:
         files[name] = base64.b64decode(encoded, validate=True)
     for name in ('index.html', 'projects/index.html', 'downloads/index.html', 'about/index.html', '404.html'):
         text = files[name].decode('utf-8')
-        if 'https://beian.miit.gov.cn/' not in text or '公安备案办理中' not in text:
+        approved_security = re.search(
+            r'<a href="https://beian\.mps\.gov\.cn/#/query/webSearch\?code=(\d{14})"'
+            r'[^>]*><img\s[^>]+>[^<]*\1号</a>', text)
+        has_security = '公安备案办理中' in text or approved_security is not None
+        if 'https://beian.miit.gov.cn/' not in text or not has_security:
             raise ValueError(f'Missing registration footer: {name}')
 
     # Copy downloads and old hashed assets as well, so cached pages remain usable.

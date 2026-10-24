@@ -44,6 +44,9 @@ def footer(base: str, config: dict) -> str:
     <span>© 2026 lilinng · 嵌入式开发与工具制作</span>
     <div class="footer-links"><a href="{base}about/index.html">关于这个小站</a><a href="https://github.com/lilinng-163" target="_blank" rel="noopener noreferrer">GitHub</a><a href="{base}downloads/index.html">软件下载</a></div>
   </div>
+  <div class="container footer-anniversary" aria-label="校庆视频链接">
+    <span>校庆视频链接</span><a href="{base}anniversary/001.html" aria-label="校庆视频 001">001</a><a href="{base}anniversary/002.html" aria-label="校庆视频 002">002</a>
+  </div>
   <div class="container registration" aria-label="网站备案信息">
     <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">{icp}</a>
     {security}
