@@ -2,7 +2,7 @@
 
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
 
-## 2026-10-25 — 原生 CLI 与后台 MCP（发行准备）
+## 2026-10-25 — v0.15.36 原生 CLI 与后台 MCP 已发布
 
 - 用户要求：软件未打开时 Agent 可自行接入 MCP，验证后更新 skill、打包推送并通过 MCP 同步网站。独立分支 `codex/headless-cli` 已合并最新网站主线 `408bac9` 与先前 SSH 拖拽修复 `d9a8376`，保留两边历史；唯一冲突为交接日志，双方记录均保留。
 - 新增原生 `SerialWorkbenchCLI`，支持 start/status/show/stop/tools/call/mcp/install-skill/configure-agent，JSON 输出与 UTF-8 参数文件。桌面支持 --headless；同一配置文件通过本地 IPC 复用同一实例，不依赖固定端口；显示 GUI 后连接、搜索、脚本和游标保持原状态。启动不连接硬件。
@@ -12,7 +12,10 @@
 - 验证：完整原生 CTest 18/18；沙箱账户的 DPAPI 缓存测试失败后，在正常用户环境复核通过，保留首次日志。CLI 使用完整打包运行库通过并发启动、动态端口、无窗口、权限拒绝、HTTP/STDIO 独立读取、loop:// 回环、大小写/逻辑/正则搜索、脚本试解析/应用与 GUI 接续、停止/重启；扩展的 CLI skill 安装和 Agent 配置也通过。Windows Agent 面板实际查看截图，4/4 通过。skill 结构校验通过；证据位于 `build/cli-verification/`。
 - 指南：skill 新增 references/cli.md 并嵌入 read_usage_guide(topic="cli")，安装器和 GUI skill 更新同步；中英文 README 与安装/Agent 文档已更新。包清单纳入 CLI，安装器检查运行中的 CLI，离线回溯更新到 0.15.35/34/33。
 - 发行验证：最终 payload 的 CLI 全流程在无 SDK 环境通过；隔离安装、升级、运行中保护、卸载保留用户文件全部通过，便携 ZIP 与单文件的 Unicode 路径、首次/缓存启动、损坏缓存修复和 MCP 测试通过。最终安装包为 15,555,295 字节，SHA-256 `25d652923248ab6ce69f2b6a2e340a0c266b298d878cd4af4bc897374c2cadf9`。完整日志 `installer-smoke.txt`、`release-smoke.txt`、`cli-package.txt` 位于上述证据目录。
-- 当前停点：0.15.36 已完成本地验证，准备 GitHub 正式发布和网站手动上传。网站维护工具继续只保留本地，不提交私人连接配置、凭据或视频。
+- GitHub：正式 v0.15.36 指向 `e2a1922`，已普通推送 main、deepseek-dev、codex/headless-cli 与标签；保留 DeepSeek 和网站历史。四个 Release 资产的远端大小与 SHA-256 digest 全部匹配本地，latest 为 0.15.36，非草稿/预发行。
+- 网站：使用最终包 CLI 从关闭状态启动用户原配置的隐藏 MCP，并通过其 SSH 连接实际部署；沿用已开启的 AI 控制，不需先手动打开 GUI。服务器从本机接收已校验的安装包，不拉取 GitHub。完整公网 HTTPS 下载为 15,555,295 字节，SHA-256 与本地/GitHub 一致。
+- 页面：更新 CLI 说明、版本、下载链接与摘要；通过 MCP 原子切换网站，旧 release 保留回退。七个公网 HTML 摘要吻合，两个原片及播放文件的大小、MIME、媒体目录链接未变，ICP/公安备案与图标保留；实际浏览器核对版本、下载/校验链接、说明及视频入口，截图 `build/cli-verification/website-0.15.36.png`。
+- 接续：实现和发行已完成；本机 Codex skill 已更新，已有修改先备份。其他用户升级后在 Agent 接入页选择后台自动启动、更新 skill 并重载 MCP；第三方 Agent 的逐版本实连与真实串口硬件仍未覆盖。网站专用维护工具、连接配置、凭据与视频继续仅本地保存，不提交 Git。
 
 ## 2026-10-23 — 校庆视频改为 4K 原片下载
 
