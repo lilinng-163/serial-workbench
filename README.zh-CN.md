@@ -60,7 +60,7 @@
 
 **[下载最新版本 →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.35 优化浅深主题的配色和文字清晰度，统一协议下拉框、链接与各窗口配色，撞色可独立设置。[查看更新说明](docs/releases/0.15.35.md)。
+v0.15.36 新增原生命令行工具、MCP 后台自动启动与 GUI 共享接入，并修复 SSH 跨屏拖拽选择。[查看更新说明](docs/releases/0.15.36.md)。
 
 | 文件 | 适合的使用方式 |
 | --- | --- |
@@ -125,9 +125,22 @@ printf("@wave temperature=%.2f,voltage=%.3f,rpm=%d\r\n",
 
 使用命名字段，以 CR、LF 或 CRLF 结束。每帧最多 16 路通道。纯数字、普通日志、JSON 和脚本结果分别处理，不会混入波形。详见[波形专用协议](docs/wave-protocol.md)。
 
+## 命令行与后台运行
+
+安装目录包含 `SerialWorkbenchCLI.exe`，与 GUI 共享配置和连接：
+
+```powershell
+.\SerialWorkbenchCLI.exe start
+.\SerialWorkbenchCLI.exe status
+.\SerialWorkbenchCLI.exe call get_status
+.\SerialWorkbenchCLI.exe show
+```
+
+新配置默认只读；已授权发送/连接控制时可用 `start --allow-control` 开启并保存。`--settings` 选择独立配置，`call TOOL --args-file request.json` 传复杂参数，`install-skill AGENT` 和 `configure-agent AGENT` 更新接入。`stop` 会关闭共享实例的所有连接。完整命令与退出码见 [CLI 指南](skills/serial-workbench/references/cli.md)。
+
 ## AI / MCP
 
-先启动工作台，默认地址为 **`http://127.0.0.1:8765/mcp`**；当前实际地址可在 **设置 → AI / MCP** 查看。端口变更后需同步客户端配置。
+STDIO 接入可自动启动后台工作台，不必先打开界面。设置 → AI / MCP → Agent 接入默认勾选“后台自动启动（STDIO）”。固定 HTTP 接入仍可使用，当前地址在设置或 `SerialWorkbenchCLI status` 中查看；以下 HTTP 示例需要先运行工作台。
 
 ### 接入 AI 客户端
 
@@ -189,13 +202,13 @@ V1 `opencode.json` / `opencode.jsonc` 可合并以下条目：
   "mcpServers": {
     "serial-workbench": {
       "command": "C:/path/to/SerialWorkbench/SerialWorkbenchMCP.exe",
-      "args": ["--url", "http://127.0.0.1:8765/mcp"]
+      "args": []
     }
   }
 }
 ```
 
-桥接程序转发到已经启动的桌面工作台。修改配置后，在 AI 客户端重新加载 MCP 连接。
+不传 `--url` 时，桥接程序按需启动或复用后台实例；显式指定 `--url` 则只连接该地址。修改配置后，在 AI 客户端重新加载 MCP 连接。
 
 </details>
 
@@ -262,7 +275,7 @@ $env:MINGW_BIN = 'C:/Qt/Tools/mingw1310_64/bin'
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r tests/integration/requirements.txt
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.35
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.36
 ```
 
 安装 NSIS，并提供匹配的 Qt 源码目录收集许可证，即可生成安装包、单文件启动器和便携 ZIP：

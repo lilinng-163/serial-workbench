@@ -104,6 +104,20 @@ private slots:
         sw::AgentConfig::configure(agent, "http://127.0.0.1:23457/mcp", bridge);
         QCOMPARE(sw::AgentConfig::check(agent, "http://127.0.0.1:23457/mcp", bridge), QString("配置地址一致"));
         QCOMPARE(sw::AgentConfig::check(agent, url, bridge), QString("需要更新配置"));
+
+        const auto profile = directory.filePath("配置 with 'quotes'/settings.json");
+        sw::AgentConfig::configure(agent, QString(), bridge, profile);
+        QCOMPARE(sw::AgentConfig::check(agent, QString(), bridge, profile), QString("配置地址一致"));
+        QCOMPARE(sw::AgentConfig::check(agent, QString(), bridge, profile + ".other"), QString("需要更新配置"));
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        const auto automatic = file.readAll();
+        file.close();
+        QVERIFY(automatic.contains("preserve me"));
+        QVERIFY(automatic.contains("https://other.invalid/mcp"));
+        QVERIFY(automatic.contains("--settings"));
+        const auto before = QDir(QFileInfo(agent.configPath).absolutePath()).entryList({"*.bak"});
+        sw::AgentConfig::configure(agent, QString(), bridge, profile);
+        QCOMPARE(QDir(QFileInfo(agent.configPath).absolutePath()).entryList({"*.bak"}), before);
     }
 
     void invalidConfigNeverOverwritten()
@@ -289,6 +303,7 @@ private slots:
         for (auto logo : panel.findChildren<QLabel *>("agentLogo")) { QVERIFY(!logo->pixmap().isNull()); }
         QVERIFY(panel.findChild<QPushButton *>("configure_codex")->isEnabled());
         QVERIFY(!panel.findChild<QPushButton *>("check_pi")->isEnabled());
+        QVERIFY(panel.findChild<QCheckBox *>("agentAutoStart")->isChecked());
         panel.configureAll();
         QTRY_VERIFY(QFileInfo::exists(directory.filePath(".gemini/settings.json")));
         QVERIFY(QFileInfo::exists(directory.filePath(".codex/config.toml")));

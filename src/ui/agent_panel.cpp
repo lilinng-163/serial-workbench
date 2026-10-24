@@ -72,6 +72,12 @@ AgentPanel::AgentPanel(McpServer *owner, QWidget *parent, std::function<AgentEnv
     connect(skills, &QPushButton::clicked, this, &AgentPanel::configureSkills);
     toolbar->addStretch();
     body->addLayout(toolbar);
+    autoStart = new QCheckBox("后台自动启动（STDIO）· 无需先打开工作台");
+    autoStart->setObjectName("agentAutoStart");
+    autoStart->setChecked(true);
+    autoStart->setToolTip("共享当前配置与连接；沿用 AI 控制权限。取消勾选可继续使用固定 HTTP 地址。");
+    body->addWidget(autoStart);
+    connect(autoStart, &QCheckBox::toggled, this, [this] { refresh(); });
     summary = new QLabel();
     summary->setObjectName("muted");
     summary->setWordWrap(true);
@@ -240,8 +246,8 @@ void AgentPanel::refresh()
         {
             try
             {
-                card.result->setText(AgentConfig::check(agent, server->url(),
-                    QCoreApplication::applicationDirPath() + "/SerialWorkbenchMCP.exe"));
+                card.result->setText(AgentConfig::check(agent, autoStart->isChecked() ? QString() : server->url(),
+                    QCoreApplication::applicationDirPath() + "/SerialWorkbenchMCP.exe", qApp->property("swSettingsPath").toString()));
             }
             catch (const std::exception &error)
             {
@@ -335,8 +341,8 @@ void AgentPanel::checkAgent(int index, bool configure)
             try
             {
                 const auto bridge = QCoreApplication::applicationDirPath() + "/SerialWorkbenchMCP.exe";
-                result = configure ? AgentConfig::configure(agents[index], server->url(), bridge)
-                    : AgentConfig::check(agents[index], server->url(), bridge) + "；MCP 服务检查通过";
+                result = configure ? AgentConfig::configure(agents[index], autoStart->isChecked() ? QString() : server->url(), bridge, qApp->property("swSettingsPath").toString())
+                    : AgentConfig::check(agents[index], autoStart->isChecked() ? QString() : server->url(), bridge, qApp->property("swSettingsPath").toString()) + "；MCP 服务检查通过";
             }
             catch (const std::exception &exception) { result = "未完成：" + QString::fromUtf8(exception.what()); }
         }
@@ -366,8 +372,8 @@ void AgentPanel::configureAll()
                 card.result->show();
                 try
                 {
-                    card.result->setText(AgentConfig::configure(agents[index], server->url(),
-                        QCoreApplication::applicationDirPath() + "/SerialWorkbenchMCP.exe"));
+                    card.result->setText(AgentConfig::configure(agents[index], autoStart->isChecked() ? QString() : server->url(),
+                        QCoreApplication::applicationDirPath() + "/SerialWorkbenchMCP.exe", qApp->property("swSettingsPath").toString()));
                     ++success;
                 }
                 catch (const std::exception &exception)

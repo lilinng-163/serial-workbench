@@ -1675,6 +1675,13 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     {
         connect(engine, &Engine::sshPromptRequested, this, [this](SshAuthPrompt *prompt)
         {
+            if (qApp->property("swBackground").toBool())
+            {
+                // Do not leave an invisible authentication dialog waiting for input.
+                qWarning("SSH needs interactive authentication; use SerialWorkbenchCLI show and reconnect.");
+                prompt->cancel();
+                return;
+            }
             showSshAuthPrompt(prompt, this, theme);
         });
         engine->allowControl = saved["allow_ai_control"].toBool();
@@ -2307,6 +2314,7 @@ void Window::showPane(Pane *pane)
     }
     host->tabs->setCurrentIndex(index);
     host->activate(index);
+    if (qApp->property("swBackground").toBool()) { return; }
     if (host->isMinimized())
     {
         host->showNormal();

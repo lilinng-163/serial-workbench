@@ -1,7 +1,13 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # 更新记录
 
-## 0.15.36 — 开发版
+## 0.15.36 — 2026-10-25
+
+- 新增原生 `SerialWorkbenchCLI`：后台启动、状态、打开界面、停止、列工具和 JSON 调用；无需 Python 或先打开桌面。
+- STDIO 桥默认按需启动或复用同一配置的后台实例；GUI Agent 接入提供自动启动选项，HTTP 地址仍可选择。Windows 后台运行独立于单个 MCP 客户端生命周期。
+- 保留协议开关和默认只读权限；显式 `start --allow-control` 可为新实例开启并保存权限。后台与 GUI 共用日志搜索、脚本与独立读取游标。
+- skill 增加 CLI 指南，支持命令行安装 skill 和配置 Agent；相同配置不重复备份。
+- English: add a native CLI and automatic background MCP startup, shared GUI handover, explicit write permission, Agent configuration and bundled CLI skill documentation.
 
 - SSH 终端按住左键拖过上/下边缘时持续滚动并扩展选区，可跨屏选中和复制大量历史行；拖得更远时滚动加快。
 - 拖拽期间滚轮同步扩展选区，新输出不再把正在选择的位置拉回底部；松开、清除、隐藏、失去鼠标捕获或切换屏幕后停止自动滚动。

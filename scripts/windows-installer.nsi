@@ -86,6 +86,15 @@ Function ${PREFIX}VerifyClosed
         ${EndIf}
         System::Call 'kernel32::CloseHandle(p r0)'
     ${EndIf}
+    ${If} ${FileExists} "$INSTDIR\SerialWorkbenchCLI.exe"
+        System::Call 'kernel32::CreateFileW(w "$INSTDIR\SerialWorkbenchCLI.exe", i 0xC0000000, i 0, p 0, i 3, i 0, p 0) p.r0'
+        ${If} $0 == -1
+            MessageBox MB_OK|MB_ICONSTOP "命令行工具正在运行或文件不可写。请先退出命令行调用，再重试。" /SD IDOK
+            SetErrorLevel 2
+            Quit
+        ${EndIf}
+        System::Call 'kernel32::CloseHandle(p r0)'
+    ${EndIf}
     ${If} ${FileExists} "$INSTDIR\SerialWorkbenchSSHAskpass.exe"
         System::Call 'kernel32::CreateFileW(w "$INSTDIR\SerialWorkbenchSSHAskpass.exe", i 0xC0000000, i 0, p 0, i 3, i 0, p 0) p.r0'
         ${If} $0 == -1

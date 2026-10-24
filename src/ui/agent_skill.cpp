@@ -37,9 +37,9 @@ QJsonArray AgentSkill::targets(const AgentEnvironment &e)
         }
         bool present = false;
         bool current = true;
-        for (const auto &topic : QStringList {"overview", "frame_script"})
+        for (const auto &topic : QStringList {"overview", "frame_script", "cli"})
         {
-            const auto relative = topic == "overview" ? "SKILL.md" : "references/frame-script.md";
+            const auto relative = topic == "overview" ? "SKILL.md" : topic == "cli" ? "references/cli.md" : "references/frame-script.md";
             QFile file(target["path"].toString() + "/" + relative);
             present = present || file.exists();
             current = file.open(QIODevice::ReadOnly) && file.readAll() == UsageGuide::text(topic).toUtf8() && current;
@@ -76,7 +76,8 @@ QJsonObject AgentSkill::install(const QString &agent, const AgentEnvironment &en
     if (directory.isEmpty()) { fail("暂不支持该 Agent 的本地 skill 目录"); }
     if (QFileInfo(directory).isSymLink()) { fail("skill 目标是链接，请选择普通目录"); }
     const QMap<QString, QString> files {{"SKILL.md", UsageGuide::text("overview")},
-        {"references/frame-script.md", UsageGuide::text("frame_script")}};
+        {"references/frame-script.md", UsageGuide::text("frame_script")},
+        {"references/cli.md", UsageGuide::text("cli")}};
     QJsonArray installed;
     QJsonArray backups;
     for (auto file = files.begin(); file != files.end(); ++file)

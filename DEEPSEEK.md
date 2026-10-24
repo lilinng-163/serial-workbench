@@ -28,7 +28,7 @@ v0.15.35 在 0.15.34 双色主题基础上修复极端撞色的文字、图标�
 
 一个应用同时管理串口、TCP 客户端/服务端、UDP、SSH，提供收发日志、交互终端、波形、JSON/XML、串口控制面板与帧解析脚本。
 
-AI 经 MCP 读取同一应用拥有的连接和数据。**GUI 与多个 AI 不争抢端口，也不互相消费历史。** 桌面程序、STDIO 桥和 SSH 认证助手均为原生程序，运行发行包不需要 Python。
+AI 经 MCP 读取同一应用拥有的连接和数据。**GUI 与多个 AI 不争抢端口，也不互相消费历史。** 桌面程序、CLI、STDIO 桥和 SSH 认证助手均为原生程序，运行发行包不需要 Python。
 
 `legacy/python/` 保留历史 Python 版本，不能把它当作当前功能的主要实现位置。
 
@@ -54,7 +54,11 @@ GUI / 串口控制 / MCP 写请求
   → Channel::send                       共用传输；MCP 另在入口检查权限
 
 src/bridge/main.cpp
-  → SerialWorkbenchMCP.exe              STDIO 转发至正在运行的 HTTP MCP
+  → SerialWorkbenchMCP.exe              自动启动或复用所选配置，再 STDIO 转发 HTTP MCP
+
+src/client/main.cpp
+  → SerialWorkbenchCLI.exe              生命周期、原生工具调用、skill / Agent 配置
+  → runtime.*                           共用实例发现与 MCP 客户端
 ```
 
 当前 C++ 类名是 **`Journal`**，不是旧 Python 版本的 `EventJournal`。GUI 和 AI 不应再次打开传输层或直接争读 socket/串口。
@@ -63,6 +67,7 @@ src/bridge/main.cpp
 
 | 任务 | 优先阅读 |
 | --- | --- |
+| CLI、后台自动启动与 STDIO 生命周期 | `src/client/`、`src/bridge/main.cpp`、`skills/serial-workbench/references/cli.md` |
 | 启动参数、单实例、演示与截图 | `src/app/main.cpp` |
 | 连接、串口恢复、收发、历史、wave/1、JSON/XML 解析 | `src/core/core.h`、`core.cpp` |
 | SSH PTY、配置别名、认证与缓存 | `src/core/ssh_process.*`、`ssh_profiles.*`、`ssh_auth.*`；`src/app/ssh_askpass.cpp` |

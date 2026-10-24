@@ -9,7 +9,7 @@ if(WIN32)
     )
     target_sources(SerialWorkbench PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/app.rc")
 endif()
-target_link_libraries(SerialWorkbench PRIVATE workbench_ui)
+target_link_libraries(SerialWorkbench PRIVATE workbench_ui workbench_client)
 
 qt_add_executable(SerialWorkbenchSSHAskpass ssh_askpass.cpp)
 workbench_configure_target(SerialWorkbenchSSHAskpass)

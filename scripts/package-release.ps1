@@ -23,7 +23,7 @@ $stageRoot = Join-Path $repoRoot ('build/' + $stageName)
 $payload = Join-Path $stageRoot 'SerialWorkbench'
 New-Item -ItemType Directory -Path $payload, $outputPath -Force | Out-Null
 
-foreach ($name in 'SerialWorkbench.exe', 'SerialWorkbenchMCP.exe', 'SerialWorkbenchSSHAskpass.exe')
+foreach ($name in 'SerialWorkbench.exe', 'SerialWorkbenchMCP.exe', 'SerialWorkbenchCLI.exe', 'SerialWorkbenchSSHAskpass.exe')
 {
     Copy-Item -LiteralPath (Join-Path $packagePath $name) -Destination $payload
 }
@@ -75,7 +75,8 @@ Installer (setup.exe): choose an installation directory and create shortcuts.
 Portable ZIP: extract the complete folder and run SerialWorkbench.exe.
 Single-file EXE: extracts its runtime once and reuses the local cache.
 No Python or Qt installation is required. SSH uses Windows OpenSSH.
-SerialWorkbenchMCP.exe bridges STDIO clients to the running desktop application.
+SerialWorkbenchCLI.exe: start, status, show, stop, tools, call and Agent setup.
+SerialWorkbenchMCP.exe automatically starts or reuses the shared background runtime.
 Documentation: https://github.com/lilinng-163/serial-workbench/blob/main/README.md
 
 简体中文
@@ -88,7 +89,8 @@ Documentation: https://github.com/lilinng-163/serial-workbench/blob/main/README.
 
 便携 ZIP：解压整个目录后双击 SerialWorkbench.exe。
 保留 DLL、插件和许可证目录；配置保存在该目录的 settings.json。
-SerialWorkbenchMCP.exe 是供 AI 客户端调用的 STDIO 桥。
+SerialWorkbenchCLI.exe 提供后台启动、状态、调用工具和 Agent 配置。
+SerialWorkbenchMCP.exe 是自动启动或复用后台实例的 STDIO 桥。
 
 桌面程序不需要安装 Python 或 Qt。SSH 功能使用 Windows OpenSSH 客户端。
 首次启动默认端口 NULL，不会自动连接硬件。

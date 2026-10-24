@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+add_library(workbench_client STATIC runtime.cpp runtime.h)
+workbench_configure_target(workbench_client)
+target_include_directories(workbench_client PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${PROJECT_BINARY_DIR}/generated")
+target_link_libraries(workbench_client PUBLIC Qt6::Network)
+if(WIN32)
+    target_sources(workbench_client PRIVATE runtime_windows.cpp)
+    target_link_libraries(workbench_client PRIVATE ole32 oleaut32 wbemuuid)
+endif()
+
+qt_add_executable(SerialWorkbenchCLI main.cpp)
+workbench_configure_target(SerialWorkbenchCLI)
+target_link_libraries(SerialWorkbenchCLI PRIVATE workbench_client)
+install(TARGETS SerialWorkbenchCLI RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

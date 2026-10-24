@@ -64,7 +64,7 @@ try
         & $cmakePath --install $buildPath --prefix $destination
         if ($LASTEXITCODE) { throw 'Package installation failed' }
 
-        foreach ($executable in 'SerialWorkbench.exe', 'SerialWorkbenchMCP.exe', 'SerialWorkbenchSSHAskpass.exe')
+        foreach ($executable in 'SerialWorkbench.exe', 'SerialWorkbenchMCP.exe', 'SerialWorkbenchCLI.exe', 'SerialWorkbenchSSHAskpass.exe')
         {
             & "$QtRoot/bin/windeployqt.exe" --release --no-translations `
                 --no-system-d3d-compiler --no-opengl-sw (Join-Path $destination $executable)

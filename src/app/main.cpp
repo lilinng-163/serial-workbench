@@ -3,6 +3,7 @@
 #include "window.h"
 #include "window_chrome.h"
 #include "agent_skill.h"
+#include "runtime.h"
 
 int main(int argc, char *argv[])
 {
@@ -15,19 +16,14 @@ int main(int argc, char *argv[])
     app.setFont(sw::Theme::interfaceFont());
     app.setWindowIcon(QIcon(":/brand/lightning.svg"));
     sw::installWindowChrome();
-    auto defaultSettings = QCoreApplication::applicationDirPath() + "/settings.json";
-    QFile installation(QCoreApplication::applicationDirPath() + "/installation.json");
-    if (installation.open(QIODevice::ReadOnly)
-        && QJsonDocument::fromJson(installation.readAll()).object()["distribution"] == "installed")
-    {
-        defaultSettings = qEnvironmentVariable("LOCALAPPDATA", QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation))
-            + "/SerialWorkbench/settings.json";
-    }
     QCommandLineParser parser;
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addOption({"mcp-port", "Local MCP port", "port", "8765"});
-    parser.addOption({"settings", "Settings file", "path", defaultSettings});
+    parser.addOption({"settings", "Settings file", "path", sw::defaultSettingsPath()});
+    parser.addOption({"headless", "Run the shared runtime without showing windows"});
+    parser.addOption({"allow-control", "Explicitly enable and save AI control when starting a new background instance"});
+    parser.addOption({"configure-agent", "Configure an Agent for automatic background MCP startup", "agent"});
     parser.addOption({"demo", "Show generated example data"});
     parser.addOption({"view", "Preview waveform, json, xml, settings, dark, search, terminal, ssh, detached, floating-wave, narrow or protocol", "name"});
     parser.addOption({"screenshot", "Save window preview", "path"});
@@ -37,6 +33,10 @@ int main(int argc, char *argv[])
     parser.addOption({"skill-report", "Write the skill installation result to a JSON file", "path"});
     parser.addOption({"detect-skill-agents", "Detect installed skill-capable Agents without opening the GUI; write INI to --skill-report"});
     parser.process(app);
+    const auto settingsPath = QFileInfo(parser.value("settings")).absoluteFilePath();
+    app.setProperty("swSettingsPath", settingsPath);
+    app.setProperty("swBackground", parser.isSet("headless"));
+    if (parser.isSet("allow-control") && !parser.isSet("headless")) { return 2; }
     if (parser.isSet("detect-skill-agents"))
     {
         if (!parser.isSet("skill-report")) { return 2; }
@@ -44,11 +44,27 @@ int main(int argc, char *argv[])
         catch (const std::exception &) { return 3; }
         return 0;
     }
-    if (parser.isSet("install-skill"))
+    if (parser.isSet("install-skill") || parser.isSet("configure-agent"))
     {
         QJsonObject result;
         int code = 0;
-        try { result = sw::AgentSkill::install(parser.value("install-skill")); }
+        try
+        {
+            if (parser.isSet("install-skill")) { result = sw::AgentSkill::install(parser.value("install-skill")); }
+            else
+            {
+                bool found = false;
+                for (const auto &agent : sw::AgentConfig::discover())
+                {
+                    if (agent.id != parser.value("configure-agent")) { continue; }
+                    result = {{"agent", agent.id}, {"message", sw::AgentConfig::configure(agent, QString(),
+                        sw::siblingExecutable("SerialWorkbenchMCP"), settingsPath)}, {"reload_required", true}};
+                    found = true;
+                    break;
+                }
+                if (!found) { sw::fail("Unknown Agent"); }
+            }
+        }
         catch (const std::exception &error)
         {
             result = {{"error", QString::fromUtf8(error.what())}};
@@ -77,24 +93,35 @@ int main(int argc, char *argv[])
     {
         return 2;
     }
-    const auto instanceKey = parser.isSet("mcp-port") ? QString::number(port)
-        : QString::fromLatin1(QCryptographicHash::hash(QFileInfo(parser.value("settings")).absoluteFilePath().toUtf8(), QCryptographicHash::Sha256).toHex().left(16));
-    const QString instanceName = "SerialWorkbenchNative-" + qEnvironmentVariable("USERNAME") + "-" + instanceKey;
-    QLocalSocket existing;
-    existing.connectToServer(instanceName);
-    if (existing.waitForConnected(100))
+    // The desktop, CLI and STDIO clients share one runtime per settings file.
+    try
     {
-        existing.write("activate");
-        existing.waitForBytesWritten(100);
-        return 0;
+        if (!sw::instanceRequest(settingsPath, parser.isSet("headless") ? "status" : "show").isEmpty()) { return 0; }
     }
+    catch (const std::exception &) { return 3; }
+    const auto instanceName = sw::instanceName(settingsPath);
+    QLockFile startupLock(QDir::temp().filePath(instanceName + ".lock"));
+    if (!startupLock.tryLock(10000)) { return 3; }
+    try
+    {
+        if (!sw::instanceRequest(settingsPath, parser.isSet("headless") ? "status" : "show").isEmpty()) { return 0; }
+    }
+    catch (const std::exception &) { return 3; }
     QLocalServer instance;
-    instance.listen(instanceName);
+    instance.setSocketOptions(QLocalServer::UserAccessOption);
+    QLocalServer::removeServer(instanceName);
+    if (!instance.listen(instanceName)) { return 3; }
     sw::Engine engine;
     sw::McpServer mcp(&engine);
     if (parser.isSet("mcp-port")) { mcp.start(static_cast<quint16>(port)); }
     else { mcp.startAvailable(static_cast<quint16>(port)); }
-    sw::Window window(&engine, &mcp, parser.value("settings"));
+    if (!mcp.isListening()) { return 4; }
+    sw::Window window(&engine, &mcp, settingsPath);
+    if (parser.isSet("allow-control"))
+    {
+        engine.allowControl = true;
+        window.saveSettings();
+    }
     if (!parser.isSet("mcp-port") && mcp.isListening()) { window.saveSettings(); }
     QPointer<QWidget> previewTarget = &window;
     QObject::connect(&instance, &QLocalServer::newConnection, &window, [&]
@@ -103,14 +130,48 @@ int main(int argc, char *argv[])
         {
             auto socket = instance.nextPendingConnection();
             QObject::connect(socket, &QLocalSocket::disconnected, socket, &QObject::deleteLater);
-            socket->disconnectFromServer();
+            socket->setReadBufferSize(4096);
+            auto buffer = std::make_shared<QByteArray>();
+            const auto handle = [&, socket, buffer]
+            {
+                *buffer += socket->readAll();
+                if (!buffer->contains('\n'))
+                {
+                    if (buffer->size() >= 4096) { socket->disconnectFromServer(); }
+                    return;
+                }
+                const auto command = QJsonDocument::fromJson(*buffer).object()["command"].toString();
+                QJsonObject result {{"application", "SerialWorkbench"}, {"version", sw::Version},
+                    {"running", true}, {"pid", QCoreApplication::applicationPid()},
+                    {"mcp_url", mcp.url()}, {"settings", settingsPath},
+                    {"allow_ai_control", engine.allowControl}, {"visible", window.isVisible()}};
+                if (command == "show")
+                {
+                    app.setProperty("swBackground", false);
+                    app.setQuitOnLastWindowClosed(true);
+                    window.showNormal();
+                    window.checkAgentEndpoints();
+                    window.raise();
+                    window.activateWindow();
+                    result["visible"] = true;
+                }
+                else if (command == "stop")
+                {
+                    result["stopping"] = true;
+                    QTimer::singleShot(100, &window, [&] { window.close(); app.quit(); });
+                }
+                else if (command != "status") { result["error"] = "Unknown instance command"; }
+                socket->write(QJsonDocument(result).toJson(QJsonDocument::Compact) + '\n');
+                socket->disconnectFromServer();
+            };
+            QObject::connect(socket, &QLocalSocket::readyRead, socket, handle);
+            QTimer::singleShot(5000, socket, &QLocalSocket::disconnectFromServer);
+            if (socket->bytesAvailable()) { handle(); }
         }
-        window.showNormal();
-        window.checkAgentEndpoints();
-        window.raise();
-        window.activateWindow();
     });
-    window.show();
+    if (parser.isSet("headless")) { app.setQuitOnLastWindowClosed(false); }
+    else { window.show(); }
+    startupLock.unlock();
     QTimer::singleShot(0, &window, &sw::Window::checkAgentEndpoints);
     if (parser.isSet("demo"))
     {
@@ -227,7 +288,7 @@ int main(int argc, char *argv[])
     }
     if (parser.isSet("quit-after"))
     {
-        QTimer::singleShot(parser.value("quit-after").toInt(), &window, &QWidget::close);
+        QTimer::singleShot(parser.value("quit-after").toInt(), &window, [&] { window.close(); app.quit(); });
     }
     return app.exec();
 }

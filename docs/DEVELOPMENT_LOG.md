@@ -2,6 +2,18 @@
 
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
 
+## 2026-10-25 — 原生 CLI 与后台 MCP（发行准备）
+
+- 用户要求：软件未打开时 Agent 可自行接入 MCP，验证后更新 skill、打包推送并通过 MCP 同步网站。独立分支 `codex/headless-cli` 已合并最新网站主线 `408bac9` 与先前 SSH 拖拽修复 `d9a8376`，保留两边历史；唯一冲突为交接日志，双方记录均保留。
+- 新增原生 `SerialWorkbenchCLI`，支持 start/status/show/stop/tools/call/mcp/install-skill/configure-agent，JSON 输出与 UTF-8 参数文件。桌面支持 --headless；同一配置文件通过本地 IPC 复用同一实例，不依赖固定端口；显示 GUI 后连接、搜索、脚本和游标保持原状态。启动不连接硬件。
+- 权限：沿用已保存的 AI 控制与协议开关，新配置只读；显式 start --allow-control 为新实例开启并保存权限，已有只读实例不会被命令行提权。后台 SSH 需要交互认证时取消请求，提示打开 GUI 后重连。
+- STDIO 桥默认自动启动或复用，显式 --url 保留只转发行为；GUI Agent 页新增自动启动选项，配置写入当前 profile，检查识别 STDIO 与 HTTP。九类 Agent 配置使用临时文件验证保留其他字段、正确转义和幂等备份；未声称逐一完成第三方客户端实连。
+- 首轮验证发现 Windows 子进程继承管道使 CLI 调用方等待，以及 Hermes 重复配置生成备份；均已修复。官方 MCP SDK 在 Windows 使用关闭即回收子进程的 Job Object，后台在这种环境通过系统 WMI 独立创建，验证 Agent 退出后服务仍可共享；无开机任务、Windows 服务或权限修改。WMI 不可用时明确报错，不绕过系统访问控制。
+- 验证：完整原生 CTest 18/18；沙箱账户的 DPAPI 缓存测试失败后，在正常用户环境复核通过，保留首次日志。CLI 使用完整打包运行库通过并发启动、动态端口、无窗口、权限拒绝、HTTP/STDIO 独立读取、loop:// 回环、大小写/逻辑/正则搜索、脚本试解析/应用与 GUI 接续、停止/重启；扩展的 CLI skill 安装和 Agent 配置也通过。Windows Agent 面板实际查看截图，4/4 通过。skill 结构校验通过；证据位于 `build/cli-verification/`。
+- 指南：skill 新增 references/cli.md 并嵌入 read_usage_guide(topic="cli")，安装器和 GUI skill 更新同步；中英文 README 与安装/Agent 文档已更新。包清单纳入 CLI，安装器检查运行中的 CLI，离线回溯更新到 0.15.35/34/33。
+- 发行验证：最终 payload 的 CLI 全流程在无 SDK 环境通过；隔离安装、升级、运行中保护、卸载保留用户文件全部通过，便携 ZIP 与单文件的 Unicode 路径、首次/缓存启动、损坏缓存修复和 MCP 测试通过。最终安装包为 15,555,295 字节，SHA-256 `25d652923248ab6ce69f2b6a2e340a0c266b298d878cd4af4bc897374c2cadf9`。完整日志 `installer-smoke.txt`、`release-smoke.txt`、`cli-package.txt` 位于上述证据目录。
+- 当前停点：0.15.36 已完成本地验证，准备 GitHub 正式发布和网站手动上传。网站维护工具继续只保留本地，不提交私人连接配置、凭据或视频。
+
 ## 2026-10-23 — 校庆视频改为 4K 原片下载
 
 - 用户指出“下载视频”实际下载的是 1080p 播放版，授权改为原片。两个下载按钮改为“下载 4K 原片（1.71 GB / 1.72 GB）”，保存名沿用用户原始文件名；在线播放继续使用独立 1080p 文件。除两个下载链接外，七页 HTML、主题、页脚及软件版本清单保持原内容。

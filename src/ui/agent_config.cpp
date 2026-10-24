@@ -266,8 +266,25 @@ QList<AgentClient> AgentConfig::discover(const AgentEnvironment &environment)
     return agents;
 }
 
-QJsonObject AgentConfig::entry(const AgentClient &agent, const QString &url, const QString &bridge)
+QJsonObject AgentConfig::entry(const AgentClient &agent, const QString &url, const QString &bridge, const QString &settings)
 {
+    if (url.isEmpty())
+    {
+        if (!QFileInfo::exists(bridge)) { fail("STDIO 桥接程序不存在：" + bridge); }
+        QJsonArray args;
+        if (!settings.isEmpty()) { args = {"--settings", QFileInfo(settings).absoluteFilePath()}; }
+        if (agent.id == "opencode")
+        {
+            QJsonArray command {bridge};
+            for (const auto &argument : args) { command.append(argument); }
+            return {{"type", "local"}, {"command", command}, {"enabled", true}};
+        }
+        QJsonObject result {{"command", bridge}, {"args", args}};
+        if (agent.id == "claude-code") { result["type"] = "stdio"; }
+        if (agent.id == "openclaw") { result["transport"] = "stdio"; result["enabled"] = true; }
+        if (agent.format == "toml" || agent.format == "yaml") { result["enabled"] = true; }
+        return result;
+    }
     if (agent.id == "claude-desktop")
     {
         if (!QFileInfo::exists(bridge)) { fail("STDIO 桥接程序不存在：" + bridge); }
@@ -280,7 +297,7 @@ QJsonObject AgentConfig::entry(const AgentClient &agent, const QString &url, con
     return {{"url", url}, {"enabled", true}};
 }
 
-static QString mergeYaml(QString text, const QString &url)
+static QString mergeYaml(QString text, const QJsonObject &value)
 {
     // Preserve the original YAML instead of reserializing tokens, secrets or
     // comments. Only conventional block mappings are edited; flow mappings,
@@ -289,14 +306,14 @@ static QString mergeYaml(QString text, const QString &url)
     {
         parseJsonc(text);
         return setJsonMember(text, 0, {"mcp_servers", "serial-workbench"},
-            QString::fromUtf8(QJsonDocument(QJsonObject {{"url", url}, {"enabled", true}}).toJson(QJsonDocument::Compact)));
+            QString::fromUtf8(QJsonDocument(value).toJson(QJsonDocument::Compact)));
     }
     const QRegularExpression header(R"((?m)^mcp_servers\s*:[^\n]*$)");
     auto matches = header.globalMatch(text);
     if (!matches.hasNext())
     {
         if (text.contains(QRegularExpression(R"((?m)^["']mcp_servers["']\s*:)"))) { fail("Hermes MCP 节点使用特殊 YAML 语法，请先改为普通块映射"); }
-        return text + "\nmcp_servers:\n  serial-workbench:\n    url: \"" + url + "\"\n    enabled: true\n";
+        return text + "\nmcp_servers:\n  serial-workbench: " + QString::fromUtf8(QJsonDocument(value).toJson(QJsonDocument::Compact)) + "\n";
     }
     const auto match = matches.next();
     if (matches.hasNext() || !match.captured().contains(QRegularExpression(R"(^mcp_servers\s*:\s*(?:#.*)?$)")))
@@ -319,12 +336,12 @@ static QString mergeYaml(QString text, const QString &url)
         const auto next = QRegularExpression("(?m)^ {0," + QString::number(indent.size()) + R"(}[^\s#][^\n]*$)").match(block, found.capturedEnd() + 1);
         block.remove(found.capturedStart(), (next.hasMatch() ? next.capturedStart() : block.size()) - found.capturedStart());
     }
-    block += "\n" + indent + "serial-workbench:\n" + indent + "  url: \"" + url + "\"\n" + indent + "  enabled: true\n";
+    block += "\n" + indent + "serial-workbench: " + QString::fromUtf8(QJsonDocument(value).toJson(QJsonDocument::Compact)) + "\n";
     text.replace(match.capturedEnd(), end - match.capturedEnd(), block);
     return text;
 }
 
-QString AgentConfig::updated(const AgentClient &agent, const QString &original, const QString &url, const QString &bridge)
+QString AgentConfig::updated(const AgentClient &agent, const QString &original, const QString &url, const QString &bridge, const QString &settings)
 {
     if (agent.format == "yaml")
     {
@@ -332,10 +349,11 @@ QString AgentConfig::updated(const AgentClient &agent, const QString &original, 
         {
             const auto before = fkyaml::node::deserialize(original.isEmpty() ? "{}" : original.toStdString());
             if (!before.is_mapping()) { fail("Hermes 配置需要 YAML 映射"); }
-            const auto changed = mergeYaml(original, url);
+            const auto value = entry(agent, url, bridge, settings);
+            const auto changed = mergeYaml(original, value);
             auto after = fkyaml::node::deserialize(changed.toStdString());
             auto expected = before;
-            expected["mcp_servers"]["serial-workbench"] = fkyaml::node {{"url", url.toStdString()}, {"enabled", true}};
+            expected["mcp_servers"]["serial-workbench"] = fkyaml::node::deserialize(QJsonDocument(value).toJson(QJsonDocument::Compact).toStdString());
             if (after != expected) { fail("YAML 编辑校验失败，未修改文件"); }
             return changed;
         }
@@ -347,7 +365,22 @@ QString AgentConfig::updated(const AgentClient &agent, const QString &original, 
         try { before = toml::parse(original.toStdString()); }
         catch (const toml::parse_error &) { fail("现有 TOML 语法无效，未修改文件"); }
         QString text = original;
-        const QString table = "[mcp_servers.\"serial-workbench\"]\nurl = \"" + url + "\"\nenabled = true\n";
+        toml::table managed;
+        const auto value = entry(agent, url, bridge, settings);
+        for (auto item = value.begin(); item != value.end(); ++item)
+        {
+            if (item->isBool()) { managed.insert(item.key().toStdString(), item->toBool()); }
+            else if (item->isArray())
+            {
+                toml::array array;
+                for (const auto &argument : item->toArray()) { array.push_back(argument.toString().toStdString()); }
+                managed.insert(item.key().toStdString(), array);
+            }
+            else { managed.insert(item.key().toStdString(), item->toString().toStdString()); }
+        }
+        std::ostringstream formatted;
+        formatted << managed;
+        const QString table = "[mcp_servers.\"serial-workbench\"]\n" + QString::fromStdString(formatted.str()) + "\n";
         const QRegularExpression section(R"((?m)^\[mcp_servers\.(?:"serial-workbench"|'serial-workbench'|serial-workbench)\][^\n]*(?:\n|$)[\s\S]*?(?=^\[|\z))");
         auto matches = section.globalMatch(text);
         if (matches.hasNext())
@@ -366,7 +399,7 @@ QString AgentConfig::updated(const AgentClient &agent, const QString &original, 
                 before.insert("mcp_servers", toml::table {});
                 mcp = before["mcp_servers"].as_table();
             }
-            mcp->insert_or_assign("serial-workbench", toml::table {{"url", url.toStdString()}, {"enabled", true}});
+            mcp->insert_or_assign("serial-workbench", managed);
             if (before != after) { fail("TOML 编辑校验失败，未修改文件"); }
         }
         catch (const toml::parse_error &) { fail("TOML 节点使用特殊语法，未修改文件"); }
@@ -375,7 +408,7 @@ QString AgentConfig::updated(const AgentClient &agent, const QString &original, 
     QString text = original.trimmed().isEmpty() ? "{}" : original;
     const auto root = parseJsonc(text);
     auto section = agent.section;
-    auto value = entry(agent, url, bridge);
+    auto value = entry(agent, url, bridge, settings);
     if (agent.id == "opencode" && agent.modernOpenCode && !root["mcp"].toObject().isEmpty()
         && !root["mcp"].toObject().contains("servers"))
     {
@@ -399,7 +432,7 @@ static QString readConfig(const AgentClient &agent)
     return QString::fromUtf8(file.readAll());
 }
 
-QString AgentConfig::check(const AgentClient &agent, const QString &url, const QString &bridge)
+QString AgentConfig::check(const AgentClient &agent, const QString &url, const QString &bridge, const QString &settings)
 {
     if (!agent.installed()) { fail("未检测到已安装的 " + agent.name); }
     if (!QFileInfo::exists(agent.configPath)) { return "尚未配置"; }
@@ -407,7 +440,7 @@ QString AgentConfig::check(const AgentClient &agent, const QString &url, const Q
     if (agent.format != "json")
     {
         // Replacing with the same managed entry must make no semantic change.
-        const auto next = updated(agent, text, url, bridge);
+        const auto next = updated(agent, text, url, bridge, settings);
         if (agent.format == "toml") { return toml::parse(next.toStdString()) == toml::parse(text.toStdString()) ? "配置地址一致" : "需要更新配置"; }
         return fkyaml::node::deserialize(next.toStdString()) == fkyaml::node::deserialize(text.toStdString()) ? "配置地址一致" : "需要更新配置";
     }
@@ -416,7 +449,7 @@ QString AgentConfig::check(const AgentClient &agent, const QString &url, const Q
     const bool v2 = agent.id == "opencode" && (agent.modernOpenCode || node.contains("servers"));
     if (v2) { node = node["servers"].toObject(); }
     const auto saved = node["serial-workbench"].toObject();
-    auto expected = entry(agent, url, bridge);
+    auto expected = entry(agent, url, bridge, settings);
     if (v2) { expected.remove("enabled"); expected["disabled"] = false; }
     for (auto item = expected.begin(); item != expected.end(); ++item)
     {
@@ -425,11 +458,15 @@ QString AgentConfig::check(const AgentClient &agent, const QString &url, const Q
     return "配置地址一致";
 }
 
-QString AgentConfig::configure(const AgentClient &agent, const QString &url, const QString &bridge)
+QString AgentConfig::configure(const AgentClient &agent, const QString &url, const QString &bridge, const QString &settings)
 {
     if (!agent.installed()) { fail("未检测到已安装的 " + agent.name); }
+    if (QFileInfo::exists(agent.configPath) && check(agent, url, bridge, settings) == "配置地址一致")
+    {
+        return "配置已一致，文件校验通过。请重载客户端配置。\n" + agent.configPath;
+    }
     const auto original = readConfig(agent);
-    const auto text = updated(agent, original, url, bridge);
+    const auto text = updated(agent, original, url, bridge, settings);
     if (!QDir().mkpath(QFileInfo(agent.configPath).absolutePath())) { fail("无法创建配置目录"); }
     if (text != original)
     {
@@ -442,7 +479,7 @@ QString AgentConfig::configure(const AgentClient &agent, const QString &url, con
         const auto bytes = text.toUtf8();
         if (!output.open(QIODevice::WriteOnly) || output.write(bytes) != bytes.size() || !output.commit()) { fail("配置写入失败"); }
     }
-    if (check(agent, url, bridge) != "配置地址一致") { fail("配置写入后校验失败"); }
+    if (check(agent, url, bridge, settings) != "配置地址一致") { fail("配置写入后校验失败"); }
     const QString reload = agent.id == "pi" ? "请在 Pi 中执行 /reload。" : "请重载客户端配置。";
     return "配置已保存，文件校验通过。" + reload + "\n" + agent.configPath;
 }

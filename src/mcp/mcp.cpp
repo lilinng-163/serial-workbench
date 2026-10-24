@@ -511,8 +511,8 @@ QJsonValue McpServer::call(const QString &name, const QJsonObject &a)
             {"allow_ai_control", engine->allowControl}, {"protocol_access", access}, {"max_events", 20000}, {"max_encoded_bytes", 8 * 1024 * 1024},
             {"connections", connections}, {"connection_count", connections.size()}, {"connected_count", active},
             {"recovering_count", recovering}, {"counts_by_protocol", counts}, {"mcp_url", url()}, {"implementation", "Qt C++"},
-            {"agent_config_checks", agentChecks},
-            {"usage_guide", QJsonObject {{"tool", "read_usage_guide"}, {"topics", QJsonArray {"overview", "frame_script"}}}}};
+            {"agent_config_checks", agentChecks}, {"background", qApp->property("swBackground").toBool()},
+            {"usage_guide", QJsonObject {{"tool", "read_usage_guide"}, {"topics", QJsonArray {"overview", "frame_script", "cli"}}}}};
     }
     if (name == "list_serial_ports")
     {
@@ -586,8 +586,8 @@ QJsonArray McpServer::tools() const
             {"inputSchema", QJsonObject {{"type", "object"}, {"properties", properties}, {"required", required}}},
             {"annotations", QJsonObject {{"readOnlyHint", read}, {"destructiveHint", !read}, {"openWorldHint", !read}}}});
     };
-    add("read_usage_guide", "Read the built-in Serial Workbench skill/usage guide. Call this when first using the software; topic=frame_script explains the exact C-style parser entry point, supported functions, framing, limits, example and result reading. Returns full Markdown even when the server-local skill_path is inaccessible. Does not install a skill or change scripts/configuration.",
-        {{"topic", QJsonObject {{"type", "string"}, {"enum", QJsonArray {"overview", "frame_script"}}, {"default", "overview"}}}});
+    add("read_usage_guide", "Read the built-in Serial Workbench skill/usage guide. Call this when first using the software; topic=cli explains background startup and native CLI commands; topic=frame_script explains the exact C-style parser entry point, supported functions, framing, limits, example and result reading. Returns full Markdown even when the server-local skill_path is inaccessible. Does not install a skill or change scripts/configuration.",
+        {{"topic", QJsonObject {{"type", "string"}, {"enum", QJsonArray {"overview", "frame_script", "cli"}}, {"default", "overview"}}}});
     add("get_status", "Get shared journal session, exposed connections, actual baud rates and permissions. See usage_guide for the built-in guide tool. protocol_access reports the GUI protocol switches; TCP covers both client and server. Disabled protocols cannot be read or controlled.", {});
     add("list_serial_ports", "List serial ports without opening hardware.", {});
     add("list_connections", "List exposed connections, including disconnected retained sessions, with ids, protocol, state and actual serial settings. Match the requested port/host before choosing channel_id; never assume the first connection is the current device.", {});

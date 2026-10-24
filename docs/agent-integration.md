@@ -53,3 +53,11 @@ OpenCode 已有 `mcp.servers` 时保留 V2 结构；新建配置通过已安装 
 Claude Desktop 的自定义 skill 在客户端导入；没有将其当作 Claude Code 的目录来安装。它也可通过 MCP 的 read_usage_guide 直接读取本指南。
 
 目录依据：[Hermes](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills)、[OpenClaw](https://docs.openclaw.ai/tools/skills)、[Grok Build](https://github.com/xai-org/grok-build/blob/main/crates/codegen/xai-grok-shell/README.md#skills)、[Gemini CLI](https://geminicli.com/docs/cli/using-agent-skills/)。
+
+## 无窗口接入（0.15.36）
+
+Agent 接入页默认勾选“后台自动启动（STDIO）”，配置为原生桥命令并携带当前配置路径。桥按需启动或复用后台工作台，发现实际端口，打开 GUI 后保留连接、搜索与脚本。取消勾选可保留固定 HTTP 接入。检查同时识别本配置的自动启动条目和正确的 HTTP 地址，不把端口变更误报为 STDIO 失效。
+
+安装目录的 `SerialWorkbenchCLI.exe` 提供 `start/status/show/stop/tools/call/mcp/install-skill/configure-agent`。默认不提升 AI 控制权限；显式 `start --allow-control` 仅为新实例开启并保存权限。CLI 使用 JSON 输出和退出码，完整步骤见 [内置 CLI 指南](../skills/serial-workbench/references/cli.md)。
+
+Windows MCP 客户端可能用 Job Object 回收子进程。后台实例在这种情况下通过系统 WMI 创建，属于用户会话，Agent 退出后仍可被其他客户端使用；WMI 不可用时明确报错，可从普通终端先执行 `start`。不创建开机任务或 Windows 服务，不修改系统权限。新模式已用官方 MCP Python SDK 和打包运行库验证；各 Agent 配置格式用隔离文件验证，不代表所有第三方客户端版本都做过实际连接测试。

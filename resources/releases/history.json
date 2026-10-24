@@ -1,5 +1,23 @@
 [
   {
+    "tag_name": "v0.15.35",
+    "name": "Serial Workbench 0.15.35",
+    "body": "# Serial Workbench 0.15.35\r\n\r\n主题配色与浅深模式一致性更新。\r\n\r\n- **清晰的主题色**：保留所选按钮填充原色，链接、图标、TX 日志、波形、焦点边框和选区自动调整明暗，修复白色撞色在浅主题、黑色撞色在深主题中难以辨认的问题。\r\n- **统一窗口配色**：工作台、设置、分离窗口、收发小窗、工具提示和禁用文字共用主题调色板；深色数字箭头、黑白勾选标记与主题同步。\r\n- **独立选择撞色**：无需先修改主色，即可设置按钮、链接与选中效果的撞色；选色盘和 `#RRGGBB` / `#RGB` 输入继续支持保存恢复。\r\n- **一致的协议选择框**：“串口 / TCP / UDP / SSH”下拉框与其他输入框使用相同底色和边框，取消单独的高亮底色。\r\n- **JSON 助手链接**：说明链接跟随当前主题，不再固定使用绿色、橙色或系统蓝色。\r\n\r\n推荐下载 `SerialWorkbench-0.15.35-windows-x64-setup.exe`。另提供单文件 EXE、便携 ZIP 和 `SHA256SUMS.txt`，运行无需安装 Qt 或 Python。升级前关闭工作台与 MCP 桥，安装器沿用原目录并保留配置。Agent 用户升级后重载 MCP，并在设置中检查 skill 与接入地址。\r\n\r\n## English\r\n\r\n- Preserve the chosen button fill while adjusting accent text, icons, TX logs, waveforms, focus borders and selections for readable light/dark themes, including black and white accents.\r\n- Share theme palettes across the workspace, Settings, detached windows, receive monitors, tooltips and disabled text. Adapt dark spin arrows and black/white checkmarks.\r\n- Choose a contrast color independently of the main color, through the picker or `#RRGGBB` / `#RGB` input, with persistent settings.\r\n- Match the protocol selector background and border to the other inputs.\r\n- Follow the active theme for JSON assistant reference links.\r\n\r\nThe Windows x64 setup installer is recommended. Single-file and portable builds plus checksums are also available. Close the application and MCP bridge before upgrading; existing paths and settings are retained. Reload Agent MCP connections after upgrading.\r\n",
+    "published_at": "2026-10-19T09:02:20Z",
+    "html_url": "https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.35",
+    "draft": false,
+    "prerelease": false,
+    "assets": [
+      {
+        "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.35/SerialWorkbench-0.15.35-windows-x64-setup.exe",
+        "digest": "sha256:deef435aa71f1f12ca787dd170dd5b4ea15685e73f9dee0aa4420ac94e3b3ac6",
+        "name": "SerialWorkbench-0.15.35-windows-x64-setup.exe",
+        "size": 15477900,
+        "state": "uploaded"
+      }
+    ]
+  },
+  {
     "tag_name": "v0.15.34",
     "name": "Serial Workbench 0.15.34",
     "body": "# Serial Workbench 0.15.34\n\n主色与撞色分工、预选背景统一和输入框细节更新。\n\n- **双色主题**：设置 → 外观 → 主题色现在分为“主色（背景/面板）”和“撞色（按钮/链接/选中）”。主色只改变背景、面板和文字的色相；撞色接管默认主题中橙色强调色所在的组件，包括主按钮、工具栏动作图标、链接、选中、焦点、勾选、滑块、进度、发送、TX、关于页链接、rail 激活图标和波形第一条线。\n- **独立设置**：两行都支持选色盘、`#RRGGBB` / `#RGB` 输入、应用和恢复默认；设置分别保存，重启及分离窗口同步。未单独设置撞色时使用默认暖橙色，不再自动生成互补色。\n- **预选统一**：菜单、列表、页签、下拉项和树形项的悬停/预选背景统一使用撞色浅色；选中页签底色、页签文字、勾选按钮文字和描边按钮悬停/焦点恢复默认角色，不再把撞色铺到错误位置。\n- **细节**：上移颜色输入框右侧的清除按钮，改善窄设置窗口中的对齐。\n- **保持不变**：GUI 与 AI 继续共享连接并各自读取历史；MCP 的 17 个工具、协议权限、脚本读写/离线试解析和原生搜索保持 0.15.31 / 0.15.32 / 0.15.33 的行为。\n\n推荐下载 `SerialWorkbench-0.15.34-windows-x64-setup.exe`。另提供单文件 EXE、便携 ZIP 和 `SHA256SUMS.txt`，运行无需安装 Qt 或 Python。升级前关闭工作台与 MCP 桥；安装器沿用原目录并保留配置。使用 Agent 的用户升级后重载 MCP 连接，并在设置中检查 skill 与地址。\n\n## English\n\n- **Two-color theme**: Settings → Appearance → Theme color now separates the main color (backgrounds and text) from a contrast color for buttons, links, selection and focus. The main color only tints surfaces; the contrast color takes over every role previously using the default orange accent, including primary buttons, toolbar actions, links, focus, checkboxes, sliders, progress, send, TX, About links, the active rail icon and the first waveform series.\n- **Independent controls**: both colors support the picker, `#RRGGBB` / `#RGB` input, Apply and Reset, persist independently and synchronize across light/dark themes, detached windows and monitors. If no contrast color is set, the warm default accent is used; no automatic complementary hue is generated.\n- **Consistent preselection**: menu, list, tab, combo and tree hover/preselection backgrounds use the contrast tint; selected-tab backgrounds, tab text, checked-button text and outline-button hover/focus keep their default roles.\n- **Detail**: the clear button in color inputs is raised for better vertical alignment in narrow Settings layouts.\n- **Preserved behavior**: GUI/AI shared connections with independent reads, all 17 MCP tools, protocol permissions, parser read/write/offline validation and native GUI search remain unchanged.\n\nThe Windows x64 setup installer is recommended. Single-file and portable builds plus SHA-256 checksums are also available; no Qt or Python SDK is required. Close the application and MCP bridge before upgrading. Existing installation paths and settings are retained. Reload the Agent MCP connection and check its skill and endpoint in Settings after upgrading.\n",
@@ -31,24 +49,6 @@
         "digest": "sha256:444b7c931c5c9ee483fe5a2eabc394cc77428881b2d744cb3d935f45300aa843",
         "name": "SerialWorkbench-0.15.33-windows-x64-setup.exe",
         "size": 15465318,
-        "state": "uploaded"
-      }
-    ]
-  },
-  {
-    "tag_name": "v0.15.32",
-    "name": "Serial Workbench 0.15.32",
-    "body": "# Serial Workbench 0.15.32\n\n版本回溯、Agent skill 配置与串口控制体验更新。\n\n- **版本回溯**：设置中查看最近三个正式版本的特性，后台下载安装包并校验大小与 SHA-256，确认后再安装。窗口底部显示当前运行版本。\n- **skill 配置**：设置中可安装或更新 Agent 使用指南；安装器默认勾选本机已检测到的受支持 Agent，可手动取消。支持 Codex、Claude Code、OpenCode、Pi、Hermes、OpenClaw、Grok Build 和 Gemini CLI，已有不同内容先备份，不修改 MCP 配置。\n- **脚本与 MCP**：试解析 HEX 样本随设置保存，MCP 可同步读取和修改；revision 保护未保存的样本与代码。移除独立 AI 提示词窗口，统一由 skill 说明脚本编写和试解析流程。\n- **串口控制**：修复控件组下拉显示和切换、删除确认框遮挡；自由布局横向跟随窗口宽度，保留拖动与缩放。清空入口统一为「清空全部」，卡片以「图层」文字提供层级操作。\n- **界面**：Windows 文件选择使用系统窗口；水平滑块、图层入口与页面图标统一样式。保留 GUI / AI 共用连接和独立读取。\n\n推荐下载 `SerialWorkbench-0.15.32-windows-x64-setup.exe`。另提供单文件 EXE、便携 ZIP 和 `SHA256SUMS.txt`，运行无需安装 Qt 或 Python。升级前关闭工作台与 MCP 桥；安装器沿用原目录并保留配置。使用 Agent 的用户升级后重载 MCP 连接，并在设置中更新 skill。\n\n## English\n\n- Review the latest three stable releases in Settings and download installers in the background, with size and SHA-256 verification before explicit installation. The status bar shows the running version.\n- Install or update Agent skills from Settings. The installer preselects detected supported Agents, allows deselection, backs up different existing content and leaves MCP configuration unchanged.\n- Save parser trial HEX samples and synchronize them over MCP. Revision checks protect unsaved code and samples. A shared skill workflow replaces the separate AI prompt window.\n- Fix control-group menus and deletion dialogs. Free-layout cards follow window width while retaining drag and resize behavior. Consolidate clearing and clarify layer actions.\n- Restore native Windows file pickers and unify themed sliders and control icons, while preserving shared GUI/AI sessions and independent reads.\n\nThe Windows x64 setup installer is recommended. Single-file and portable builds plus SHA-256 checksums are also available; no Qt or Python SDK is required. Close the application and MCP bridge before upgrading. Existing installation paths and settings are retained. Reload the Agent MCP connection and update its skill in Settings after upgrading.\n",
-    "published_at": "2026-10-17T10:31:33Z",
-    "html_url": "https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.32",
-    "draft": false,
-    "prerelease": false,
-    "assets": [
-      {
-        "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.32/SerialWorkbench-0.15.32-windows-x64-setup.exe",
-        "digest": "sha256:499fcc9217c1d711a363266cf213a5f9af056f250284cb255e27ee1706f313cc",
-        "name": "SerialWorkbench-0.15.32-windows-x64-setup.exe",
-        "size": 15464069,
         "state": "uploaded"
       }
     ]

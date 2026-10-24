@@ -29,6 +29,8 @@ def verify_payload(directory):
     for name in (
         "SerialWorkbench.exe",
         "SerialWorkbenchMCP.exe",
+        "SerialWorkbenchCLI.exe",
+        "skills/serial-workbench/references/cli.md",
         "platforms/qwindows.dll",
         "LICENSE",
         "licenses/Qt/qtbase/LICENSES/LGPL-3.0-only.txt",

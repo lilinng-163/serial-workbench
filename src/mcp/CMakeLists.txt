@@ -15,6 +15,6 @@ set(guide_root "${PROJECT_SOURCE_DIR}/skills/serial-workbench")
 qt_add_resources(workbench_mcp workbench_guides
     PREFIX "/guides"
     BASE "${guide_root}"
-    FILES "${guide_root}/SKILL.md" "${guide_root}/references/frame-script.md"
+    FILES "${guide_root}/SKILL.md" "${guide_root}/references/frame-script.md" "${guide_root}/references/cli.md"
 )
 install(DIRECTORY "${guide_root}" DESTINATION skills)

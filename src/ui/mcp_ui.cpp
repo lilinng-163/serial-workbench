@@ -196,7 +196,7 @@ void Window::installMcpUi()
         owner->applyScript(code, enabled);
         guard->showPane(owner);
         if (samples) { owner->scriptTestHex = *samples; }
-        if (!owner->scriptDialog) { owner->openScriptEditor(true); }
+        if (!owner->scriptDialog && !qApp->property("swBackground").toBool()) { owner->openScriptEditor(true); }
         for (auto host : guard->hosts)
         {
             if (!host) { continue; }
@@ -247,7 +247,11 @@ void Window::checkAgentEndpoints()
     {
         if (!agent.installed()) { continue; }
         QString status;
-        try { status = AgentConfig::check(agent, mcp->url(), bridge); }
+        try
+        {
+            status = AgentConfig::check(agent, QString(), bridge, settingsPath);
+            if (status != "配置地址一致") { status = AgentConfig::check(agent, mcp->url(), bridge); }
+        }
         catch (const std::exception &)
         {
             // Parser diagnostics can contain user configuration fragments.

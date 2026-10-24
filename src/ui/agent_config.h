@@ -35,9 +35,9 @@ class AgentConfig
 {
 public:
     static QList<AgentClient> discover(const AgentEnvironment &environment = AgentEnvironment::current());
-    static QJsonObject entry(const AgentClient &agent, const QString &url, const QString &bridge);
-    static QString updated(const AgentClient &agent, const QString &original, const QString &url, const QString &bridge);
-    static QString configure(const AgentClient &agent, const QString &url, const QString &bridge);
-    static QString check(const AgentClient &agent, const QString &url, const QString &bridge);
+    static QJsonObject entry(const AgentClient &agent, const QString &url, const QString &bridge, const QString &settings = {});
+    static QString updated(const AgentClient &agent, const QString &original, const QString &url, const QString &bridge, const QString &settings = {});
+    static QString configure(const AgentClient &agent, const QString &url, const QString &bridge, const QString &settings = {});
+    static QString check(const AgentClient &agent, const QString &url, const QString &bridge, const QString &settings = {});
 };
 }

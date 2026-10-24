@@ -33,6 +33,7 @@ private:
     QList<Card> cards;
     QLabel *summary;
     QPushButton *updateAll;
+    QCheckBox *autoStart;
     bool busy = false;
     void prepareProbe(const std::function<void(const QString &)> &finished);
     void probe(const std::function<void(const QString &)> &finished);

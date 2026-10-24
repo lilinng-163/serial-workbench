@@ -60,7 +60,7 @@ Screenshots are captured from the application using generated example data and l
 
 **[Download the latest release →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.35 improves light/dark theme contrast, synchronizes window and link colors, unifies the protocol selector and supports an independent accent. [Release notes](docs/releases/0.15.35.md).
+v0.15.36 adds a native CLI, automatic background MCP startup and shared GUI handover, plus multi-page SSH drag selection. [Release notes](docs/releases/0.15.36.md).
 
 | Package | Use it when… |
 | --- | --- |
@@ -125,9 +125,22 @@ printf("@wave temperature=%.2f,voltage=%.3f,rpm=%d\r\n",
 
 Use named fields and terminate each line with CR, LF or CRLF. Up to 16 channels can share a frame. Plain numbers, ordinary logs, JSON and script output are handled separately. See the [wave/1 protocol](docs/wave-protocol.md).
 
+## CLI and background runtime
+
+The installation includes `SerialWorkbenchCLI.exe`, sharing settings and connections with the GUI:
+
+```powershell
+.\SerialWorkbenchCLI.exe start
+.\SerialWorkbenchCLI.exe status
+.\SerialWorkbenchCLI.exe call get_status
+.\SerialWorkbenchCLI.exe show
+```
+
+New profiles are read-only. When write/control access is authorized, `start --allow-control` explicitly enables and saves it for a new instance. Use `--settings` for an isolated profile, `call TOOL --args-file request.json` for complex arguments, and `install-skill AGENT` / `configure-agent AGENT` for setup. `stop` closes all connections in the shared instance. The STDIO bridge starts or reuses the runtime automatically; fixed HTTP URLs remain available. See the [CLI guide](skills/serial-workbench/references/cli.md) for commands and exit codes.
+
 ## AI / MCP
 
-Start Serial Workbench first. The default endpoint is **`http://127.0.0.1:8765/mcp`**; the active address is shown in **设置 → AI / MCP**. If the port changes, update the client configuration.
+STDIO starts the background runtime automatically, without opening the desktop. Agent settings select this mode by default. Fixed HTTP connections remain available and require a running runtime; check the actual URL in Settings or with `SerialWorkbenchCLI status`. The HTTP examples below use the default `http://127.0.0.1:8765/mcp`.
 
 ### Connect an agent
 
@@ -189,13 +202,13 @@ Replace the executable path with your installation directory:
   "mcpServers": {
     "serial-workbench": {
       "command": "C:/path/to/SerialWorkbench/SerialWorkbenchMCP.exe",
-      "args": ["--url", "http://127.0.0.1:8765/mcp"]
+      "args": []
     }
   }
 }
 ```
 
-The bridge forwards to the running desktop application. Reload the agent's MCP connection after editing its settings.
+Without `--url`, the bridge starts or reuses the background runtime. An explicit `--url` connects only to that server. Reload the agent after editing its configuration.
 
 </details>
 
@@ -264,7 +277,7 @@ The build script compiles the application, runs native tests and deploys Qt libr
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r tests/integration/requirements.txt
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.35
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.36
 ```
 
 To create the installer, single-file launcher and portable ZIP, install NSIS and provide the matching Qt source tree for license notices:
