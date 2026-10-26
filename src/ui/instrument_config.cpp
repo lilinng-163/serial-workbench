@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "instrument_config.h"
 #include "window.h"
+#include "model3d_panel.h"
 #include <QJsonObject>
 
 namespace sw
 {
 void Instrument::clearDisplay()
 {
+    if (model) { model->clearDisplay(); return; }
     if (plot) { plot->clearSamples(waveChannel, points->value()); }
     if (waveChannel && isStructured())
     {
@@ -83,7 +85,7 @@ QJsonArray migrateInstrumentPages(const QJsonArray &pages)
                 result.append(separate);
             }
         }
-        else if (kind == "waveform" || kind == "json" || kind == "xml" || kind == "control")
+        else if (kind == "waveform" || kind == "json" || kind == "xml" || kind == "control" || kind == "model3d")
         {
             result.append(page);
         }

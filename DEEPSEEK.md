@@ -77,6 +77,7 @@ src/client/main.cpp
 | 主界面、连接页、控件页、设置与持久化 | `src/ui/window.*`；先定位 `Window` / `Pane` / `Instrument` 对应方法 |
 | 终端字符屏、历史、选区、键盘输入 | `src/ui/terminal.*`：`TerminalView`；日志显示为 `LogView` |
 | 波形、四路读数、通道选择与设置 | `src/ui/wave_plot.cpp`、`wave_settings.cpp`、`controls.h` |
+| 3D 网格、通道姿态绑定与 OpenGL 视图 | `src/ui/model3d_data.*`、`model3d_panel.*`、`model3d_view.*`；`tests/native/model3d_tests.cpp` |
 | JSON 助手、控件迁移与数据源 | `src/ui/json_tools.*`、`instrument_config.*` |
 | 串口控制卡片、控件组、模板与收发小窗 | `src/ui/control_card.*`、`serial_control_panel.*`、`serial_control_presets.cpp`、`serial_control_packet.cpp`、`serial_monitor_dialog.*` |
 | C 风格脚本解释器与编辑器 | `src/core/frame_script.*`、`script_worker.cpp`；`src/ui/script_editor.cpp`、`script_results.cpp` |

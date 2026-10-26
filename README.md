@@ -30,6 +30,7 @@ Built with **Qt 6 and C++17**. The Windows application and its native MCP bridge
 | 🔌 **Connections** | Serial, TCP client/server, UDP and SSH; independent tabs, live port discovery and serial recovery. |
 | 🖥️ **SSH terminal** | A dedicated interactive terminal with **10,000 lines of scrollback**, selection and copy, ANSI colors, IME input and remote PTY resizing. |
 | 📈 **Waveforms** | Up to 16 named curves, zoom, pan, cursor inspection and four fixed-width live readouts with selectable channels. |
+| 🧊 **3D models** | Import STL, OBJ and PLY; drive position and orientation from shared numerical channels, with Euler/quaternion bindings, axis remapping, gain/offset and initial alignment. |
 | 🧩 **JSON / XML** | Separate pages sharing a connection, incremental extraction, structured inspection and a JSON assistant. |
 | 🕘 **Version history** | Review the latest three stable releases in Settings, download verified installers, and see the running version in the status bar. |
 | 🎛️ **Serial controls** | Sliders, numeric inputs, switches, buttons and choices; groups, draggable/resizable cards that follow window width, presets and per-control automatic sending. |
@@ -76,7 +77,7 @@ The installer includes the runtime libraries and MCP bridge. SSH uses the Window
 1. Install or extract the application, then launch **Serial Workbench**. It does not connect to hardware automatically.
 2. Choose **串口 / TCP 客户端 / TCP 服务端 / UDP / SSH**, fill in the connection parameters and connect.
 3. For serial/network sessions, use the receive log and send panel, or switch to an interactive terminal. **SSH opens directly in the terminal**, with no log-mode switch or serial send panel.
-4. Click **+ → 新建控件页面** to add a waveform, JSON, XML or serial-control page. Choose its data source; several pages can share one connection.
+4. Click **+ → 新建控件页面** to add a waveform, JSON, XML, serial-control or **3D 模型** (3D model) page. Choose its data source; several pages can share one connection.
 5. Open **设置 → AI / MCP** to connect your agent to the running application.
 
 The receive log, serial monitor window and JSON/XML record list share the same search controls: **Aa** (case sensitive), **ab** (whole word), **.*** (regular expression) and **&&** (logical matching). All switches start off. With logical matching enabled, `temperature && alarm || fault` means both `temperature` and `alarm`, or `fault` (`&&` takes precedence). Use double quotes around terms containing operators, such as `"A||B"`; quoted regex terms also work when both modes are enabled. Invalid expressions show a warning border and an explanation on hover, keeping records visible. Search settings are saved with the page/window; filtering changes only the display, including while paused, and leaves shared MCP history intact.
@@ -249,6 +250,7 @@ Detailed guides are currently in Chinese.
 | --- | --- |
 | [Agent integration](docs/agent-integration.md) | Client formats, configuration paths and connection checks |
 | [Waveform protocol](docs/wave-protocol.md) | Framing, channel names, numeric types and limits |
+| [3D models and orientation](docs/model3d.md) | Mesh import, serial field bindings, Euler angles, quaternions and coordinate conversion |
 | [Version history](docs/version-history.md) | Recent stable release notes and installers |
 | [Serial controls](docs/serial-controls.md) | Control groups, presets, templates and automatic sending |
 | [Frame scripts](docs/frame-scripts.md) | C-style parser API, validation and examples |
@@ -261,7 +263,7 @@ Detailed guides are currently in Chinese.
 
 ## Build from source
 
-Windows builds require **Qt 6.9+** (Widgets, Network, SerialPort, Core5Compat, Svg and Test), **CMake 3.21+**, Ninja and a matching C++17 compiler. The release is built with Qt 6.11.1 and MinGW 13.1.
+Windows builds require **Qt 6.9+** (Widgets, Network, SerialPort, Core5Compat, Svg, OpenGLWidgets, Concurrent and Test), **CMake 3.21+**, Ninja and a matching C++17 compiler. The release is built with Qt 6.11.1 and MinGW 13.1. The 3D viewport requires an OpenGL 2.1 or newer graphics environment.
 
 ```powershell
 git clone https://github.com/lilinng-163/serial-workbench.git

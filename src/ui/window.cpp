@@ -4,6 +4,7 @@
 #include "window_chrome.h"
 #include "instrument_config.h"
 #include "serial_control_panel.h"
+#include "model3d_panel.h"
 #include "json_tools.h"
 #include "ssh_profiles.h"
 #include "parameter_grip.h"
@@ -33,6 +34,7 @@ static QString instrumentIconName(const QString &kind)
         return "wave";
     }
     if (kind == "control") { return "control"; }
+    if (kind == "model3d") { return "cube"; }
     if (kind == "json" || kind == "xml")
     {
         return kind;
@@ -305,6 +307,19 @@ Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), 
     sourceRow->addWidget(source, 1);
     sourceRow->addStretch();
     body->addLayout(sourceRow);
+    if (kind == "model3d")
+    {
+        model = new ModelPanel(this);
+        body->addWidget(model, 1);
+        info = model->status;
+        frameTimer.setTimerType(Qt::PreciseTimer);
+        frameTimer.setInterval(16);
+        connect(&frameTimer, &QTimer::timeout, this, [this]
+        {
+            if (isVisible() && !window()->isMinimized()) { tick(waveChannel); }
+        });
+        return;
+    }
     if (kind == "control")
     {
         controls = new SerialControlPanel(this);
@@ -497,7 +512,7 @@ Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), 
 void Instrument::showEvent(QShowEvent *event)
 {
     QWidget::showEvent(event);
-    if (plot && !freeze->isChecked()) { frameTimer.start(); }
+    if (model || (plot && !freeze->isChecked())) { frameTimer.start(); }
 }
 
 void Instrument::hideEvent(QHideEvent *event)
@@ -508,6 +523,7 @@ void Instrument::hideEvent(QHideEvent *event)
 
 QJsonObject Instrument::settings() const
 {
+    if (model) { return {{"kind", kind}, {"model3d", model->settings()}}; }
     if (controls) { return {{"kind", kind}, {"serial_controls", controls->settings()}}; }
     QJsonObject result {{"kind", kind}, {"frozen", freeze->isChecked()}};
     if (filter) { result["search_filter"] = filter->settings(); }
@@ -529,6 +545,7 @@ QJsonObject Instrument::settings() const
 
 void Instrument::tick(Channel *channel)
 {
+    if (model) { waveChannel = channel; model->tick(channel); return; }
     if (controls) { controls->setChannel(channel); return; }
     waveChannel = channel;
     if (!channel || freeze->isChecked())
@@ -623,6 +640,10 @@ Pane::Pane(Window *owner, const QString &instrumentKind) : QWidget(owner), windo
     {
         instrument = new Instrument(instrumentKind, this);
         instrument->helpWindow = window->rootWindow();
+        if (instrument->model)
+        {
+            connect(instrument->model, &ModelPanel::changed, this, [this] { window->saveSettings(); });
+        }
         if (instrument->controls)
         {
             connect(instrument->controls, &SerialControlPanel::changed, this, [this] { window->saveSettings(); });
@@ -975,6 +996,11 @@ void Pane::setChannel(Channel *value)
         if (instrument->table) { instrument->table->clear(); }
         if (instrument->detail) { instrument->detail->clear(); }
         if (instrument->plot) { instrument->plot->setSamples({}); }
+        if (instrument->model)
+        {
+            instrument->waveChannel = value;
+            instrument->model->resetSource(value);
+        }
         instrument->info->setText(value ? "等待设备数据" : "等待数据来源连接");
     }
     channel = value;
@@ -1119,6 +1145,7 @@ void Pane::applyAppearance()
         .arg(window->dataFont.italic() ? "italic" : "normal");
     if (instrument)
     {
+        if (instrument->model) { instrument->model->setTheme(window->theme); }
         if (instrument->controls)
         {
             instrument->controls->setTheme(window->theme);
@@ -1528,6 +1555,7 @@ void Pane::restore(const QJsonObject &settings)
     {
         if (instrument->freeze) { instrument->freeze->setChecked(settings["frozen"].toBool()); }
         if (instrument->controls) { instrument->controls->restore(settings["serial_controls"].toObject()); }
+        if (instrument->model) { instrument->model->restore(settings["model3d"].toObject()); }
         if (instrument->filter) { instrument->filter->restore(settings["search_filter"].toObject()); }
         if (instrument->points)
         {
@@ -2498,7 +2526,7 @@ Pane *Window::newConnection()
 Pane *Window::newInstrument(const QString &kind, Channel *source, bool activatePage, const QString &pendingKey)
 {
     const QString canonical = kind == "values" ? "waveform" : kind == "structured" ? "json" : kind;
-    if (!QStringList {"waveform", "json", "xml", "control"}.contains(canonical))
+    if (!QStringList {"waveform", "json", "xml", "control", "model3d"}.contains(canonical))
     {
         return nullptr;
     }
@@ -2518,7 +2546,8 @@ Pane *Window::newInstrument(const QString &kind, Channel *source, bool activateP
     }
     auto previous = active;
     auto page = new Pane(this, kind);
-    const QString baseTitle = canonical == "waveform" ? "数值波形" : canonical == "control" ? "串口控制" : canonical.toUpper();
+    const QString baseTitle = canonical == "waveform" ? "数值波形" : canonical == "control" ? "串口控制"
+        : canonical == "model3d" ? "3D 模型" : canonical.toUpper();
     QStringList titles;
     for (auto host : rootWindow()->hosts)
     {
@@ -2553,8 +2582,8 @@ QMenu *Window::newPageMenu()
     menu->addSeparator();
     auto widgets = menu->addMenu(icon("widgets", theme.text), "新建控件页面");
     widgets->setObjectName("newWidgetPage");
-    const QStringList kinds {"waveform", "json", "xml", "control"};
-    const QStringList titles {"数值波形", "JSON", "XML", "串口控制"};
+    const QStringList kinds {"waveform", "json", "xml", "control", "model3d"};
+    const QStringList titles {"数值波形", "JSON", "XML", "串口控制", "3D 模型"};
     for (int i = 0; i < kinds.size(); ++i)
     {
         const auto kind = kinds[i];

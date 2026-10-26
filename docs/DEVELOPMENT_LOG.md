@@ -2,6 +2,17 @@
 
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
 
+## 2026-10-26 — 3D 模型与通道姿态，本地测试版
+
+- 用户要求：导入 STL 等常见模型，通过串口通道数值设置位置和姿态，支持欧拉角、四元数与自定义 XYZ。开始时工作区干净，`origin/main..origin/deepseek-dev` 无待集成提交；从 `643e9eb` 建立 `codex/model3d-telemetry`。正式版本仍为 v0.15.36，本项未创建 Release、未发布网站。
+- 新增“+ → 新建控件页面 → 3D 模型”：后台导入 STL（文本/二进制/多 solid）、OBJ、PLY（文本/大小端），三角化多边形，拒绝损坏、越界和超限文件，失败保留当前模型。限制 64 MiB / 50 万三角面，当前不导入纹理、材质或骨骼动画。
+- 模型页直接读取选定连接、对端的最新 `@wave` 或脚本结果，不新开串口、不消费日志、不自动发送或启用解析器。独立绑定位置 XYZ、欧拉角 XYZ 或四元数 WXYZ，支持倍率/偏移、六种旋转顺序、内禀/外禀、角度/弧度、四元数归一化、轴交换/反向；初始模型对齐、比例和旋转原点单独设置。缺字段和无效帧保留上一有效姿态，重连等待新帧，切换来源立即更新动画定时器的数据指针。
+- Qt OpenGL 视图支持鼠标旋转/平移/缩放、适配与预设视角、主题配色、标签分离/回收；模型路径、绑定、坐标系、暂停和视角随页面保存。增加 OpenGLWidgets / Concurrent 构建依赖与 Docker OpenGL 开发包；中英 README、模型指南、脚本指南和工程结构同步。
+- 验证：Release 构建通过；完整 CTest **19/19**（`build/model3d-full-ctest.txt`）。随后修正来源切换与 16ms 动画定时器的短暂竞争，新增专项回归；最终 Windows 模型组 **10/10**（`build/model3d-delivery-windows-tests.txt`），离屏组 9 通过、1 渲染用例按平台跳过。覆盖 STL/OBJ/PLY、损坏文件、欧拉角/四元数、左右手轴转换、共享历史、暂停/复位、重连、来源切换、文件失败回退、页面保存恢复。
+- 真实窗口：已查看浅/深主题截图，修复网格深度写入造成的模型切边和透明混合；姿态 A→B→A 的帧缓冲逐像素一致，鼠标旋转、分离及回收通过。Qt 6.11.1 首次建窗仍记录短暂的 wrapper texture / No fbo 诊断，随后有效上下文、帧缓冲与屏幕渲染验证通过；日志保留。截图在 `build/model3d-verification/delivery-captures/`。未声称其他显卡、Linux Docker 实机渲染或真实 MCU/IMU 联调。
+- 测试包：`dist/SerialWorkbenchModel3DPreview/SerialWorkbench.exe`，含 OpenGL 运行库、许可证和使用说明；EXE 与构建产物 SHA-256 一致：`060f2c7a2b34dd87bf4dca7a19269e8ae2c0e043ced3ca1a751058c970417c0f`。精简 PATH 后 `smoke_native.py` 与 `smoke_cli.py` 全部通过，使用隔离配置和 loopback 验证 HTTP/STDIO、17 工具、权限、独立读取、搜索/脚本、后台复用及 GUI 交接；日志为 `build/model3d-package-smoke.txt` / `build/model3d-cli-smoke.txt`。
+- 便携 ZIP：`dist/local/model3d-preview/SerialWorkbench-model3d-preview-windows-x64.zip`，21,160,769 字节，SHA-256 `b536ad8a8944d270ac4b827da9790e545a8ed250b3060130b7614201ac9b8fd0`。ZIP CRC 与 273 个文件逐项摘要匹配，未包含个人配置；核验记录 `build/model3d-verification/artifact-verification.json`。
+
 ## 2026-10-25 — v0.15.36 原生 CLI 与后台 MCP 已发布
 
 - 用户要求：软件未打开时 Agent 可自行接入 MCP，验证后更新 skill、打包推送并通过 MCP 同步网站。独立分支 `codex/headless-cli` 已合并最新网站主线 `408bac9` 与先前 SSH 拖拽修复 `d9a8376`，保留两边历史；唯一冲突为交接日志，双方记录均保留。

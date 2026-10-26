@@ -226,3 +226,14 @@ add_test(NAME theme_color_tests COMMAND "${CMAKE_COMMAND}" -E env
     -o "${PROJECT_BINARY_DIR}/theme-color-tests.txt,txt"
 )
 set_tests_properties(theme_color_tests PROPERTIES TIMEOUT 30)
+
+qt_add_executable(model3d_tests model3d_tests.cpp)
+workbench_configure_target(model3d_tests)
+target_link_libraries(model3d_tests PRIVATE workbench_ui Qt6::Test)
+add_test(NAME model3d_tests COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=${workbench_test_path}"
+    $<TARGET_FILE:model3d_tests>
+    -platform offscreen
+    -o "${PROJECT_BINARY_DIR}/model3d-tests.txt,txt"
+)
+set_tests_properties(model3d_tests PROPERTIES TIMEOUT 45)

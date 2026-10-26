@@ -34,13 +34,14 @@ serial/
 | `workbench_options` | C++17、编译器警告规则 |
 | `workbench_core` | 静态库，Qt Network / SerialPort / Core5Compat |
 | `workbench_mcp` | 静态库，依赖 core |
-| `workbench_ui` | 对象库，依赖 mcp / Widgets / Svg；界面和资源编译一次，供应用和测试使用 |
+| `workbench_ui` | 对象库，依赖 mcp / Widgets / Svg / OpenGLWidgets / Concurrent；界面和资源编译一次，供应用和测试使用 |
 | `SerialWorkbench` | 桌面程序 |
 | `SerialWorkbenchMCP` | 独立 STDIO 桥，依赖 Qt Network |
 | `native_tests` | BUILD_TESTING 开启时构建，依赖 ui / Qt Test |
 | `wave_benchmark` | 非 CTest 的波形性能诊断程序，测量 16 通道 × 5000 点的同步与绘制耗时 |
 | `serial_transfer_tests` | 文件传输协议、原始字节、CRC 校验、重传、取消、隔离与中键关页测试 |
 | `serial_control_tests` | 控件模板、字节序、手动/自动发送、连接隔离与配置恢复测试 |
+| `model3d_tests` | STL/OBJ/PLY、欧拉角/四元数、轴映射、共享帧和配置恢复；真实 Windows 平台另检查 OpenGL 渲染与窗口分离 |
 | `FileTransferDemo` | 独立虚拟串口 Demo，仅 BUILD_TESTING 构建，无安装规则 |
 | `frame_script_tests` | 脚本语法、分帧、执行限制、后台处理与编辑器联动测试 |
 

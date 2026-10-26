@@ -744,6 +744,14 @@ void drawIcon(QPainter &p, const QString &name, QRectF rect, const QColor &color
         p.drawRoundedRect(QRectF(15, 9, 3, 6), 1, 1);
         p.drawRoundedRect(QRectF(5, 16, 3, 6), 1, 1);
     }
+    else if (name == "cube")
+    {
+        QPolygonF outline {{12, 2}, {21, 7}, {21, 17}, {12, 22}, {3, 17}, {3, 7}, {12, 2}};
+        p.drawPolyline(outline);
+        p.drawLine(QPointF(3, 7), QPointF(12, 12));
+        p.drawLine(QPointF(21, 7), QPointF(12, 12));
+        p.drawLine(QPointF(12, 12), QPointF(12, 22));
+    }
     else if (name == "widgets")
     {
         p.drawRoundedRect(QRectF(3, 3, 7, 7), 1, 1);

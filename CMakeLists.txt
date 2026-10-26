@@ -16,7 +16,7 @@ include(CTest)
 include(GNUInstallDirs)
 include(cmake/ProjectOptions.cmake)
 
-find_package(Qt6 6.9 REQUIRED COMPONENTS Widgets Network SerialPort Core5Compat Svg)
+find_package(Qt6 6.9 REQUIRED COMPONENTS Widgets Network SerialPort Core5Compat Svg OpenGLWidgets Concurrent)
 if(BUILD_TESTING)
     find_package(Qt6 6.9 REQUIRED COMPONENTS Test)
 endif()

@@ -11,6 +11,7 @@ namespace sw
 class Window;
 class UpdateDialog;
 class SerialControlPanel;
+class ModelPanel;
 
 class Instrument : public QWidget
 {
@@ -19,6 +20,7 @@ public:
     Instrument(const QString &kind, QWidget *parent = nullptr);
     QString kind;
     SerialControlPanel *controls = nullptr;
+    ModelPanel *model = nullptr;
     QPointer<Window> helpWindow;
     IconButton *freeze = nullptr;
     QSpinBox *points = nullptr;
