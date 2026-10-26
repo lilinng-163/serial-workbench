@@ -18,6 +18,8 @@ public:
     void setMesh(const ModelMesh &value);
     void setPose(const ModelPose &value);
     void setTheme(const Theme &value);
+    void setModelColor(const QColor &value);
+    QColor modelColor() const;
     void setModelTransform(double scale, bool centered, const QVector3D &alignment);
     void fit();
     void setView(const QString &direction);
@@ -42,6 +44,7 @@ private:
     void cleanup();
     void lines(const QList<QVector3D> &points, const QColor &color, const QMatrix4x4 &matrix);
     Theme theme;
+    QColor customColor;
     ModelMesh mesh;
     ModelPose currentPose;
     QOpenGLBuffer meshBuffer;

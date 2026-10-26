@@ -2,18 +2,40 @@
 #include "model3d_panel.h"
 #include <QtConcurrentRun>
 #include <QMimeData>
+#include <QColorDialog>
 
 namespace sw
 {
 namespace
 {
+class CompactDoubleSpinBox : public QDoubleSpinBox
+{
+public:
+    using QDoubleSpinBox::QDoubleSpinBox;
+
+protected:
+    QString textFromValue(double value) const override
+    {
+        auto numberLocale = locale();
+        numberLocale.setNumberOptions(QLocale::OmitGroupSeparator);
+        auto text = numberLocale.toString(value, 'f', decimals());
+        if (text.contains(numberLocale.decimalPoint()))
+        {
+            while (text.endsWith(numberLocale.zeroDigit())) { text.chop(numberLocale.zeroDigit().size()); }
+            if (text.endsWith(numberLocale.decimalPoint())) { text.chop(numberLocale.decimalPoint().size()); }
+        }
+        return text;
+    }
+};
+
 QDoubleSpinBox *numeric(QWidget *parent, double low, double high, int decimals = 4)
 {
-    auto box = new QDoubleSpinBox(parent);
+    auto box = new CompactDoubleSpinBox(parent);
     box->setRange(low, high);
     box->setDecimals(decimals);
     box->setKeyboardTracking(false);
-    box->setMinimumWidth(75);
+    box->setMinimumWidth(box->fontMetrics().horizontalAdvance("-1000000000.000001") + 60);
+    box->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     return box;
 }
 
@@ -33,6 +55,16 @@ QWidget *formPage(QVBoxLayout *&layout)
     layout->setSpacing(10);
     return page;
 }
+
+std::pair<ModelMapping, ModelMapping> separateMapping(const ModelMapping &mapping)
+{
+    auto position = mapping;
+    position.mode = "euler";
+    position.angles = {};
+    auto rotation = mapping;
+    rotation.position = {};
+    return {position, rotation};
+}
 }
 
 ModelPanel::BindingRow ModelPanel::bindingRow(QGridLayout *layout, int row,
@@ -48,17 +80,18 @@ ModelPanel::BindingRow ModelPanel::bindingRow(QGridLayout *layout, int row,
     result.field->setObjectName(id + "Field");
     result.gain = numeric(this, -1e9, 1e9, 6);
     result.gain->setValue(1);
-    result.gain->setPrefix("× ");
     result.gain->setObjectName(id + "Gain");
     result.gain->setToolTip("通道值 × 倍率 + 偏移");
     result.offset = numeric(this, -1e9, 1e9, 6);
-    result.offset->setPrefix("+ ");
     result.offset->setObjectName(id + "Offset");
     result.offset->setToolTip("通道值 × 倍率 + 偏移；留空的通道可用偏移设置固定值");
-    layout->addWidget(new QLabel(title), row * 2, 0, 1, 2);
-    layout->addWidget(result.field, row * 2, 2, 1, 4);
-    layout->addWidget(result.gain, row * 2 + 1, 0, 1, 3);
-    layout->addWidget(result.offset, row * 2 + 1, 3, 1, 3);
+    layout->setColumnStretch(1, 1);
+    layout->addWidget(new QLabel(title), row * 3, 0);
+    layout->addWidget(result.field, row * 3, 1);
+    layout->addWidget(new QLabel("倍率"), row * 3 + 1, 0);
+    layout->addWidget(result.gain, row * 3 + 1, 1);
+    layout->addWidget(new QLabel("偏移"), row * 3 + 2, 0);
+    layout->addWidget(result.offset, row * 3 + 2, 1);
     connect(result.field, &QComboBox::currentTextChanged, this, &ModelPanel::scheduleSave);
     connect(result.gain, &QDoubleSpinBox::valueChanged, this, &ModelPanel::scheduleSave);
     connect(result.offset, &QDoubleSpinBox::valueChanged, this, &ModelPanel::scheduleSave);
@@ -96,8 +129,7 @@ ModelPanel::ModelPanel(QWidget *parent) : QWidget(parent)
     split->addWidget(view);
     QVBoxLayout *sideBody;
     auto side = formPage(sideBody);
-    side->setMinimumWidth(300);
-    side->setMaximumWidth(430);
+    side->setMinimumWidth(380);
     auto feedRow = new QHBoxLayout;
     feed = new Combo;
     feed->setObjectName("model3dFeed");
@@ -114,11 +146,32 @@ ModelPanel::ModelPanel(QWidget *parent) : QWidget(parent)
     peer->addItem("本连接", "default");
     peer->setToolTip("网络有多个对端时选择同一个来源，姿态分量不跨对端混用");
     sideBody->addWidget(peer);
+    stream = new Combo;
+    stream->setObjectName("model3dStream");
+    stream->setEditable(true);
+    stream->setInsertPolicy(QComboBox::NoInsert);
+    stream->lineEdit()->setMaxLength(32);
+    stream->lineEdit()->setPlaceholderText("未命名 @wave · 或输入流名，如 imu");
+    stream->addItem("");
+    stream->setToolTip("只接收所选连接、对端和流名的数据。留空对应 @wave；imu 对应 @wave[imu]");
+    auto streamForm = new QFormLayout;
+    streamForm->addRow("数据流", stream);
+    sideBody->addLayout(streamForm);
     auto tabs = new QTabWidget;
     tabs->setObjectName("model3dMappingTabs");
     QVBoxLayout *positionBody;
     auto positionPage = formPage(positionBody);
-    positionBody->addWidget(note("位置 = 通道值 × 倍率 + 偏移。未绑定时默认为 0。"));
+    positionBody->addWidget(note("手动平移 · 世界坐标\n始终生效，并叠加到通道位置上；无需等待姿态数据。"));
+    auto manualForm = new QFormLayout;
+    for (int i = 0; i < 3; ++i)
+    {
+        manualPosition[i] = numeric(this, -1e9, 1e9, 6);
+        manualPosition[i]->setObjectName(QString("modelManualPosition%1").arg(i));
+        manualForm->addRow(QString("XYZ")[i], manualPosition[i]);
+        connect(manualPosition[i], &QDoubleSpinBox::valueChanged, this, &ModelPanel::scheduleSave);
+    }
+    positionBody->addLayout(manualForm);
+    positionBody->addWidget(note("通道位置 = 数值 × 倍率 + 偏移。字段留空时使用偏移常量，缺失字段时保留上次位置。"));
     auto positionGrid = new QGridLayout;
     for (int i = 0; i < 3; ++i)
     {
@@ -137,18 +190,17 @@ ModelPanel::ModelPanel(QWidget *parent) : QWidget(parent)
     rotationPages = new QStackedWidget;
     QVBoxLayout *eulerBody;
     auto eulerPage = formPage(eulerBody);
-    auto orderRow = new QHBoxLayout;
+    auto orderRow = new QFormLayout;
     order = new Combo;
     order->setObjectName("model3dEulerOrder");
-    order->setMaximumWidth(90);
     for (const auto &value : QStringList {"ZYX", "XYZ", "XZY", "YXZ", "YZX", "ZXY"}) { order->addItem(value); }
     convention = new Combo;
     convention->addItem("内禀 / 随动轴", true);
     convention->addItem("外禀 / 固定轴", false);
     convention->setObjectName("model3dConvention");
     convention->setMinimumWidth(160);
-    orderRow->addWidget(order);
-    orderRow->addWidget(convention, 1);
+    orderRow->addRow("顺序", order);
+    orderRow->addRow("约定", convention);
     eulerBody->addLayout(orderRow);
     units = new Combo;
     units->addItem("角度 °", false);
@@ -162,7 +214,7 @@ ModelPanel::ModelPanel(QWidget *parent) : QWidget(parent)
         angles[i] = bindingRow(angleGrid, i, QString("绕 %1").arg(QString("XYZ")[i]), defaults[i], QString("modelAngle%1").arg(i));
     }
     eulerBody->addLayout(angleGrid);
-    eulerBody->addWidget(note("默认 ZYX 内禀：Rz(yaw) · Ry(pitch) · Rx(roll)。正向遵循右手定则。"));
+    eulerBody->addWidget(note("正向遵循右手定则。按上方顺序组合旋转；例如 ZYX 内禀为 Rz · Ry · Rx。"));
     eulerBody->addStretch();
     rotationPages->addWidget(eulerPage);
     QVBoxLayout *quaternionBody;
@@ -196,7 +248,27 @@ ModelPanel::ModelPanel(QWidget *parent) : QWidget(parent)
         connect(axes[i], &QComboBox::currentIndexChanged, this, &ModelPanel::scheduleSave);
     }
     axesBody->addLayout(axisForm);
-    axesBody->addWidget(note("模型初始对齐（°）只影响模型自身，不改变遥测坐标。"));
+    axesBody->addStretch();
+    tabs->addTab(axesPage, "坐标轴");
+    QVBoxLayout *modelBody;
+    auto modelPage = formPage(modelBody);
+    followTheme = new QCheckBox("模型颜色跟随主题");
+    followTheme->setObjectName("model3dFollowTheme");
+    followTheme->setChecked(true);
+    modelBody->addWidget(followTheme);
+    auto colorRow = new QHBoxLayout;
+    colorHex = new QLineEdit(customColor.name());
+    colorHex->setObjectName("model3dColor");
+    colorHex->setPlaceholderText("#RRGGBB");
+    colorHex->setMaxLength(7);
+    colorHex->setEnabled(false);
+    auto chooseColor = new QPushButton("选色");
+    chooseColor->setObjectName("model3dChooseColor");
+    colorRow->addWidget(colorHex, 1);
+    colorRow->addWidget(chooseColor);
+    modelBody->addLayout(colorRow);
+    modelBody->addWidget(note("自定义颜色支持 #RGB / #RRGGBB，显示时保留立体光照。"));
+    modelBody->addWidget(note("模型初始对齐（°）只影响模型自身，不改变遥测坐标。"));
     auto modelForm = new QFormLayout;
     for (int i = 0; i < 3; ++i)
     {
@@ -214,18 +286,17 @@ ModelPanel::ModelPanel(QWidget *parent) : QWidget(parent)
     centered->setChecked(true);
     centered->setObjectName("model3dCentered");
     modelForm->addRow(centered);
-    axesBody->addLayout(modelForm);
-    axesBody->addStretch();
-    tabs->addTab(axesPage, "坐标轴");
+    modelBody->addLayout(modelForm);
+    modelBody->addStretch();
+    tabs->addTab(modelPage, "模型");
     sideBody->addWidget(tabs, 1);
-    sideBody->addWidget(note("示例：@wave roll=10,pitch=20,yaw=30\n以换行结束。也可绑定脚本 emit 输出的数值字段。"));
+    sideBody->addWidget(note("分流示例：@wave[imu] roll=10,pitch=20,yaw=30\n选择 imu，只驱动此模型。旧 @wave 对应空流名；报文以换行结束。"));
     auto sideScroll = scrollPanel(side);
-    sideScroll->setMinimumWidth(320);
-    sideScroll->setMaximumWidth(460);
+    sideScroll->setMinimumWidth(400);
     split->addWidget(sideScroll);
     split->setStretchFactor(0, 1);
     split->setStretchFactor(1, 0);
-    split->setSizes({760, 350});
+    split->setSizes({720, 420});
     body->addWidget(split, 1);
     status = new QLabel("等待通道数据 · 可先导入模型和设置绑定");
     status->setWordWrap(true);
@@ -249,8 +320,49 @@ ModelPanel::ModelPanel(QWidget *parent) : QWidget(parent)
     }
     connect(scale, &QDoubleSpinBox::valueChanged, this, &ModelPanel::scheduleSave);
     connect(centered, &QCheckBox::toggled, this, &ModelPanel::scheduleSave);
+    connect(followTheme, &QCheckBox::toggled, this, [this]
+    {
+        colorHex->setEnabled(!followTheme->isChecked());
+        scheduleSave();
+    });
+    connect(colorHex, &QLineEdit::editingFinished, this, [this]
+    {
+        const auto text = colorHex->text().trimmed();
+        static const QRegularExpression pattern("^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$");
+        if (!pattern.match(text).hasMatch())
+        {
+            colorHex->setText(customColor.name());
+            status->setText("颜色需为 #RGB 或 #RRGGBB，已保留原色");
+            return;
+        }
+        customColor = QColor(text);
+        colorHex->setText(customColor.name());
+        scheduleSave();
+    });
+    connect(chooseColor, &QPushButton::clicked, this, [this]
+    {
+        const auto selected = QColorDialog::getColor(view->modelColor(), this, "模型颜色");
+        if (!selected.isValid()) { return; }
+        customColor = selected;
+        colorHex->setText(selected.name());
+        followTheme->setChecked(false);
+        scheduleSave();
+    });
     connect(pause, &QCheckBox::toggled, this, [this] { scheduleSave(); if (!pause->isChecked()) { lastSample = -1; tick(channel); } });
-    connect(feed, &QComboBox::currentIndexChanged, this, [this] { resetSource(channel); scheduleSave(); });
+    connect(feed, &QComboBox::currentIndexChanged, this, [this]
+    {
+        stream->setEnabled(feed->currentData() == "wave");
+        if (restoring) { return; }
+        resetSource(channel);
+        scheduleSave();
+    });
+    connect(stream, &QComboBox::currentTextChanged, this, [this]
+    {
+        if (restoring) { return; }
+        streamKey = stream->currentText().trimmed();
+        resetSource(channel);
+        scheduleSave();
+    });
     connect(peer, &QComboBox::activated, this, [this]
     {
         peerKey = peer->currentData().toString();
@@ -316,26 +428,41 @@ void ModelPanel::applyModelTransform()
 {
     view->setModelTransform(scale->value(), centered->isChecked(),
         {float(alignment[0]->value()), float(alignment[1]->value()), float(alignment[2]->value())});
+    view->setModelColor(followTheme->isChecked() ? QColor() : customColor);
 }
 
-void ModelPanel::applyMapping()
+void ModelPanel::applyMapping(const QStringList &incomingErrors)
 {
-    const auto pose = evaluateModelPose(mapping(), latestValues);
-    if (!pose.valid())
-    {
-        status->setText(pose.error + " · 保留上一有效姿态");
-        return;
-    }
+    const auto [positionMapping, rotationMapping] = separateMapping(mapping());
+    const auto positionPose = evaluateModelPose(positionMapping, positionValues);
+    const auto rotationPose = evaluateModelPose(rotationMapping, rotationValues);
+    if (positionPose.valid()) { telemetryPosition = positionPose.position; }
+    if (rotationPose.valid()) { telemetryRotation = rotationPose.matrix; }
+
+    ModelPose pose;
+    pose.position = telemetryPosition + QVector3D(float(manualPosition[0]->value()),
+        float(manualPosition[1]->value()), float(manualPosition[2]->value()));
+    pose.matrix.translate(pose.position);
+    pose.matrix *= telemetryRotation;
     view->setPose(pose);
-    status->setText(QString("%1 · X %2   Y %3   Z %4 · %5")
+
+    QStringList errors = incomingErrors;
+    if (!positionPose.valid()) { errors.append("位置：" + positionPose.error); }
+    if (!rotationPose.valid()) { errors.append("姿态：" + rotationPose.error); }
+    errors.removeDuplicates();
+    const auto source = (peerKey == "default" ? "本连接" : peerKey)
+        + (feed->currentData() == "wave" ? (streamKey.isEmpty() ? " / 未命名 @wave" : " / " + streamKey) : " / 脚本");
+    auto message = QString("%1 · X %2   Y %3   Z %4 · %5")
         .arg(pause->isChecked() ? "显示已暂停" : "姿态已更新")
         .arg(pose.position.x(), 0, 'g', 6).arg(pose.position.y(), 0, 'g', 6).arg(pose.position.z(), 0, 'g', 6)
-        .arg(peerKey == "default" ? "本连接" : peerKey));
+        .arg(source);
+    if (!errors.isEmpty()) { message += "\n" + errors.join("；") + " · 保留对应的上一有效值，手动平移仍生效"; }
+    status->setText(message);
 }
 
-void ModelPanel::refreshFieldNames()
+void ModelPanel::refreshFieldNames(const QJsonObject &values)
 {
-    const auto current = modelNumericFields(latestValues);
+    const auto current = modelNumericFields(values);
     bool added = false;
     for (const auto &name : current)
     {
@@ -367,9 +494,20 @@ void ModelPanel::resetSource(Channel *value)
     lastSample = -1;
     floorSample = -1;
     latestValues = {};
+    positionValues = {};
+    rotationValues = {};
+    telemetryPosition = {};
+    telemetryRotation.setToIdentity();
     fields.clear();
-    view->setPose({});
+    applyMapping();
     status->setText("等待所选来源的完整数据帧");
+    {
+        const QSignalBlocker blocker(stream);
+        stream->clear();
+        stream->addItem("");
+        if (!streamKey.isEmpty()) { stream->addItem(streamKey); }
+        stream->setEditText(streamKey);
+    }
     for (auto *rows : {&position, &angles})
     {
         for (auto &row : *rows)
@@ -418,18 +556,87 @@ void ModelPanel::tick(Channel *value)
         for (const auto &key : keys) { peer->addItem(key == "default" ? "本连接" : key, key); }
         peer->setCurrentIndex(peer->findData(peerKey));
     }
-    if (pause->isChecked() || !channel->sources.contains(peerKey)) { return; }
+    if (!channel->sources.contains(peerKey)) { return; }
     const auto source = channel->sources.value(peerKey);
     const bool script = feed->currentData() == "script";
+    if (!script)
+    {
+        auto names = source->waveStreams.values();
+        if (!names.contains("")) { names.append(""); }
+        if (!names.contains(streamKey)) { names.append(streamKey); }
+        names.sort();
+        QStringList currentNames;
+        for (int i = 0; i < stream->count(); ++i) { currentNames.append(stream->itemText(i)); }
+        if (names != currentNames)
+        {
+            const QSignalBlocker streamBlocker(stream);
+            stream->clear();
+            stream->addItems(names);
+            stream->setEditText(streamKey);
+        }
+    }
+    if (pause->isChecked()) { return; }
     const auto &records = script ? source->scriptRecords : source->samples;
     if (records.empty()) { return; }
-    const auto &last = records.back();
-    const qint64 sequence = last[script ? "seq" : "index"].toInteger();
+    const auto indexKey = script ? "seq" : "index";
+    const auto valuesKey = script ? "value" : "values";
+    const qint64 sequence = records.back()[indexKey].toInteger();
     if (sequence == lastSample || sequence <= floorSample) { return; }
+
+    // Select the newest complete position and rotation separately, but never
+    // assemble rotation components across frames or across named streams.
+    const auto [positionMapping, rotationMapping] = separateMapping(mapping());
+    const auto after = qMax(lastSample, floorSample);
+    bool found = false;
+    bool foundPosition = false;
+    bool foundRotation = false;
+    QString positionError;
+    QString rotationError;
+    for (auto record = records.rbegin(); record != records.rend(); ++record)
+    {
+        if ((*record)[indexKey].toInteger() <= after) { break; }
+        if (!script && (*record)["stream"].toString() != streamKey) { continue; }
+        const auto values = (*record)[valuesKey].toObject();
+        if (!found)
+        {
+            latestValues = values;
+            found = true;
+        }
+        if (!foundPosition)
+        {
+            const auto pose = evaluateModelPose(positionMapping, values);
+            if (pose.valid())
+            {
+                positionValues = values;
+                foundPosition = true;
+                positionError.clear();
+            }
+            else if (positionError.isEmpty()) { positionError = pose.error; }
+        }
+        if (!foundRotation)
+        {
+            const auto pose = evaluateModelPose(rotationMapping, values);
+            if (pose.valid())
+            {
+                rotationValues = values;
+                foundRotation = true;
+                rotationError.clear();
+            }
+            else if (rotationError.isEmpty()) { rotationError = pose.error; }
+        }
+        if (foundPosition && foundRotation) { break; }
+    }
     lastSample = sequence;
-    latestValues = last[script ? "value" : "values"].toObject();
-    refreshFieldNames();
-    applyMapping();
+    if (found)
+    {
+        refreshFieldNames(latestValues);
+        if (foundPosition) { refreshFieldNames(positionValues); }
+        if (foundRotation) { refreshFieldNames(rotationValues); }
+        QStringList errors;
+        if (!positionError.isEmpty()) { errors.append("位置：" + positionError); }
+        if (!rotationError.isEmpty()) { errors.append("姿态：" + rotationError); }
+        applyMapping(errors);
+    }
 }
 
 void ModelPanel::clearDisplay()
@@ -441,7 +648,11 @@ void ModelPanel::clearDisplay()
         floorSample = feed->currentData() == "script" ? source->scriptCount : source->count;
     }
     latestValues = {};
-    view->setPose({});
+    positionValues = {};
+    rotationValues = {};
+    telemetryPosition = {};
+    telemetryRotation.setToIdentity();
+    applyMapping();
     status->setText("已复位显示，等待新数据；共享历史未清除");
 }
 
@@ -468,7 +679,10 @@ void ModelPanel::setTheme(const Theme &theme)
 QJsonObject ModelPanel::settings() const
 {
     return {{"file", modelPath}, {"mapping", mapping().settings()}, {"feed", feed->currentData().toString()},
-        {"peer", peerKey}, {"paused", pause->isChecked()}, {"scale", scale->value()}, {"centered", centered->isChecked()},
+        {"peer", peerKey}, {"stream", streamKey}, {"paused", pause->isChecked()},
+        {"scale", scale->value()}, {"centered", centered->isChecked()},
+        {"manual_position", QJsonArray {manualPosition[0]->value(), manualPosition[1]->value(), manualPosition[2]->value()}},
+        {"follow_theme", followTheme->isChecked()}, {"color", customColor.name()},
         {"alignment", QJsonArray {alignment[0]->value(), alignment[1]->value(), alignment[2]->value()}},
         {"camera", view->cameraSettings()}};
 }
@@ -495,6 +709,7 @@ void ModelPanel::restore(const QJsonObject &settings)
     units->setCurrentIndex(config.radians ? 1 : 0);
     rotationPages->setCurrentIndex(mode->currentIndex());
     feed->setCurrentIndex(settings["feed"] == "script" ? 1 : 0);
+    streamKey = settings["stream"].toString();
     peerKey = settings["peer"].toString("default");
     if (peer->findData(peerKey) < 0) { peer->addItem(peerKey, peerKey); }
     peer->setCurrentIndex(peer->findData(peerKey));
@@ -503,13 +718,21 @@ void ModelPanel::restore(const QJsonObject &settings)
         axes[i]->setCurrentIndex(axes[i]->findData(config.axes[i]));
         const auto initial = settings["alignment"].toArray();
         alignment[i]->setValue(i < initial.size() ? initial[i].toDouble() : 0);
+        const auto manual = settings["manual_position"].toArray();
+        manualPosition[i]->setValue(i < manual.size() ? manual[i].toDouble() : 0);
     }
     scale->setValue(settings["scale"].toDouble(1));
     centered->setChecked(settings["centered"].toBool(true));
+    const QColor savedColor(settings["color"].toString());
+    if (savedColor.isValid()) { customColor = savedColor; }
+    colorHex->setText(customColor.name());
+    followTheme->setChecked(settings["follow_theme"].toBool(true));
+    colorHex->setEnabled(!followTheme->isChecked());
     pause->setChecked(settings["paused"].toBool());
     modelPath = settings["file"].toString();
     pendingCamera = settings["camera"].toObject();
     applyModelTransform();
+    resetSource(channel);
     view->restoreCamera(pendingCamera);
     if (!modelPath.isEmpty()) { loadFile(modelPath); }
     restoring = false;

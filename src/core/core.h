@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #pragma once
+#include <optional>
 
 #include "workbench_version.h"
 #include "frame_script.h"
@@ -68,6 +69,7 @@ struct Source
     QByteArray wavePending;
     bool discarding = false;
     std::deque<QJsonObject> samples;
+    QSet<QString> waveStreams;
     qint64 count = 0;
     int rejected = 0;
     QString parsePending;
@@ -134,7 +136,7 @@ public:
     void status(const QString &value, const QString &message = {}, bool reset = false);
     void configureParser(const QString &mode, const QString &encoding = "utf-8");
     void configureScript(const QString &code, bool enabled);
-    QJsonObject waveform(int limit = 1000) const;
+    QJsonObject waveform(int limit = 1000, std::optional<QString> stream = std::nullopt) const;
     QJsonObject structured(qint64 after = 0, int limit = 100, const QJsonObject &cursors = {}) const;
     QJsonObject scriptResults(qint64 after = 0, int limit = 100, const QJsonObject &cursors = {}) const;
 

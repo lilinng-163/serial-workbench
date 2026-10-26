@@ -44,14 +44,20 @@ private:
     };
     BindingRow bindingRow(QGridLayout *layout, int row, const QString &label, const QString &field, const QString &id);
     void scheduleSave();
-    void applyMapping();
-    void refreshFieldNames();
+    void applyMapping(const QStringList &incomingErrors = {});
+    void refreshFieldNames(const QJsonObject &values);
     void applyModelTransform();
     QString modelPath;
     QString pendingPath;
     QString peerKey = "default";
+    QString streamKey;
     QStringList fields;
     QJsonObject latestValues;
+    QJsonObject positionValues;
+    QJsonObject rotationValues;
+    QVector3D telemetryPosition;
+    QMatrix4x4 telemetryRotation;
+    QColor customColor = QColor("#de8c32");
     qint64 lastSample = -1;
     qint64 floorSample = -1;
     int generation = -1;
@@ -64,6 +70,7 @@ private:
     QLabel *fileLabel;
     Combo *feed;
     Combo *peer;
+    Combo *stream;
     QCheckBox *pause;
     Combo *mode;
     Combo *order;
@@ -75,7 +82,10 @@ private:
     std::array<BindingRow, 4> quaternion;
     std::array<Combo *, 3> axes;
     std::array<QDoubleSpinBox *, 3> alignment;
+    std::array<QDoubleSpinBox *, 3> manualPosition;
     QDoubleSpinBox *scale;
     QCheckBox *centered;
+    QCheckBox *followTheme;
+    QLineEdit *colorHex;
 };
 }

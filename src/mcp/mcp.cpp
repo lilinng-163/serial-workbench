@@ -533,7 +533,13 @@ QJsonValue McpServer::call(const QString &name, const QJsonObject &a)
     }
     if (name == "read_waveform")
     {
-        return accessibleChannel(a["channel_id"].toString())->waveform(a["limit"].toInt(1000));
+        std::optional<QString> stream;
+        if (a.contains("stream"))
+        {
+            if (!a["stream"].isString()) { fail("stream 必须是字符串；空字符串表示未命名的数据流"); }
+            stream = a["stream"].toString();
+        }
+        return accessibleChannel(a["channel_id"].toString())->waveform(a["limit"].toInt(1000), stream);
     }
     if (name == "read_structured")
     {
@@ -597,7 +603,7 @@ QJsonArray McpServer::tools() const
          {"wait_ms", property("integer", 0)}}, {"channel_id"});
     add("read_all_events", "Explicit global history read across ALL exposed connections, including disconnected or removed sessions and historical SSH traffic. Use only when an aggregate log is requested. For a specific device use read_events with its channel_id. Retain an independent next_cursor for this aggregate stream; protocol switches still apply.",
         {{"after", property("integer", 0)}, {"limit", property("integer", 200)}, {"wait_ms", property("integer", 0)}});
-    add("read_waveform", "Read wave/1 samples per peer: only complete @wave name=value,... lines are accepted. Names identify channels; integer, decimal and scientific values can be mixed. Plain CSV/JSON/logs are ignored. Custom script results use read_script_results.", {{"channel_id", property("string")}, {"limit", property("integer", 1000)}}, {"channel_id"});
+    add("read_waveform", "Read wave/1 samples per connection and peer. Accepts @wave name=value,... and @wave[stream] name=value,... lines. Optional stream selects one named stream; empty string selects unnamed lines; omit for all. Named samples include stream; available_streams lists names per peer. total_samples is the counter across all streams. Integer/decimal/scientific values are supported. CSV/JSON/logs are ignored; scripts use read_script_results.", {{"channel_id", property("string")}, {"limit", property("integer", 1000)}, {"stream", property("string")}}, {"channel_id"});
     add("read_structured", "Read incremental JSON/XML extraction enabled in the GUI. Custom script results use read_script_results.", {{"channel_id", property("string")}, {"after", property("integer", 0)}, {"limit", property("integer", 100)}, {"cursors", property("object")}}, {"channel_id"});
     add("read_script_results", "Read custom serial frame script results shown in the receive page. Records contain numeric value fields and event_seq linking the original bytes. Retain each source next_cursor independently of JSON/XML cursors. Read access needs no control permission.", {{"channel_id", property("string")}, {"after", property("integer", 0)}, {"limit", property("integer", 100)}, {"cursors", property("object")}}, {"channel_id"});
     add("send_data", "Send bytes. Requires GUI permission. newline none/lf/cr/crlf, peer IP:port.",

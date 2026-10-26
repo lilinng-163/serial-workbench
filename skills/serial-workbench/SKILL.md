@@ -23,11 +23,13 @@ description: Use Serial Workbench CLI or MCP to start a shared background runtim
 | 目标 | 工具与格式 |
 | --- | --- |
 | 原始收发、日志、SSH 输出 | `read_events`，按指定连接筛选 |
-| 数值波形、实时数值 | `read_waveform`，仅接受完整的 `@wave temperature=25.5,voltage=3.3` 专用文本行，以 CR、LF 或 CRLF 结束 |
+| 数值波形、实时数值 | `read_waveform(channel_id, stream?, limit?)`，接受完整的 `@wave temperature=25.5,voltage=3.3` 或 `@wave[imu] roll=10,pitch=20,yaw=30`，以 CR、LF 或 CRLF 结束 |
 | JSON / XML | `read_structured`，需在界面启用提取；原文和结构化记录独立保留 |
 | 自定义串口帧 | `read_script_results`，需在串口收发页启用脚本，字段位于 `sources.default.records[].value` |
 
-脚本 `emit` 不会自动进入波形或 JSON/XML。各工具的 `sources` 中按来源分别保存 `next_cursor`；增量 JSON/XML 与脚本结果使用 `cursors={"default":上次游标}`。`event_seq` 可关联原始批次。TCP 服务端的不同对端也应分别检查，不能将来自不同对端的半帧拼接。
+波形按连接、网络对端和流名隔离。先查看 `sources.*.available_streams`，按用户所需用途选择流名；`stream="imu"` 只取命名流，`stream=""` 只取未命名，省略则返回全部。命名样本有 `samples[].stream`，不要将不同流的同名字段合并为同一信号。每个对端最多 32 种流名、所有流共用 5000 条历史；limit 在筛选后生效，index 和 total_samples 仍是对端所有流的序号/总数。流名区分大小写、最长 32 个字符，字母或下划线开头，后续可有字母、数字、下划线、连字符。3D 模型页选择同一连接、对端和流名后可绑定数值；旧未命名报文若同字段但含义不同，需发送端加流名，不能凭数值猜用途。
+
+脚本 `emit` 不会自动进入波形或 JSON/XML。增量 JSON/XML 与脚本结果按来源保存 `next_cursor`，使用 `cursors={"default":上次游标}`；波形是有界快照，没有增量游标。`event_seq` 可关联原始批次。TCP 服务端的不同对端也应分别检查，不能将来自不同对端的半帧拼接。
 
 ## 原生搜索与 GUI 同步
 

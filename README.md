@@ -30,7 +30,7 @@ Built with **Qt 6 and C++17**. The Windows application and its native MCP bridge
 | 🔌 **Connections** | Serial, TCP client/server, UDP and SSH; independent tabs, live port discovery and serial recovery. |
 | 🖥️ **SSH terminal** | A dedicated interactive terminal with **10,000 lines of scrollback**, selection and copy, ANSI colors, IME input and remote PTY resizing. |
 | 📈 **Waveforms** | Up to 16 named curves, zoom, pan, cursor inspection and four fixed-width live readouts with selectable channels. |
-| 🧊 **3D models** | Import STL, OBJ and PLY; drive position and orientation from shared numerical channels, with Euler/quaternion bindings, axis remapping, gain/offset and initial alignment. |
+| 🧊 **3D models** | Import STL, OBJ and PLY; choose a connection and named data stream, bind Euler/quaternion telemetry, remap axes, adjust manual XYZ translation and model color. |
 | 🧩 **JSON / XML** | Separate pages sharing a connection, incremental extraction, structured inspection and a JSON assistant. |
 | 🕘 **Version history** | Review the latest three stable releases in Settings, download verified installers, and see the running version in the status bar. |
 | 🎛️ **Serial controls** | Sliders, numeric inputs, switches, buttons and choices; groups, draggable/resizable cards that follow window width, presets and per-control automatic sending. |
@@ -125,6 +125,8 @@ printf("@wave temperature=%.2f,voltage=%.3f,rpm=%d\r\n",
 ```
 
 Use named fields and terminate each line with CR, LF or CRLF. Up to 16 channels can share a frame. Plain numbers, ordinary logs, JSON and script output are handled separately. See the [wave/1 protocol](docs/wave-protocol.md).
+
+The current development build also accepts named streams: `@wave[imu] roll=10,pitch=20,yaw=30` and `@wave[motor] rpm=1200`. Connections, peers and stream names remain separate; curves and live values show the stream name. Select `imu` in the 3D model page or pass `stream="imu"` to `read_waveform`. An empty stream name selects legacy `@wave ...` frames. Model translation and orientation update independently; manual world-space XYZ translation works without telemetry, and model colors can follow the theme or use a picker / hex input.
 
 ## CLI and background runtime
 

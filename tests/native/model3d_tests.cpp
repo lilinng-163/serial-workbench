@@ -235,6 +235,113 @@ private slots:
         QVERIFY(near(panel.view->pose().matrix.mapVector({1, 0, 0}), {1, 0, 0}));
     }
 
+    void independentPositionColorAndRestore()
+    {
+        sw::ModelPanel panel;
+        auto offset = panel.findChild<QDoubleSpinBox *>("modelPosition0Offset");
+        auto manual = panel.findChild<QDoubleSpinBox *>("modelManualPosition0");
+        offset->setValue(12.5);
+        manual->setValue(2);
+        QVERIFY(near(panel.view->pose().position, {14.5, 0, 0}));
+        QVERIFY(panel.status->text().contains("保留")); // Missing angles do not block translation.
+        auto gain = panel.findChild<QDoubleSpinBox *>("modelPosition0Gain");
+        QCOMPARE(gain->text(), QString("1"));
+        gain->setValue(0.000001);
+        QCOMPARE(gain->text(), QString("0.000001"));
+        gain->setValue(2);
+        panel.findChild<QComboBox *>("modelPosition0Field")->setEditText("x");
+        sw::Engine engine;
+        sw::Config config;
+        config.port = "loop://";
+        auto channel = engine.open(config);
+        panel.tick(channel);
+        channel->receive("@wave x=3\n");
+        panel.tick(channel);
+        QVERIFY(near(panel.view->pose().position, {20.5, 0, 0}));
+        channel->receive("@wave roll=0,pitch=0,yaw=90\n");
+        panel.tick(channel);
+        QVERIFY(near(panel.view->pose().position, {20.5, 0, 0}));
+        QVERIFY(near(panel.view->pose().matrix.mapVector({1, 0, 0}), {0, 1, 0}));
+        manual->setValue(4);
+        QVERIFY(near(panel.view->pose().position, {22.5, 0, 0}));
+        gain->setValue(4);
+        QVERIFY(near(panel.view->pose().position, {28.5, 0, 0}));
+
+        auto theme = panel.findChild<QCheckBox *>("model3dFollowTheme");
+        auto hex = panel.findChild<QLineEdit *>("model3dColor");
+        theme->setChecked(false);
+        hex->setText("#3af");
+        QVERIFY(QMetaObject::invokeMethod(hex, "editingFinished"));
+        QCOMPARE(panel.view->modelColor(), QColor("#33aaff"));
+        hex->setText("#oops");
+        QVERIFY(QMetaObject::invokeMethod(hex, "editingFinished"));
+        QCOMPARE(panel.view->modelColor(), QColor("#33aaff"));
+        QCOMPARE(hex->text(), QString("#33aaff"));
+        sw::ModelPanel restored;
+        auto saved = panel.settings();
+        saved["mapping"] = sw::ModelMapping().settings();
+        restored.restore(saved);
+        QVERIFY(near(restored.view->pose().position, {4, 0, 0}));
+        QCOMPARE(restored.view->modelColor(), QColor("#33aaff"));
+        restored.clearDisplay();
+        QVERIFY(near(restored.view->pose().position, {4, 0, 0}));
+        const auto before = restored.view->cameraSettings();
+        restored.findChild<QDoubleSpinBox *>("modelManualPosition1")->setValue(3);
+        QCOMPARE(restored.view->cameraSettings(), before); // Camera must not hide a translation by following it.
+        auto customTheme = sw::Theme::make(false);
+        customTheme.accent = QColor("#551122");
+        restored.setTheme(customTheme);
+        QCOMPARE(restored.view->modelColor(), QColor("#33aaff"));
+        restored.findChild<QCheckBox *>("model3dFollowTheme")->setChecked(true);
+        QCOMPARE(restored.view->modelColor(), customTheme.accent);
+    }
+
+    void namedStreamsAndAlternatingFrames()
+    {
+        sw::Engine engine;
+        sw::Config config;
+        config.port = "loop://";
+        auto first = engine.open(config);
+        sw::Channel second(&engine, config);
+        sw::ModelPanel panel;
+        panel.findChild<QComboBox *>("model3dStream")->setEditText("imu");
+        panel.tick(first);
+        first->receive("@wave[imu] roll=0,pitch=0,yaw=90\n@wave[motor] roll=0,pitch=0,yaw=180\n");
+        panel.tick(first);
+        QVERIFY(near(panel.view->pose().matrix.mapVector({1, 0, 0}), {0, 1, 0}));
+        first->receive("@wave[motor] roll=0,pitch=0,yaw=-90\n@wave roll=0,pitch=0,yaw=180\n");
+        panel.tick(first);
+        QVERIFY(near(panel.view->pose().matrix.mapVector({1, 0, 0}), {0, 1, 0}));
+        second.receive("@wave[imu] roll=0,pitch=0,yaw=-90\n");
+        panel.tick(&second);
+        QVERIFY(near(panel.view->pose().matrix.mapVector({1, 0, 0}), {0, -1, 0}));
+        auto saved = panel.settings();
+        QCOMPARE(saved["stream"].toString(), QString("imu"));
+        panel.findChild<QComboBox *>("model3dStream")->setEditText("motor");
+        panel.tick(first);
+        QVERIFY(near(panel.view->pose().matrix.mapVector({1, 0, 0}), {0, -1, 0}));
+        panel.findChild<QComboBox *>("model3dStream")->setEditText("");
+        panel.tick(first);
+        first->receive("@wave roll=0,pitch=0,yaw=90\n@wave temperature=25\n");
+        panel.tick(first);
+        QVERIFY(near(panel.view->pose().matrix.mapVector({1, 0, 0}), {0, 1, 0}));
+        QVERIFY(panel.findChild<QComboBox *>("modelAngle0Field")->findText("yaw") >= 0);
+        QVERIFY(panel.findChild<QComboBox *>("modelAngle0Field")->findText("temperature") >= 0);
+        first->receive("@wave roll=0,pitch=0\n@wave yaw=180\n");
+        panel.tick(first);
+        QVERIFY(near(panel.view->pose().matrix.mapVector({1, 0, 0}), {0, 1, 0}));
+        QVERIFY(panel.status->text().contains("保留"));
+        panel.restore(saved);
+        panel.tick(first);
+        QCOMPARE(panel.findChild<QComboBox *>("model3dStream")->currentText(), QString("imu"));
+        QVERIFY(near(panel.view->pose().matrix.mapVector({1, 0, 0}), {0, 1, 0}));
+        ++first->generation;
+        panel.tick(first);
+        first->receive("@wave[motor] roll=0,pitch=0,yaw=180\n");
+        panel.tick(first);
+        QVERIFY(near(panel.view->pose().matrix.mapVector({1, 0, 0}), {1, 0, 0}));
+    }
+
     void sourceSwitchUpdatesAnimationImmediately()
     {
         sw::Engine engine;
@@ -319,6 +426,18 @@ private slots:
         QTRY_VERIFY(panel->status->text().contains("已更新"));
         panel->findChild<QTabWidget *>("model3dMappingTabs")->setCurrentIndex(1);
         QTest::qWait(250);
+        auto gain = panel->findChild<QDoubleSpinBox *>("modelAngle0Gain");
+        gain->setValue(-999999999.999999);
+        auto editor = gain->findChild<QLineEdit *>();
+        QVERIFY(editor);
+        QVERIFY2(editor->contentsRect().width() >= editor->fontMetrics().horizontalAdvance(editor->text()) + 4,
+            qPrintable(QString("numeric text %1 needs %2 px, has %3 px").arg(editor->text())
+                .arg(editor->fontMetrics().horizontalAdvance(editor->text())).arg(editor->contentsRect().width())));
+        auto order = panel->findChild<QComboBox *>("model3dEulerOrder");
+        QVERIFY(order->width() > order->fontMetrics().horizontalAdvance("ZYX") + 50);
+        QTest::qWait(100);
+        capture(&window, "model3d-numeric-width");
+        gain->setValue(1);
         qInfo() << "Capture initial framebuffer";
         const auto first = panel->view->grabFramebuffer();
         QVERIFY(!first.isNull());
@@ -348,12 +467,28 @@ private slots:
         channel->receive("@wave roll=15,pitch=-20,yaw=35\n");
         panel->tick(channel);
         QCOMPARE(panel->view->grabFramebuffer(), first);
+        panel->findChild<QDoubleSpinBox *>("modelManualPosition0")->setValue(0.8);
+        QVERIFY(panel->view->grabFramebuffer() != first);
+        panel->findChild<QTabWidget *>("model3dMappingTabs")->setCurrentIndex(0);
+        QTest::qWait(100);
+        capture(&window, "model3d-manual-position");
+        panel->findChild<QDoubleSpinBox *>("modelManualPosition0")->setValue(0);
+        QCOMPARE(panel->view->grabFramebuffer(), first);
+        panel->findChild<QCheckBox *>("model3dFollowTheme")->setChecked(false);
+        auto hex = panel->findChild<QLineEdit *>("model3dColor");
+        hex->setText("#33aaff");
+        QVERIFY(QMetaObject::invokeMethod(hex, "editingFinished"));
+        QVERIFY(panel->view->grabFramebuffer() != first);
+        panel->findChild<QTabWidget *>("model3dMappingTabs")->setCurrentIndex(3);
+        QTest::qWait(100);
+        capture(&window, "model3d-color");
         const auto camera = panel->view->cameraSettings();
         QTest::mousePress(panel->view, Qt::LeftButton, {}, QPoint(150, 130));
         QTest::mouseMove(panel->view, QPoint(220, 170), 40);
         QTest::mouseRelease(panel->view, Qt::LeftButton, {}, QPoint(220, 170));
         QVERIFY(panel->view->cameraSettings() != camera);
         window.applyTheme(true);
+        QCOMPARE(panel->view->modelColor(), QColor("#33aaff"));
         QTest::qWait(250);
         capture(&window, "model3d-dark");
         panel->findChild<QTabWidget *>("model3dMappingTabs")->setCurrentIndex(2);

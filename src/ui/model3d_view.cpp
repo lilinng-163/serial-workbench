@@ -103,6 +103,17 @@ void ModelView::setTheme(const Theme &value)
     update();
 }
 
+void ModelView::setModelColor(const QColor &value)
+{
+    customColor = value;
+    update();
+}
+
+QColor ModelView::modelColor() const
+{
+    return customColor.isValid() ? customColor : (theme.dark ? theme.accent.lighter(125) : theme.accent);
+}
+
 void ModelView::setModelTransform(double scale, bool center, const QVector3D &angles)
 {
     modelScale = qBound(1e-6, scale, 1e6);
@@ -230,7 +241,7 @@ void ModelView::paintGL()
     }
     program->setUniformValue("mvp", vp * model);
     program->setUniformValue("normals", model.normalMatrix());
-    program->setUniformValue("color", theme.dark ? theme.accent.lighter(125) : theme.accent);
+    program->setUniformValue("color", modelColor());
     program->setUniformValue("shaded", true);
     program->enableAttributeArray("position");
     program->enableAttributeArray("normal");

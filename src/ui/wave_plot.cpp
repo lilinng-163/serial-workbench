@@ -283,6 +283,13 @@ void WavePlot::dataChanged()
     invalidatePlot();
 }
 
+QString WavePlot::sampleCurveName(const QString &source, const QJsonObject &sample, const QString &field)
+{
+    const auto stream = sample["stream"].toString();
+    const auto prefix = source == "default" ? QString() : source + "/";
+    return prefix + (stream.isEmpty() ? QString() : "[" + stream + "]/") + field;
+}
+
 void WavePlot::setSamples(const QJsonObject &data)
 {
     boundChannel.clear();
@@ -300,7 +307,7 @@ void WavePlot::setSamples(const QJsonObject &data)
             const auto values = sample["values"].toObject();
             for (auto field = values.constBegin(); field != values.constEnd(); ++field)
             {
-                const QString name = source.key() == "default" ? field.key() : source.key() + "/" + field.key();
+                const auto name = sampleCurveName(source.key(), sample, field.key());
                 if (!series.contains(name) && series.size() >= 16) { continue; }
                 series[name].append(QPointF(sample["index"].toDouble(), field.value().toDouble()));
             }
@@ -377,7 +384,7 @@ bool WavePlot::updateChannel(Channel *channel, int limit)
             const auto values = sample["values"].toObject();
             for (auto field = values.constBegin(); field != values.constEnd(); ++field)
             {
-                const QString name = source.key() == "default" ? field.key() : source.key() + "/" + field.key();
+                const auto name = sampleCurveName(source.key(), sample, field.key());
                 if (!series.contains(name) && series.size() >= 16) { continue; }
                 series[name].append(QPointF(sample["index"].toDouble(), field.value().toDouble()));
                 if (!sourceCurves[source.key()].contains(name)) { sourceCurves[source.key()].append(name); }
