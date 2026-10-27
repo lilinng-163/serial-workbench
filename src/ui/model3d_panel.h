@@ -22,7 +22,10 @@ public:
     void setTheme(const Theme &theme);
     void loadFile(const QString &path);
     QJsonObject settings() const;
-    void restore(const QJsonObject &settings);
+    void restore(const QJsonObject &settings, bool reload = true);
+    QJsonObject state() const;
+    void configure(const QJsonObject &patch);
+    bool loading() const { return importPending; }
     ModelView *view;
     QLabel *status;
     ModelMapping mapping() const;
@@ -59,10 +62,15 @@ private:
     QMatrix4x4 telemetryRotation;
     QColor customColor = QColor("#de8c32");
     qint64 lastSample = -1;
+    qint64 positionSample = -1;
+    qint64 rotationSample = -1;
+    QString loadError;
+    QStringList mappingErrors;
     qint64 floorSample = -1;
     int generation = -1;
     QPointer<Channel> channel;
     bool restoring = false;
+    bool importPending = false;
     QJsonObject pendingCamera;
     QTimer saveTimer;
     QFutureWatcher<ModelLoadResult> loader;

@@ -41,7 +41,9 @@ private:
         {
             file.replace(".svg", "-dark.svg");
         }
-        auto image = QIcon(":/agents/" + file).pixmap(QSize(30, 30), devicePixelRatioF());
+        auto image = asset.isEmpty()
+            ? icon("code", palette().color(QPalette::WindowText)).pixmap(QSize(30, 30), devicePixelRatioF())
+            : QIcon(":/agents/" + file).pixmap(QSize(30, 30), devicePixelRatioF());
         if (asset == "codex.svg" || asset == "grok.svg")
         {
             QPainter painter(&image);
@@ -78,6 +80,10 @@ AgentPanel::AgentPanel(McpServer *owner, QWidget *parent, std::function<AgentEnv
     autoStart->setToolTip("共享当前配置与连接；沿用 AI 控制权限。取消勾选可继续使用固定 HTTP 地址。");
     body->addWidget(autoStart);
     connect(autoStart, &QCheckBox::toggled, this, [this] { refresh(); });
+    auto filter = new QLineEdit;
+    filter->setObjectName("agentFilter");
+    filter->setPlaceholderText("搜索 Agent，例如 Cursor、Copilot、Cline…");
+    body->addWidget(filter);
     summary = new QLabel();
     summary->setObjectName("muted");
     summary->setWordWrap(true);
@@ -123,6 +129,11 @@ AgentPanel::AgentPanel(McpServer *owner, QWidget *parent, std::function<AgentEnv
         check->setAutoDefault(false);
         row->addWidget(configure);
         row->addWidget(check);
+        auto exportButton = new QPushButton("导出配置");
+        exportButton->setObjectName("export_" + agent.id);
+        exportButton->setAutoDefault(false);
+        row->addWidget(exportButton);
+        connect(exportButton, &QPushButton::clicked, this, [this, index] { exportAgent(agents[index]); });
         layout->addLayout(row);
         auto result = new QLabel();
         result->setTextFormat(Qt::PlainText);
@@ -135,7 +146,26 @@ AgentPanel::AgentPanel(McpServer *owner, QWidget *parent, std::function<AgentEnv
         connect(configure, &QPushButton::clicked, this, [this, index] { checkAgent(index, true); });
         connect(check, &QPushButton::clicked, this, [this, index] { checkAgent(index, false); });
     }
+    connect(filter, &QLineEdit::textChanged, this, [this, grid](const QString &query)
+    {
+        int index = 0;
+        for (auto frame : findChildren<QFrame *>("agentCard"))
+        {
+            grid->removeWidget(frame);
+            const bool match = frame->findChild<QLabel *>("agentTitle")->text().contains(query, Qt::CaseInsensitive)
+                || frame->property("agentId").toString().contains(query, Qt::CaseInsensitive);
+            frame->setVisible(match);
+            if (match) { grid->addWidget(frame, index / 2, index % 2); ++index; }
+        }
+    });
     body->addLayout(grid);
+    auto generic = new QPushButton("其他客户端 · 导出通用 MCP 配置");
+    generic->setObjectName("exportGenericAgent");
+    body->addWidget(generic);
+    connect(generic, &QPushButton::clicked, this, [this]
+    {
+        exportAgent({"generic", "通用 MCP", "", "", "", "json", {"mcpServers"}, false, true});
+    });
     auto hint = new QLabel("配置前备份原文件，保留其他 MCP 服务。更新后请在 Agent 中重载；Pi 使用 /reload。检测范围：Windows 程序与 CLI。");
     hint->setWordWrap(true);
     hint->setObjectName("muted");
@@ -145,6 +175,35 @@ AgentPanel::AgentPanel(McpServer *owner, QWidget *parent, std::function<AgentEnv
     connect(updateAll, &QPushButton::clicked, this, &AgentPanel::configureAll);
     connect(server, &McpServer::portChanged, this, [this] { refresh(); });
     refresh();
+}
+
+void AgentPanel::exportAgent(const AgentClient &agent)
+{
+    auto dialog = new QDialog(this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle(agent.name + " · MCP 配置");
+    dialog->resize(700, 420);
+    auto body = new QVBoxLayout(dialog);
+    auto hint = new QLabel("在客户端的 MCP 设置中导入或合并下面的配置，保留已有服务。STDIO 可自动启动后台工作台；导出不会修改客户端文件。当前主机之外的 Agent 需部署在能访问设备的主机上。");
+    hint->setWordWrap(true);
+    body->addWidget(hint);
+    auto text = new QPlainTextEdit;
+    text->setObjectName("agentExportText");
+    text->setReadOnly(true);
+    try
+    {
+        text->setPlainText(AgentConfig::updated(agent, agent.format == "json" ? "{}" : "",
+            autoStart->isChecked() ? QString() : server->url(),
+            QCoreApplication::applicationDirPath() + "/SerialWorkbenchMCP.exe", qApp->property("swSettingsPath").toString()));
+    }
+    catch (const std::exception &error) { text->setPlainText(QString::fromUtf8(error.what())); }
+    body->addWidget(text);
+    auto buttons = new QDialogButtonBox(QDialogButtonBox::Close);
+    auto copy = buttons->addButton("复制配置", QDialogButtonBox::ActionRole);
+    connect(copy, &QPushButton::clicked, dialog, [text] { QApplication::clipboard()->setText(text->toPlainText()); });
+    connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
+    body->addWidget(buttons);
+    dialog->show();
 }
 
 void AgentPanel::configureSkills()
@@ -234,11 +293,11 @@ void AgentPanel::refresh()
     {
         const auto &agent = agents[index];
         auto &card = cards[index];
-        installed += agent.installed();
-        card.state->setText(agent.installed() ? "已安装" : "未检测到安装");
+        installed += agent.installed() && !agent.manualConfig;
+        card.state->setText(agent.manualConfig ? "通过配置导入接入" : agent.installed() ? "已安装" : "未检测到安装 · 可导出配置");
         card.state->setToolTip(agent.executable);
-        card.configure->setEnabled(agent.installed() && server->isListening());
-        card.check->setEnabled(agent.installed() && server->isListening());
+        card.configure->setEnabled(agent.installed() && !agent.manualConfig && server->isListening());
+        card.check->setEnabled(agent.installed() && !agent.manualConfig && server->isListening());
         card.configure->setToolTip(agent.installed() ? "保存并检查：" + agent.configPath : "安装后重新检测");
         card.check->setToolTip(agent.installed() ? "只读检查配置与 MCP 服务" : "安装后才可检查配置");
         card.result->setVisible(agent.installed());
@@ -367,7 +426,7 @@ void AgentPanel::configureAll()
         {
             for (int index = 0; index < agents.size(); ++index)
             {
-                if (!agents[index].installed()) { continue; }
+                if (!agents[index].installed() || agents[index].manualConfig) { continue; }
                 auto &card = cards[index];
                 card.result->show();
                 try
@@ -382,7 +441,7 @@ void AgentPanel::configureAll()
                     ++failed;
                 }
             }
-            summary->setText(QString("更新完成：%1 成功，%2 失败，%3 未安装跳过。请重载 Agent 配置。")
+            summary->setText(QString("更新完成：%1 成功，%2 失败，%3 未安装或需手动导入。请重载 Agent 配置。")
                 .arg(success).arg(failed).arg(agents.size() - success - failed));
         }
         else { summary->setText(failure); }

@@ -42,7 +42,7 @@ NSIS Modern UI 提供目录、组件、安装和卸载页面，中文字体与�
 
 ## 可选 Agent skill
 
-安装组件页默认勾选本机已检测到的 Agent 使用指南，用户可取消；未检测到的也可手动选择。支持 Codex、Claude Code、OpenCode、Pi、Hermes、OpenClaw、Grok Build 和 Gemini CLI。指南包含软件、MCP、原生搜索及 C 风格脚本的用法；写入对应用户目录并遵循环境覆盖，已有不同内容先备份，相同内容不重复写入。此步骤不修改 MCP 配置；安装后重载 Agent。卸载软件时保留已安装的 skill。其他客户端可直接通过 read_usage_guide 读取指南。详情与目录见 [Agent 接入说明](agent-integration.md)。
+安装组件页默认勾选本机已检测到的 Agent 使用指南，用户可取消；未检测到的也可手动选择。当前开发版提供 17 个 skill 目标：Codex、Claude Code、OpenCode、Pi、Hermes、OpenClaw、Grok Build、Gemini CLI、Cursor、Copilot、Windsurf、Devin、Cline、Kilo、Kiro、Antigravity、Kimi Code。指南包含软件、CLI、MCP、原生搜索、C 风格脚本、3D 模型与 Agent 接入的用法；写入对应用户目录并遵循环境覆盖，已有不同内容先备份，相同内容不重复写入。此步骤不修改 MCP 配置；安装后重载 Agent。卸载软件时保留已安装的 skill。其他客户端可直接通过 read_usage_guide 读取指南。详情与目录见 [Agent 接入说明](agent-integration.md)。
 
 无需重装即可更新指南：设置 → AI / MCP → Agent 接入 → 配置 skill。检测、目标目录与备份规则和安装器共用原生实现；设置中的安装不需要 MCP 已启动。
 

@@ -215,6 +215,8 @@ Without `--url`, the bridge starts or reuses the background runtime. An explicit
 
 </details>
 
+The current development build provides **26 client adapters** and **17 skill installation targets**, including Cursor, VS Code / Copilot, Cline, Kilo, Kiro, Qoder, Zed, Antigravity and Qwen Code. Use the searchable Settings panel or `SerialWorkbenchCLI agents`. Each adapter offers configuration export; clients with unverified or version-dependent storage paths use manual import. `export-agent generic` covers other compatible MCP clients. See the [format and path reference](docs/agent-integration.md).
+
 ### What the agent can do
 
 | Goal | MCP tools |
@@ -225,6 +227,8 @@ Without `--url`, the bridge starts or reuses the background runtime. An explicit
 | Search the GUI display | `list_search_views`, `search_logs` — share case, whole-word, regex and logical switches with the GUI |
 | Inspect or test a serial parser | `get_frame_script`, `validate_frame_script` — offline tests leave the live parser unchanged |
 | Apply a serial parser | `set_frame_script` — requires AI control permission and the latest revision; protects unsaved GUI edits |
+| Import / configure a shared 3D page | `open_model_view`, `configure_model_view` — local STL / OBJ / PLY, telemetry mappings, color, position and camera; requires AI control |
+| Inspect / capture a 3D model | `list_model_views`, `get_model_state`, `capture_model_view` — transforms, bounds, adopted frame sequences and native MCP PNG images |
 | Learn the workflow / parser syntax | `read_usage_guide` |
 | Send data or manage connections | `send_data`, `open_connection`, `close_connection` — requires AI control permission |
 
@@ -233,6 +237,10 @@ Example prompts:
 > Read the last 200 events from my connected serial device and explain the startup failure. Continue with `next_cursor` so you do not analyze old output again.
 
 > Inspect the temperature and voltage channels. Find spikes and correlate them with the raw receive events.
+
+> Import the STL at this local path, bind only the imu stream from the selected device, then check the quaternion mapping using both state and a rendered capture.
+
+Read [the 3D MCP guide](skills/serial-workbench/references/model3d.md) before changing bindings. A background runtime can render without opening a window, but still needs a desktop OpenGL environment. Captures and retained poses do not prove that a physical device applied a command; use the adopted frame sequences, errors and original replies.
 
 The bundled [Serial Workbench skill](skills/serial-workbench/SKILL.md) explains connection selection, incremental reading, native search and C-style frame scripts. Agents can retrieve the guide directly with `read_usage_guide`; the installer preselects skill components for detected Agents, and Settings can update them later. AI-opened connections and applied scripts appear in the GUI. An activity notice links to call details and the audit log.
 

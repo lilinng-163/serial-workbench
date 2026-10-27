@@ -248,3 +248,13 @@ add_test(NAME wave_stream_tests COMMAND "${CMAKE_COMMAND}" -E env
     -o "${PROJECT_BINARY_DIR}/wave-stream-tests.txt,txt"
 )
 set_tests_properties(wave_stream_tests PROPERTIES TIMEOUT 30)
+
+qt_add_executable(model3d_mcp_tests model3d_mcp_tests.cpp)
+workbench_configure_target(model3d_mcp_tests)
+target_link_libraries(model3d_mcp_tests PRIVATE workbench_ui Qt6::Test)
+add_test(NAME model3d_mcp_tests COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=${workbench_test_path}"
+    $<TARGET_FILE:model3d_mcp_tests> -platform offscreen
+    -o "${PROJECT_BINARY_DIR}/model3d-mcp-tests.txt,txt"
+)
+set_tests_properties(model3d_mcp_tests PROPERTIES TIMEOUT 45)

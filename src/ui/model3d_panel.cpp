@@ -348,7 +348,12 @@ ModelPanel::ModelPanel(QWidget *parent) : QWidget(parent)
         followTheme->setChecked(false);
         scheduleSave();
     });
-    connect(pause, &QCheckBox::toggled, this, [this] { scheduleSave(); if (!pause->isChecked()) { lastSample = -1; tick(channel); } });
+    connect(pause, &QCheckBox::toggled, this, [this]
+    {
+        if (restoring) { return; }
+        scheduleSave();
+        if (!pause->isChecked()) { lastSample = -1; tick(channel); }
+    });
     connect(feed, &QComboBox::currentIndexChanged, this, [this]
     {
         stream->setEnabled(feed->currentData() == "wave");
@@ -371,8 +376,10 @@ ModelPanel::ModelPanel(QWidget *parent) : QWidget(parent)
     });
     connect(&loader, &QFutureWatcher<ModelLoadResult>::finished, this, [this]
     {
+        importPending = false;
         import->setEnabled(true);
         const auto result = loader.result();
+        loadError = result.error;
         if (!result.error.isEmpty())
         {
             status->setText("导入失败：" + result.error + "；保留当前模型，可重新选择文件");
@@ -450,6 +457,7 @@ void ModelPanel::applyMapping(const QStringList &incomingErrors)
     if (!positionPose.valid()) { errors.append("位置：" + positionPose.error); }
     if (!rotationPose.valid()) { errors.append("姿态：" + rotationPose.error); }
     errors.removeDuplicates();
+    mappingErrors = errors;
     const auto source = (peerKey == "default" ? "本连接" : peerKey)
         + (feed->currentData() == "wave" ? (streamKey.isEmpty() ? " / 未命名 @wave" : " / " + streamKey) : " / 脚本");
     auto message = QString("%1 · X %2   Y %3   Z %4 · %5")
@@ -492,6 +500,8 @@ void ModelPanel::resetSource(Channel *value)
     channel = value;
     generation = value ? value->generation : -1;
     lastSample = -1;
+    positionSample = -1;
+    rotationSample = -1;
     floorSample = -1;
     latestValues = {};
     positionValues = {};
@@ -608,6 +618,7 @@ void ModelPanel::tick(Channel *value)
             if (pose.valid())
             {
                 positionValues = values;
+                positionSample = (*record)[indexKey].toInteger();
                 foundPosition = true;
                 positionError.clear();
             }
@@ -619,6 +630,7 @@ void ModelPanel::tick(Channel *value)
             if (pose.valid())
             {
                 rotationValues = values;
+                rotationSample = (*record)[indexKey].toInteger();
                 foundRotation = true;
                 rotationError.clear();
             }
@@ -641,6 +653,8 @@ void ModelPanel::tick(Channel *value)
 
 void ModelPanel::clearDisplay()
 {
+    positionSample = -1;
+    rotationSample = -1;
     floorSample = lastSample;
     if (channel && channel->sources.contains(peerKey))
     {
@@ -658,8 +672,10 @@ void ModelPanel::clearDisplay()
 
 void ModelPanel::loadFile(const QString &path)
 {
-    if (loader.isRunning()) { return; }
+    if (loading()) { return; }
+    importPending = true;
     pendingPath = QFileInfo(path).absoluteFilePath();
+    loadError.clear();
     import->setEnabled(false);
     status->setText("正在后台读取模型…");
     loader.setFuture(QtConcurrent::run([path = pendingPath]
@@ -687,10 +703,13 @@ QJsonObject ModelPanel::settings() const
         {"camera", view->cameraSettings()}};
 }
 
-void ModelPanel::restore(const QJsonObject &settings)
+void ModelPanel::restore(const QJsonObject &settings, bool reload)
 {
+    const bool sourceChanged = feed->currentData().toString() != settings["feed"].toString("wave")
+        || peerKey != settings["peer"].toString("default") || streamKey != settings["stream"].toString();
     restoring = true;
     const auto config = ModelMapping::restore(settings["mapping"].toObject());
+    const bool mappingChanged = mapping().settings() != config.settings();
     const auto write = [](auto &rows, const auto &bindings)
     {
         for (int i = 0; i < int(rows.size()); ++i)
@@ -729,12 +748,18 @@ void ModelPanel::restore(const QJsonObject &settings)
     followTheme->setChecked(settings["follow_theme"].toBool(true));
     colorHex->setEnabled(!followTheme->isChecked());
     pause->setChecked(settings["paused"].toBool());
-    modelPath = settings["file"].toString();
-    pendingCamera = settings["camera"].toObject();
+    if (reload)
+    {
+        modelPath = settings["file"].toString();
+        pendingCamera = settings["camera"].toObject();
+    }
     applyModelTransform();
-    resetSource(channel);
-    view->restoreCamera(pendingCamera);
-    if (!modelPath.isEmpty()) { loadFile(modelPath); }
+    if (reload || sourceChanged) { resetSource(channel); }
+    else { applyMapping(mappingChanged ? QStringList() : mappingErrors); }
+    stream->setEditText(streamKey);
+    stream->setEnabled(feed->currentData() == "wave");
+    view->restoreCamera(settings["camera"].toObject());
+    if (reload && !modelPath.isEmpty()) { loadFile(modelPath); }
     restoring = false;
     saveTimer.stop();
 }

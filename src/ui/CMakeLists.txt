@@ -27,6 +27,8 @@ add_library(workbench_ui OBJECT
     model3d_view.cpp
     model3d_view.h
     model3d_panel.cpp
+    model3d_api.cpp
+    model3d_mcp.cpp
     model3d_panel.h
     json_tools.cpp
     json_tools.h

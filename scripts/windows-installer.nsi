@@ -218,6 +218,35 @@ Section /o "Gemini CLI 使用指南 skill（当前用户）" SkillGemini
     !insertmacro InstallAgentSkill gemini
 SectionEnd
 
+Section /o "Cursor 使用指南 skill（当前用户）" SkillCursor
+    !insertmacro InstallAgentSkill cursor
+SectionEnd
+Section /o "Copilot 使用指南 skill（当前用户）" SkillCopilot
+    !insertmacro InstallAgentSkill copilot
+SectionEnd
+Section /o "Windsurf 使用指南 skill（当前用户）" SkillWindsurf
+    !insertmacro InstallAgentSkill windsurf
+SectionEnd
+Section /o "Devin 使用指南 skill（当前用户）" SkillDevin
+    !insertmacro InstallAgentSkill devin
+SectionEnd
+Section /o "Cline 使用指南 skill（当前用户）" SkillCline
+    !insertmacro InstallAgentSkill cline
+SectionEnd
+Section /o "Kilo 使用指南 skill（当前用户）" SkillKilo
+    !insertmacro InstallAgentSkill kilo
+SectionEnd
+Section /o "Kiro 使用指南 skill（当前用户）" SkillKiro
+    !insertmacro InstallAgentSkill kiro
+SectionEnd
+
+Section /o "Antigravity 使用指南 skill（当前用户）" SkillAntigravity
+    !insertmacro InstallAgentSkill antigravity
+SectionEnd
+Section /o "Kimi 使用指南 skill（当前用户）" SkillKimi
+    !insertmacro InstallAgentSkill kimi
+SectionEnd
+
 Section "创建桌面快捷方式" Desktop
     CreateShortCut "$DESKTOP\${PRODUCT_NAME}.lnk" "$INSTDIR\SerialWorkbench.exe" "" "$INSTDIR\SerialWorkbench.exe" 0
 SectionEnd
@@ -233,6 +262,15 @@ SectionEnd
 !insertmacro MUI_DESCRIPTION_TEXT ${SkillOpenClaw} "遵循 OPENCLAW_STATE_DIR，安装到 managed skills，已有内容先备份。"
 !insertmacro MUI_DESCRIPTION_TEXT ${SkillGrok} "安装到当前用户 .grok/skills，已有内容先备份。"
 !insertmacro MUI_DESCRIPTION_TEXT ${SkillGemini} "安装到当前用户 .gemini/skills，已有内容先备份。"
+!insertmacro MUI_DESCRIPTION_TEXT ${SkillCursor} "可选。安装软件、MCP、脚本和 3D 使用指南到 Cursor 的用户 skill 目录；原内容先备份，安装后重载 Agent。"
+!insertmacro MUI_DESCRIPTION_TEXT ${SkillCopilot} "可选。安装软件、MCP、脚本和 3D 使用指南到 Copilot 的用户 skill 目录；原内容先备份，安装后重载 Agent。"
+!insertmacro MUI_DESCRIPTION_TEXT ${SkillWindsurf} "可选。安装软件、MCP、脚本和 3D 使用指南到 Windsurf 的用户 skill 目录；原内容先备份，安装后重载 Agent。"
+!insertmacro MUI_DESCRIPTION_TEXT ${SkillDevin} "可选。安装软件、MCP、脚本和 3D 使用指南到 Devin 的用户 skill 目录；原内容先备份，安装后重载 Agent。"
+!insertmacro MUI_DESCRIPTION_TEXT ${SkillCline} "可选。安装软件、MCP、脚本和 3D 使用指南到 Cline 的用户 skill 目录；原内容先备份，安装后重载 Agent。"
+!insertmacro MUI_DESCRIPTION_TEXT ${SkillKilo} "可选。安装软件、MCP、脚本和 3D 使用指南到 Kilo 的用户 skill 目录；原内容先备份，安装后重载 Agent。"
+!insertmacro MUI_DESCRIPTION_TEXT ${SkillKiro} "可选。安装软件、MCP、脚本和 3D 使用指南到 Kiro 的用户 skill 目录；原内容先备份，安装后重载 Agent。"
+!insertmacro MUI_DESCRIPTION_TEXT ${SkillAntigravity} "可选。安装软件、MCP、脚本和 3D 使用指南到 Antigravity 的用户 skill 目录；原内容先备份，安装后重载 Agent。"
+!insertmacro MUI_DESCRIPTION_TEXT ${SkillKimi} "可选。安装软件、MCP、脚本和 3D 使用指南到 Kimi Code 的用户 skill 目录；原内容先备份，安装后重载 Agent。"
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
 
 ; Reuse the native Agent detector before displaying the component page.
@@ -283,6 +321,42 @@ Function DetectSkillAgents
     ReadINIStr $1 "$PLUGINSDIR\agents.ini" "agents" "gemini"
     ${If} $1 == "1"
         !insertmacro SelectSection ${SkillGemini}
+    ${EndIf}
+    ReadINIStr $1 "$PLUGINSDIR\agents.ini" "agents" "cursor"
+    ${If} $1 == "1"
+        !insertmacro SelectSection ${SkillCursor}
+    ${EndIf}
+    ReadINIStr $1 "$PLUGINSDIR\agents.ini" "agents" "copilot"
+    ${If} $1 == "1"
+        !insertmacro SelectSection ${SkillCopilot}
+    ${EndIf}
+    ReadINIStr $1 "$PLUGINSDIR\agents.ini" "agents" "windsurf"
+    ${If} $1 == "1"
+        !insertmacro SelectSection ${SkillWindsurf}
+    ${EndIf}
+    ReadINIStr $1 "$PLUGINSDIR\agents.ini" "agents" "devin"
+    ${If} $1 == "1"
+        !insertmacro SelectSection ${SkillDevin}
+    ${EndIf}
+    ReadINIStr $1 "$PLUGINSDIR\agents.ini" "agents" "cline"
+    ${If} $1 == "1"
+        !insertmacro SelectSection ${SkillCline}
+    ${EndIf}
+    ReadINIStr $1 "$PLUGINSDIR\agents.ini" "agents" "kilo"
+    ${If} $1 == "1"
+        !insertmacro SelectSection ${SkillKilo}
+    ${EndIf}
+    ReadINIStr $1 "$PLUGINSDIR\agents.ini" "agents" "kiro"
+    ${If} $1 == "1"
+        !insertmacro SelectSection ${SkillKiro}
+    ${EndIf}
+    ReadINIStr $1 "$PLUGINSDIR\agents.ini" "agents" "antigravity"
+    ${If} $1 == "1"
+        !insertmacro SelectSection ${SkillAntigravity}
+    ${EndIf}
+    ReadINIStr $1 "$PLUGINSDIR\agents.ini" "agents" "kimi"
+    ${If} $1 == "1"
+        !insertmacro SelectSection ${SkillKimi}
     ${EndIf}
 FunctionEnd
 

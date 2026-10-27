@@ -21,7 +21,7 @@ int main(int argc, char **argv)
     parser.setApplicationDescription("Serial Workbench: shared GUI/background MCP runtime. Output is JSON.");
     parser.addHelpOption();
     parser.addVersionOption();
-    parser.addPositionalArgument("command", "start | status | show | stop | tools | call TOOL | mcp | install-skill AGENT | configure-agent AGENT");
+    parser.addPositionalArgument("command", "start | status | show | stop | tools | call TOOL | mcp | agents | export-agent AGENT | install-skill AGENT | configure-agent AGENT");
     parser.addPositionalArgument("name", "Tool or Agent name", "[name]");
     parser.addOption({"settings", "Select a shared settings profile", "path", sw::defaultSettingsPath()});
     parser.addOption({"url", "Use an explicit MCP URL (never auto-start)", "url"});
@@ -39,14 +39,16 @@ int main(int argc, char **argv)
         {
             throw std::runtime_error("--allow-control is only valid with start");
         }
-        if (command == "install-skill" || command == "configure-agent")
+        if (command == "install-skill" || command == "configure-agent" || command == "export-agent" || command == "agents")
         {
-            if (positional.size() != 2) { throw std::runtime_error("Specify one Agent name"); }
+            if (positional.size() != (command == "agents" ? 1 : 2)) { throw std::runtime_error("Specify one Agent ID; agents takes no ID"); }
             QTemporaryDir temporary;
             const auto report = temporary.filePath("result.json");
             QProcess child;
-            child.start(sw::siblingExecutable("SerialWorkbench"),
-                {"--" + command, positional[1], "--skill-report", report, "--settings", settings});
+            QStringList options {command == "agents" ? "--list-agents" : "--" + command};
+            if (command != "agents") { options.append(positional[1]); }
+            options.append({"--skill-report", report, "--settings", settings});
+            child.start(sw::siblingExecutable("SerialWorkbench"), options);
             if (!child.waitForFinished(20000)) { throw std::runtime_error("Agent operation did not finish"); }
             QFile file(report);
             if (!file.open(QIODevice::ReadOnly)) { throw std::runtime_error("Agent operation produced no report"); }

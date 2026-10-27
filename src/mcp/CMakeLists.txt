@@ -16,5 +16,6 @@ qt_add_resources(workbench_mcp workbench_guides
     PREFIX "/guides"
     BASE "${guide_root}"
     FILES "${guide_root}/SKILL.md" "${guide_root}/references/frame-script.md" "${guide_root}/references/cli.md"
+        "${guide_root}/references/model3d.md" "${guide_root}/references/agents.md"
 )
 install(DIRECTORY "${guide_root}" DESTINATION skills)

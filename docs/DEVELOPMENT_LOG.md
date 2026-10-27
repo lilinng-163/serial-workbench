@@ -2,6 +2,19 @@
 
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
 
+
+## 2026-10-28 — 3D MCP 与常见 Agent 接入，本地测试包
+
+- 从 `codex/model3d-telemetry` 的 `ac01ff5` 继续；开始时工作区干净，检查 `origin/main..origin/deepseek-dev` 无待集成提交。用户要求 AI 能直接导入模型、设置绑定并分析，以及扩大常见 Agent 接入范围。本轮仍为基于 v0.15.36 的开发测试版，未创建新 Release、未更新网站或修改用户当前安装。
+- 新增 `list_model_views`、`open_model_view`、`get_model_state`、`configure_model_view`、`capture_model_view`，共 22 个 MCP 工具。通过本机绝对路径异步导入 STL/OBJ/PLY，读取加载错误、三角面、最终矩阵、保守包围盒、颜色和采用帧序号；局部配置补丁支持精确连接/对端/命名流、位置、欧拉角、四元数、轴转换、比例、颜色与视角。导入/设置需要 AI 控制，关闭协议隐藏对应页面；revision 与正在编辑的输入保护 GUI 设置，无效补丁整体拒绝，导入失败保留旧模型。
+- 截图使用与 GUI 相同的渲染器，在不显示的 OpenGL 视口返回原生 MCP PNG image 与对应状态；HTTP/STDIO 保持图片内容，不将 base64 塞进状态正文。后台实例可导入、配置、读取和截图，打开 GUI 后沿用同一页面。修正窄视口适配时模型裁边；外观/暂停更新保留最近无效帧的错误与采用序号，防止把旧姿态当作新反馈。
+- Agent 页扩展为 26 个适配入口（包含不同客户端版本/模式），新增搜索、逐项配置导出和通用导出；CLI 增加 `agents` / `export-agent`。涵盖 Cursor、VS Code Local/Insiders、Copilot、Devin、Cline 新旧入口、Kilo、Kiro、Qoder、Zed、Antigravity、Qwen、Kimi 等。Windsurf 旧版、TRAE、Continue 与无法判定版本的 Kimi 采用导入；自动配置保留其他字段、先备份、重复配置幂等。官方路径/格式来源、手动入口及限制记录在 `docs/agent-integration.md`，没有声明所有第三方客户端已经逐一实连。
+- 安装器及设置页支持 17 个 skill 目标；新增 3D / Agent 指南，共 5 个内嵌主题和随包文件。中英 README、模型/安装/接入文档同步。安装测试先断言全部目标位于隔离用户目录，发现 Qt Windows home 查询忽略进程 USERPROFILE 后，修正 Agent 目录解析遵循该变量；首轮在写入前中止，没有触碰真实 Agent skill 或 MCP 配置。
+- 验证：Release 构建通过；最终全量 CTest 20/21，新增测试中的临时 `QJsonValueRef` 夹具悬空问题改为值拷贝后，3D MCP 组单独复核通过，21 组均完成验证。更早一轮主题组超时，单独复核 16/16，最终全量中正常通过。Windows 3D MCP 最终 **5/5**、Agent 窗口 **21/21**（其后 USERPROFILE 回归随 CTest Agent 组通过）、skill 对话框 **3/3**。已实际查看模型、窄视口、Agent 搜索/导出和紧凑 skill 对话框截图。skill 结构与 Python 测试语法检查通过。
+- 打包验证：精简 PATH 下 `smoke_native.py`、`smoke_cli.py`、新增 `smoke_model_mcp.py` 通过；官方 MCP SDK 验证共享独立读取、命名流隔离、欧拉角/四元数、修订冲突、HTTP/STDIO PNG、后台无窗口与 GUI 接续。最终安装器通过 Unicode 路径安装、默认勾选新增 Agent skill、升级保留用户数据、无 SDK 启动、运行中保护、22 工具及卸载保留个人文件。只使用 loopback，未做真实 MCU/IMU 联调。初次失败、复核和最终证据均在 `build/model3d-mcp/`。
+- 测试 EXE：`dist/SerialWorkbenchMcp3DPreview/SerialWorkbench.exe`，SHA-256 `98a34d3718556ac5297c40ba1712252465b1672de0346f43aa602985b93007cb`。ZIP：`dist/local/mcp3d-preview/SerialWorkbench-mcp3d-preview-windows-x64.zip`，21,134,751 字节，276 文件 CRC/逐项摘要通过，SHA-256 `77a3a0f29db1afcd200fac7ef1ea8a48d58e3551c3a7574bb09d99e0eca3bb36`。测试安装包同目录 `SerialWorkbench-0.15.36-windows-x64-setup.exe`，15,831,156 字节，SHA-256 `361492cba006dcd0b1304e437fa23175759a54b2e445a99fc3b7ea2ecc36327c`。构建、便携目录和安装 payload 的四个 EXE 摘要一致；不带个人设置。
+- 使用与边界：运行新测试版，在设置 → AI / MCP 更新所需 Agent 配置并重载，才能发现新增工具；旧安装的运行进程不自动升级。截图仍需要桌面 OpenGL 环境，视觉分析取决于客户端和模型能力；数值状态可独立读取，保守包围盒不是碰撞/结构安全分析。Windows 默认安装位置、CLI 和部分 VS Code 扩展可自动检测，其他 Profile/WSL/远程/便携客户端使用导出。后续若发布正式版，需另行提升版本号、生成发行说明并执行发布流程。
+
 ## 2026-10-26 — 3D 调节修复与命名 wave 数据流，测试版 2
 
 - 在 `codex/model3d-telemetry` 的 `840efbe` 上继续。用户反馈模型设置数字截断、位置不生效，希望独立调整颜色，并明确两个串口或同一串口的不同 wave 不能混用。本轮仍为基于 v0.15.36 的本地测试版。

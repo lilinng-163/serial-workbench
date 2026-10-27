@@ -165,10 +165,25 @@ def main():
         windows = Path(os.environ["SystemRoot"])
         agent_bin = directory / "agent-bin"
         agent_bin.mkdir()
-        for name in ("codex", "pi"):
+        for name in ("codex", "pi", "cursor", "copilot", "windsurf", "devin", "cline", "kilo", "kiro-cli", "agy", "kimi"):
             (agent_bin / f"{name}.cmd").write_text("@echo off\n", encoding="utf-8")
         env["PI_CODING_AGENT_DIR"] = str(profile / "pi")
+        # Keep every optional Agent destination inside this fixture, including
+        # overrides inherited from the developer's real environment.
+        for key, relative in {
+            "CLAUDE_CONFIG_DIR": "claude", "OPENCODE_CONFIG_DIR": "opencode",
+            "XDG_CONFIG_HOME": "config", "HERMES_HOME": "hermes",
+            "OPENCLAW_STATE_DIR": "openclaw", "GROK_HOME": "grok",
+            "COPILOT_HOME": "copilot", "KIMI_CODE_HOME": "kimi-code",
+        }.items():
+            env[key] = str(profile / relative)
         env["PATH"] = os.pathsep.join((str(agent_bin), str(windows / "System32"), str(windows)))
+        discovery = subprocess.run([
+            str(args.payload.resolve() / "SerialWorkbenchCLI.exe"), "agents", "--settings", str(settings),
+        ], env=env, capture_output=True, text=True, encoding="utf-8", timeout=25,
+            creationflags=subprocess.CREATE_NO_WINDOW, check=True)
+        for target in json.loads(discovery.stdout)["skill_targets"]:
+            assert Path(target["path"]).resolve().is_relative_to(profile.resolve()), target
         app = None
         try:
             baseline_version = "0.15.7"
@@ -182,6 +197,16 @@ def main():
             assert (profile / "pi/skills/serial-workbench/SKILL.md").is_file(), "Detected Pi skill component was not selected"
             assert "search_logs" in skill.read_text(encoding="utf-8")
             assert (skill.parent / "references/frame-script.md").is_file()
+            for relative in (
+                ".cursor/skills", "copilot/skills", ".codeium/windsurf/skills",
+                "roaming/devin/skills", ".cline/skills", ".kilo/skills", ".kiro/skills",
+                ".gemini/antigravity-cli/skills", "kimi-code/skills",
+            ):
+                guide = profile / relative / "serial-workbench"
+                assert (guide / "SKILL.md").is_file(), relative
+                assert (guide / "references/model3d.md").is_file(), relative
+                assert (guide / "references/agents.md").is_file(), relative
+            assert not (profile / ".cursor/mcp.json").exists()
             assert not (profile / "codex/config.toml").exists(), "Skill installation must not configure MCP"
             print("PASS detected Agent skill components install guide/references without changing MCP config", flush=True)
             info = registration()

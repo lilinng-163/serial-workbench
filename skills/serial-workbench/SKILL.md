@@ -1,6 +1,6 @@
 ---
 name: serial-workbench
-description: Use Serial Workbench CLI or MCP to start a shared background runtime, inspect serial/network/SSH sessions, search logs with native matching options, and validate or apply C-style frame parsers.
+description: Use Serial Workbench CLI or MCP to share serial/network/SSH connections, search logs, validate C-style frame parsers, import and inspect telemetry-driven 3D models, and configure supported Agent clients.
 ---
 
 # Serial Workbench
@@ -26,6 +26,9 @@ description: Use Serial Workbench CLI or MCP to start a shared background runtim
 | 数值波形、实时数值 | `read_waveform(channel_id, stream?, limit?)`，接受完整的 `@wave temperature=25.5,voltage=3.3` 或 `@wave[imu] roll=10,pitch=20,yaw=30`，以 CR、LF 或 CRLF 结束 |
 | JSON / XML | `read_structured`，需在界面启用提取；原文和结构化记录独立保留 |
 | 自定义串口帧 | `read_script_results`，需在串口收发页启用脚本，字段位于 `sources.default.records[].value` |
+| 3D 模型、姿态和视口 | `list_model_views` / `open_model_view` / `get_model_state` / `configure_model_view` / `capture_model_view`，先读 [3D 指南](references/model3d.md) 或 `read_usage_guide(topic="model3d")` |
+
+Agent 配置和安装 skill 先读 [接入指南](references/agents.md)，也可 `read_usage_guide(topic="agents")`。用 CLI `agents` 获取实际支持 ID，不猜客户端配置路径。
 
 波形按连接、网络对端和流名隔离。先查看 `sources.*.available_streams`，按用户所需用途选择流名；`stream="imu"` 只取命名流，`stream=""` 只取未命名，省略则返回全部。命名样本有 `samples[].stream`，不要将不同流的同名字段合并为同一信号。每个对端最多 32 种流名、所有流共用 5000 条历史；limit 在筛选后生效，index 和 total_samples 仍是对端所有流的序号/总数。流名区分大小写、最长 32 个字符，字母或下划线开头，后续可有字母、数字、下划线、连字符。3D 模型页选择同一连接、对端和流名后可绑定数值；旧未命名报文若同字段但含义不同，需发送端加流名，不能凭数值猜用途。
 
@@ -52,6 +55,6 @@ description: Use Serial Workbench CLI or MCP to start a shared background runtim
 
 ## 权限与能力边界
 
-`get_status.protocol_access` 控制串口、TCP、UDP、SSH 的开放范围；关闭的协议不可读也不可操作。`send_data`、`open_connection`、`close_connection`、`set_frame_script` 还需要当前实例允许 AI 控制（GUI 设置或新实例显式 `start --allow-control`），并且操作需符合用户任务。读取或写脚本说明不要求开启写权限。
+`get_status.protocol_access` 控制串口、TCP、UDP、SSH 的开放范围；关闭的协议不可读也不可操作。`send_data`、`open_connection`、`close_connection`、`set_frame_script`、`open_model_view`、`configure_model_view` 还需要当前实例允许 AI 控制（GUI 设置或新实例显式 `start --allow-control`），并且操作需符合用户任务。读取或写脚本说明不要求开启写权限。
 
-MCP 连接后可调用 `read_usage_guide()` 获得本说明正文及服务端的 skill 路径。路径属于运行工作台的那台电脑，其他主机或沙箱可能不能访问，直接读取 MCP 返回的正文即可。MCP 读取指南不会安装 skill。Windows 安装器默认勾选检测到的 Codex、Claude Code、OpenCode、Pi、Hermes、OpenClaw、Grok Build、Gemini CLI 的 skill 组件（可取消）；也可在设置 → AI / MCP → Agent 接入 → 配置 skill 中安装或更新，写入对应用户目录；已有变更文件先备份，重装相同内容不重复备份，卸载软件时保留 skill。未勾选则不写入；其他客户端可直接读取 MCP 指南。不要把已安装 skill 当作 MCP 已配置成功。启动时应用会只读检查当前配置的 STDIO 接入或实际 MCP URL 与已安装 Agent 的配置，并在状态栏、Agent 接入页及 get_status.agent_config_checks 显示差异；通过 GUI 的一键更新修正，重载 Agent 后再调用。
+MCP 连接后可调用 `read_usage_guide()` 获得本说明正文及服务端的 skill 路径。路径属于运行工作台的那台电脑，其他主机或沙箱可能不能访问，直接读取 MCP 返回的正文即可。MCP 读取指南不会安装 skill。Windows 安装器默认勾选检测到的 [17 类 Agent skill](references/agents.md) 组件（可取消）；也可在设置 → AI / MCP → Agent 接入 → 配置 skill 中安装或更新，写入对应用户目录；已有变更文件先备份，重装相同内容不重复备份，卸载软件时保留 skill。未勾选则不写入；其他客户端可直接读取 MCP 指南。不要把已安装 skill 当作 MCP 已配置成功。启动时应用会只读检查当前配置的 STDIO 接入或实际 MCP URL 与已安装 Agent 的配置，并在状态栏、Agent 接入页及 get_status.agent_config_checks 显示差异；通过 GUI 的一键更新修正，重载 Agent 后再调用。

@@ -133,7 +133,11 @@ void ModelView::fit()
         modelAlignment.rotate(alignment.x(), 1, 0, 0);
         target += currentPose.matrix.mapVector(modelAlignment.mapVector(mesh.center() * modelScale));
     }
-    distance = qMax(0.001, mesh.radius() * modelScale * 3.4);
+    const double aspect = double(width()) / qMax(1, height());
+    const double halfVertical = qDegreesToRadians(20.0);
+    const double halfHorizontal = std::atan(std::tan(halfVertical) * aspect);
+    const double limitingAngle = qMin(halfVertical, halfHorizontal);
+    distance = qMax(0.001, mesh.radius() * modelScale * 1.1 / std::sin(limitingAngle));
     update();
 }
 
@@ -160,6 +164,68 @@ void ModelView::restoreCamera(const QJsonObject &settings)
     const auto point = settings["target"].toArray();
     for (int i = 0; i < 3; ++i) { target[i] = qBound(-1e12, i < point.size() ? point[i].toDouble() : 0, 1e12); }
     update();
+}
+
+QMatrix4x4 ModelView::modelMatrix() const
+{
+    QMatrix4x4 model = currentPose.matrix;
+    model.rotate(alignment.z(), 0, 0, 1);
+    model.rotate(alignment.y(), 0, 1, 0);
+    model.rotate(alignment.x(), 1, 0, 0);
+    model.scale(modelScale);
+    if (centered) { model.translate(-mesh.center()); }
+    return model;
+}
+
+QJsonObject ModelView::modelState() const
+{
+    const auto vector = [](const QVector3D &v) { return QJsonArray {v.x(), v.y(), v.z()}; };
+    const auto matrix = modelMatrix();
+    QJsonArray rows;
+    for (int row = 0; row < 4; ++row)
+    {
+        rows.append(QJsonArray {matrix(row, 0), matrix(row, 1), matrix(row, 2), matrix(row, 3)});
+    }
+    QVector3D low;
+    QVector3D high;
+    for (int corner = 0; corner < 8; ++corner)
+    {
+        const auto point = matrix.map(QVector3D(corner & 1 ? mesh.maximum.x() : mesh.minimum.x(),
+            corner & 2 ? mesh.maximum.y() : mesh.minimum.y(), corner & 4 ? mesh.maximum.z() : mesh.minimum.z()));
+        for (int axis = 0; axis < 3; ++axis)
+        {
+            low[axis] = corner ? qMin(low[axis], point[axis]) : point[axis];
+            high[axis] = corner ? qMax(high[axis], point[axis]) : point[axis];
+        }
+    }
+    return {{"triangles", mesh.vertices.size() / 3}, {"local_min", vector(mesh.minimum)},
+        {"local_max", vector(mesh.maximum)}, {"world_bounds_min", vector(low)}, {"world_bounds_max", vector(high)},
+        {"position", vector(currentPose.position)}, {"model_matrix_rows", rows},
+        {"effective_color", modelColor().name()}, {"render_error", error}};
+}
+
+QImage ModelView::capture(int maxSize)
+{
+    // A separate, non-visible viewport uses the same mesh, renderer and camera.
+    // It also works when the shared runtime was started without a GUI window.
+    // Never pump events here: another MCP call must not change the pose mid-frame.
+    ModelView renderer;
+    renderer.setAttribute(Qt::WA_DontShowOnScreen);
+    renderer.setMinimumSize(1, 1);
+    renderer.resize(size().scaled(maxSize, maxSize, Qt::KeepAspectRatio));
+    renderer.setTheme(theme);
+    renderer.setMesh(mesh);
+    renderer.setPose(currentPose);
+    renderer.setModelColor(customColor);
+    renderer.setModelTransform(modelScale, centered, alignment);
+    renderer.restoreCamera(cameraSettings());
+    renderer.show();
+    auto frame = renderer.grabFramebuffer();
+    if (!renderer.isValid() || !renderer.renderError().isEmpty() || frame.isNull())
+    {
+        fail("无法捕获 3D 视口：OpenGL 渲染不可用。请在本机桌面环境运行工作台并检查显卡驱动。");
+    }
+    return frame.scaled(maxSize, maxSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 }
 
 void ModelView::lines(const QList<QVector3D> &points, const QColor &color, const QMatrix4x4 &matrix)
@@ -227,12 +293,7 @@ void ModelView::paintGL()
     glDepthMask(GL_FALSE);
     lines(grid, gridColor, vp);
     glDepthMask(GL_TRUE);
-    QMatrix4x4 model = currentPose.matrix;
-    model.rotate(alignment.z(), 0, 0, 1);
-    model.rotate(alignment.y(), 0, 1, 0);
-    model.rotate(alignment.x(), 1, 0, 0);
-    model.scale(modelScale);
-    if (centered) { model.translate(-mesh.center()); }
+    const auto model = modelMatrix();
     meshBuffer.bind();
     if (dirty)
     {

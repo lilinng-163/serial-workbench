@@ -141,6 +141,7 @@ class Window : public QMainWindow
     Q_OBJECT
 public:
     void installMcpUi();
+    void installModelMcp();
     void checkAgentEndpoints();
     void showAuditDetail(const QJsonObject &entry);
     void showAiActivity(const QJsonObject &entry);

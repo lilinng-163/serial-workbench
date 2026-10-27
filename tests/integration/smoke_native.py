@@ -48,7 +48,7 @@ async def check(url, bridge, allow, expected_version=None):
             initialized = await client.initialize()
             if expected_version:
                 assert initialized.serverInfo.version == expected_version
-            assert len((await client.list_tools()).tools) == 17
+            assert len((await client.list_tools()).tools) == 22
             assert "read_usage_guide" in initialized.instructions
             guide = unpack(await client.call_tool("read_usage_guide", {}))
             assert guide["guide"] and guide["skill_path_scope"] == "server_host"
@@ -73,7 +73,7 @@ async def check(url, bridge, allow, expected_version=None):
             async with stdio_client(params) as (sr, sw):
                 async with ClientSession(sr, sw) as second:
                     await second.initialize()
-                    assert len((await second.list_tools()).tools) == 17
+                    assert len((await second.list_tools()).tools) == 22
                     other = unpack(await second.call_tool("read_all_events", {}))
                     assert other["session_id"] == events["session_id"]
                     assert other["events"][:len(events["events"])] == events["events"]
@@ -191,7 +191,7 @@ async def check(url, bridge, allow, expected_version=None):
                     assert invalid.isError
                     status = unpack(await client.call_tool("get_status"))
                     assert status["session_id"] == events["session_id"]
-                    print("PASS HTTP/stdio, 17 tools, shared history, baud reconfiguration, long poll, loopback, strict wave/1, integer/double values, reconnect, validation")
+                    print("PASS HTTP/stdio, 22 tools, shared history, baud reconfiguration, long poll, loopback, strict wave/1, integer/double values, reconnect, validation")
 
 
 def main():

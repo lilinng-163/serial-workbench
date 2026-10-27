@@ -215,6 +215,8 @@ V1 `opencode.json` / `opencode.jsonc` 可合并以下条目：
 
 </details>
 
+当前开发版提供 **26 个客户端适配入口**与 **17 个 skill 安装目标**，涵盖 Cursor、VS Code / Copilot、Cline、Kilo、Kiro、Qoder、Zed、Antigravity、Qwen Code 等。设置页可搜索，也可用 `SerialWorkbenchCLI agents` 查看；每个入口可导出配置，路径尚未确认或依版本变化的客户端通过导入接入。其他兼容 MCP 的客户端使用 `export-agent generic`。详见[格式与路径说明](docs/agent-integration.md)。
+
 ### AI 可以做什么
 
 | 目标 | MCP 工具 |
@@ -225,6 +227,8 @@ V1 `opencode.json` / `opencode.jsonc` 可合并以下条目：
 | 搜索界面显示内容 | `list_search_views`、`search_logs`，与 GUI 共用大小写、全词、正则和逻辑开关 |
 | 读取或试解析串口脚本 | `get_frame_script`、`validate_frame_script`，离线试解析不改变正在使用的脚本 |
 | 应用串口脚本 | `set_frame_script`，需要 AI 控制权限和最新 revision，保护 GUI 未保存的编辑 |
+| 导入 / 设置共享 3D 页面 | `open_model_view`、`configure_model_view`，导入本机 STL / OBJ / PLY，设置数据绑定、颜色、位置和视角；需要 AI 控制权限 |
+| 分析 / 截图 3D 模型 | `list_model_views`、`get_model_state`、`capture_model_view`，读取矩阵、边界、采用帧序号，并返回原生 MCP PNG 图片 |
 | 了解使用流程与脚本语法 | `read_usage_guide` |
 | 发送数据或管理连接 | `send_data`、`open_connection`、`close_connection`，需要开启 AI 控制权限 |
 
@@ -233,6 +237,10 @@ V1 `opencode.json` / `opencode.jsonc` 可合并以下条目：
 > 读取我当前串口最近的 200 条记录，分析启动失败的原因。之后使用 next_cursor 继续，不要重复分析旧输出。
 
 > 检查 temperature 和 voltage 通道的突变，并与原始接收记录关联。
+
+> 导入我指定路径的 STL，只绑定这台设备的 imu 流，通过姿态状态和截图检查四元数映射是否正确。
+
+修改绑定前读取 [3D MCP 指南](skills/serial-workbench/references/model3d.md)。后台实例可不弹窗截图，但仍需要桌面 OpenGL 环境。保留的姿态或截图不能证明硬件已执行命令，要结合采用帧序号、错误和原始回包判断。
 
 附带的 [Serial Workbench skill](skills/serial-workbench/SKILL.md) 说明连接选择、增量读取、原生搜索与 C 风格帧脚本。AI 可直接调用 `read_usage_guide` 获取正文，也可在安装器中选装对应 Agent 的 skill。AI 打开的连接和应用的脚本会同步显示在界面中；活动提示可直接打开调用详情与调用日志。
 

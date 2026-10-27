@@ -27,6 +27,8 @@ public:
     void restoreCamera(const QJsonObject &settings);
     ModelPose pose() const { return currentPose; }
     QString renderError() const { return error; }
+    QJsonObject modelState() const;
+    QImage capture(int maxSize);
 
 signals:
     void cameraChanged();
@@ -42,6 +44,7 @@ protected:
 
 private:
     void cleanup();
+    QMatrix4x4 modelMatrix() const;
     void lines(const QList<QVector3D> &points, const QColor &color, const QMatrix4x4 &matrix);
     Theme theme;
     QColor customColor;

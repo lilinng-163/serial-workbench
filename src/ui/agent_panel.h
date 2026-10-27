@@ -37,5 +37,6 @@ private:
     bool busy = false;
     void prepareProbe(const std::function<void(const QString &)> &finished);
     void probe(const std::function<void(const QString &)> &finished);
+    void exportAgent(const AgentClient &agent);
 };
 }

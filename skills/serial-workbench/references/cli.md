@@ -39,10 +39,13 @@
 ```powershell
 .\SerialWorkbenchCLI.exe call search_logs --args-file search.json
 .\SerialWorkbenchCLI.exe call validate_frame_script --args-file parser-test.json
+.\SerialWorkbenchCLI.exe agents
+.\SerialWorkbenchCLI.exe export-agent cursor
+.\SerialWorkbenchCLI.exe export-agent generic
 .\SerialWorkbenchCLI.exe install-skill codex
 .\SerialWorkbenchCLI.exe configure-agent codex
 ```
 
-`install-skill` 更新指南并备份不同内容，不修改 MCP 配置。`configure-agent` 配置 STDIO 自动启动并备份原配置；保留其他服务与设置，完成后重载对应 Agent。支持的标识沿用 GUI：codex、claude-code、opencode、claude-desktop（只配置 MCP）、pi、hermes、openclaw、grok、gemini。不要把安装 skill、配置文件校验成功当作 Agent 实际握手成功；仍需调用 `get_status` 验证。
+`install-skill` 更新指南并备份不同内容，不修改 MCP 配置。`configure-agent` 配置 STDIO 自动启动并备份原配置；保留其他服务与设置，完成后重载对应 Agent。`agents` 返回当前版本支持的 ID、检测结果、配置路径、手动导入标记和 skill 目标；覆盖 Cursor、Copilot、Cline、Kilo、Kiro 等常见客户端。`export-agent ID` 只返回 configuration 文本，`generic` 输出通用 MCP JSON，不启动运行时也不改客户端文件。需要手动导入的客户端在其 MCP 设置中合并配置。完整范围见 [Agent 接入](agents.md)。不要把安装 skill、配置文件校验成功当作 Agent 实际握手成功；仍需调用 `get_status` 验证。
 
 搜索、连接选择、独立游标、脚本 revision 和试解析样本遵循主指南。后台搜索使用同一页面模型，仍受显示缓存限制；`show` 后可以看到相同的筛选、连接和已应用脚本。

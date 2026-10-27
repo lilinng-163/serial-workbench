@@ -439,9 +439,18 @@ void McpServer::finishCall(QTcpSocket *socket, const QJsonObject &rpc, const QSt
     try
     {
         toolValue = call(name, args);
+        QJsonArray content;
+        if (name == "capture_model_view")
+        {
+            auto state = toolValue.toObject();
+            const auto image = state.take("image_png_base64");
+            content.append(QJsonObject {{"type", "image"}, {"mimeType", "image/png"}, {"data", image}});
+            toolValue = state;
+        }
         const QByteArray text = toolValue.isArray() ? QJsonDocument(toolValue.toArray()).toJson(QJsonDocument::Compact)
             : QJsonDocument(toolValue.toObject()).toJson(QJsonDocument::Compact);
-        result = {{"content", QJsonArray {QJsonObject {{"type", "text"}, {"text", QString::fromUtf8(text)}}}}, {"isError", false}};
+        content.append(QJsonObject {{"type", "text"}, {"text", QString::fromUtf8(text)}});
+        result = {{"content", content}, {"isError", false}};
         result["structuredContent"] = toolValue.isObject() ? toolValue.toObject() : QJsonObject {{"result", toolValue}};
     }
     catch (const std::exception &exception)
@@ -473,6 +482,15 @@ void McpServer::finishCall(QTcpSocket *socket, const QJsonObject &rpc, const QSt
 
 QJsonValue McpServer::call(const QString &name, const QJsonObject &a)
 {
+    if (QStringList {"list_model_views", "open_model_view", "get_model_state", "configure_model_view", "capture_model_view"}.contains(name))
+    {
+        if ((name == "open_model_view" || name == "configure_model_view") && !engine->allowControl)
+        {
+            fail("AI 控制未开启，请在桌面设置 → AI / MCP 中允许控制");
+        }
+        if (!modelHandler) { fail("3D 页面服务尚未连接"); }
+        return modelHandler(name, a);
+    }
     if (QStringList {"get_frame_script", "validate_frame_script", "set_frame_script"}.contains(name))
     {
         return scriptTool(name, a);
@@ -512,7 +530,7 @@ QJsonValue McpServer::call(const QString &name, const QJsonObject &a)
             {"connections", connections}, {"connection_count", connections.size()}, {"connected_count", active},
             {"recovering_count", recovering}, {"counts_by_protocol", counts}, {"mcp_url", url()}, {"implementation", "Qt C++"},
             {"agent_config_checks", agentChecks}, {"background", qApp->property("swBackground").toBool()},
-            {"usage_guide", QJsonObject {{"tool", "read_usage_guide"}, {"topics", QJsonArray {"overview", "frame_script", "cli"}}}}};
+            {"usage_guide", QJsonObject {{"tool", "read_usage_guide"}, {"topics", QJsonArray {"overview", "frame_script", "cli", "model3d", "agents"}}}}};
     }
     if (name == "list_serial_ports")
     {
@@ -593,7 +611,7 @@ QJsonArray McpServer::tools() const
             {"annotations", QJsonObject {{"readOnlyHint", read}, {"destructiveHint", !read}, {"openWorldHint", !read}}}});
     };
     add("read_usage_guide", "Read the built-in Serial Workbench skill/usage guide. Call this when first using the software; topic=cli explains background startup and native CLI commands; topic=frame_script explains the exact C-style parser entry point, supported functions, framing, limits, example and result reading. Returns full Markdown even when the server-local skill_path is inaccessible. Does not install a skill or change scripts/configuration.",
-        {{"topic", QJsonObject {{"type", "string"}, {"enum", QJsonArray {"overview", "frame_script", "cli"}}, {"default", "overview"}}}});
+        {{"topic", QJsonObject {{"type", "string"}, {"enum", QJsonArray {"overview", "frame_script", "cli", "model3d", "agents"}}, {"default", "overview"}}}});
     add("get_status", "Get shared journal session, exposed connections, actual baud rates and permissions. See usage_guide for the built-in guide tool. protocol_access reports the GUI protocol switches; TCP covers both client and server. Disabled protocols cannot be read or controlled.", {});
     add("list_serial_ports", "List serial ports without opening hardware.", {});
     add("list_connections", "List exposed connections, including disconnected retained sessions, with ids, protocol, state and actual serial settings. Match the requested port/host before choosing channel_id; never assume the first connection is the current device.", {});
@@ -631,6 +649,17 @@ QJsonArray McpServer::tools() const
         {{"channel_id", property("string")}, {"code", property("string")}, {"enabled", property("boolean")},
          {"sample_chunks", QJsonObject {{"type", "array"}, {"items", property("string")}, {"maxItems", 64}}},
          {"expected_revision", property("string")}}, {"channel_id", "code", "enabled", "expected_revision"}, false);
+    add("list_model_views", "List shared GUI 3D pages. Optional channel_id filters one connection; empty string selects unbound pages. Disabled protocols are excluded. View IDs are valid only while the page exists.",
+        {{"channel_id", property("string")}});
+    add("open_model_view", "Import a server-local STL/OBJ/PLY file into a new shared GUI 3D page (64 MiB maximum). Requires AI control. Optional channel_id binds an exact connection; omit to leave unbound. Loading is asynchronous: poll get_model_state until loading=false and check load_error. Works in the background runtime without opening a visible window.",
+        {{"file_path", property("string")}, {"channel_id", property("string")}}, {"file_path"}, false);
+    add("get_model_state", "Read the actual 3D page settings, revision, load error, triangle count, bounds, model_matrix_rows (row-major), effective color, final position, telemetry frame sequences and mapping errors. Read-only; does not consume a log cursor. Retained pose may be stale: check errors, connection_state, paused and sequence values. Read topic=model3d for binding semantics.",
+        {{"view_id", property("string")}}, {"view_id"});
+    add("configure_model_view", "Update the shared GUI 3D page using expected_revision from get_model_state. Requires AI control. settings is a partial patch: mapping (position/angles/quaternion binding arrays, mode, order, intrinsic, radians, axes), feed wave/script, peer, stream, manual_position, scale, alignment, centered, color, follow_theme, paused, camera. Unknown/invalid settings reject the whole patch. Optional channel_id rebinds (empty string unbinds); optional file_path imports a replacement asynchronously; fit=true fits the camera. Read read_usage_guide(topic=model3d) first.",
+        {{"view_id", property("string")}, {"expected_revision", property("string")}, {"settings", property("object")},
+         {"channel_id", property("string")}, {"file_path", property("string")}, {"fit", property("boolean", false)}}, {"view_id", "expected_revision"}, false);
+    add("capture_model_view", "Render only the selected 3D viewport using its exact mesh, pose, camera and theme. Returns native MCP PNG image content plus matching structured state. Works in the background on a desktop OpenGL environment; reports an error if rendering is unavailable. max_size bounds the longest image dimension (256..1600, default 1024). Does not show windows or capture other applications. A vision-capable client can inspect the image; numerical analysis should use get_model_state.",
+        {{"view_id", property("string")}, {"max_size", property("integer", 1024)}}, {"view_id"});
     return result;
 }
 }

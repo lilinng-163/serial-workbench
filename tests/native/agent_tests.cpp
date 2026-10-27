@@ -25,14 +25,107 @@ class AgentTests : public QObject
 
     static void installAll(const sw::AgentEnvironment &env)
     {
-        for (const auto &command : QStringList {"codex", "claude", "opencode", "pi", "hermes", "openclaw", "grok", "gemini"})
+        for (const auto &command : QStringList {"codex", "claude", "opencode", "pi", "hermes", "openclaw", "grok", "gemini",
+            "cursor", "code", "code-insiders", "copilot", "windsurf", "devin", "cline", "kilo", "kiro-cli", "qoder", "zed", "trae", "agy", "qwen", "kimi"})
         {
             write(env.searchPaths.first() + "/" + command + ".cmd", "installation fixture");
         }
         write(env.localAppData + "/Claude/app-1.0/Claude.exe", "desktop fixture");
+        write(env.home + "/.vscode/extensions/saoudrizwan.claude-dev-1.0/package.json", "{\"publisher\":\"saoudrizwan\",\"name\":\"claude-dev\"}");
+        write(env.appData + "/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json", "{}");
+        write(env.home + "/.vscode/extensions/Continue.continue-1.0/package.json", "{\"publisher\":\"Continue\",\"name\":\"continue\"}");
     }
 
 private slots:
+    void userProfileControlsAgentHome()
+    {
+#ifdef Q_OS_WIN
+        QTemporaryDir directory;
+        const auto previous = qgetenv("USERPROFILE");
+        qputenv("USERPROFILE", QDir::toNativeSeparators(directory.path()).toUtf8());
+        const auto actual = sw::AgentEnvironment::current().home;
+        if (previous.isNull()) { qunsetenv("USERPROFILE"); }
+        else { qputenv("USERPROFILE", previous); }
+        QCOMPARE(actual, directory.path());
+#endif
+    }
+
+    void expandedAdaptersPreserveAndVerifyConfiguration()
+    {
+        QTemporaryDir directory;
+        auto env = environment(directory);
+        installAll(env);
+        env.variables["COPILOT_HOME"] = directory.filePath("copilot custom");
+        env.variables["CLINE_MCP_SETTINGS_PATH"] = directory.filePath("cline custom/mcp.json");
+        env.variables["KIMI_CODE_HOME"] = directory.filePath("kimi custom");
+        const auto bridge = directory.filePath("bridge with spaces.exe");
+        write(bridge, "fixture");
+        const auto clients = sw::AgentConfig::discover(env);
+        const auto url = QString("http://127.0.0.1:12345/mcp");
+        const auto profile = directory.filePath("profile with spaces.json");
+        QSet<QString> ids;
+        for (const auto &agent : clients)
+        {
+            QVERIFY(!ids.contains(agent.id));
+            ids.insert(agent.id);
+            if (ids.size() <= 9) { continue; }
+            const auto exported = sw::AgentConfig::updated(agent, "{\n// keep this comment\n\"unrelated\": 42\n}", "", bridge, profile);
+            QVERIFY(exported.contains("// keep this comment"));
+            const auto local = sw::AgentConfig::entry(agent, "", bridge, profile);
+            const auto remote = sw::AgentConfig::entry(agent, url, bridge);
+            QVERIFY(!local.contains("url"));
+            QVERIFY(!remote.contains("command"));
+            if (agent.id == "kilo")
+            {
+                QCOMPARE(local["command"].toArray(), QJsonArray({bridge, "--settings", profile}));
+                QCOMPARE(remote["type"].toString(), QString("remote"));
+            }
+            else
+            {
+                QCOMPARE(local["command"].toString(), bridge);
+                QCOMPARE(local["args"].toArray(), QJsonArray({"--settings", profile}));
+            }
+            if (agent.id == "qwen") { QCOMPARE(remote["httpUrl"].toString(), url); }
+            else if (agent.id == "antigravity") { QCOMPARE(remote["serverUrl"].toString(), url); }
+            else { QCOMPARE(remote["url"].toString(), url); }
+            if (agent.id.startsWith("vscode"))
+            {
+                QCOMPARE(agent.section, QStringList({"servers"}));
+                QCOMPARE(local["type"].toString(), QString("stdio"));
+                QCOMPARE(remote["type"].toString(), QString("http"));
+            }
+            if (agent.id == "cline")
+            {
+                QCOMPARE(agent.configPath, env.variables["CLINE_MCP_SETTINGS_PATH"]);
+                QCOMPARE(remote["type"].toString(), QString("streamableHttp"));
+            }
+            if (agent.id == "copilot")
+            {
+                QCOMPARE(agent.configPath, env.variables["COPILOT_HOME"] + "/mcp-config.json");
+                QCOMPARE(remote["tools"].toArray(), QJsonArray({"*"}));
+            }
+            if (agent.manualConfig)
+            {
+                QVERIFY_EXCEPTION_THROWN(sw::AgentConfig::configure(agent, "", bridge, profile), std::exception);
+                continue;
+            }
+            write(agent.configPath, "{\n// untouched\n\"unrelated\":42\n}");
+            sw::AgentConfig::configure(agent, "", bridge, profile);
+            QCOMPARE(sw::AgentConfig::check(agent, "", bridge, profile), QString("配置地址一致"));
+            const auto backups = QDir(QFileInfo(agent.configPath).absolutePath()).entryList({QFileInfo(agent.configPath).fileName() + ".*.bak"});
+            QCOMPARE(backups.size(), 1);
+            sw::AgentConfig::configure(agent, "", bridge, profile);
+            QCOMPARE(QDir(QFileInfo(agent.configPath).absolutePath()).entryList({QFileInfo(agent.configPath).fileName() + ".*.bak"}), backups);
+            sw::AgentConfig::configure(agent, url, bridge);
+            QCOMPARE(sw::AgentConfig::check(agent, url, bridge), QString("配置地址一致"));
+            QFile saved(agent.configPath);
+            QVERIFY(saved.open(QIODevice::ReadOnly));
+            const auto bytes = saved.readAll();
+            QVERIFY(bytes.contains("// untouched"));
+            QVERIFY(bytes.contains("\"unrelated\":42"));
+        }
+    }
+
     void installedDetectionIgnoresConfigResidue()
     {
         QTemporaryDir directory;
@@ -41,7 +134,7 @@ private slots:
         for (const auto &agent : sw::AgentConfig::discover(env)) { QVERIFY(!agent.installed()); }
         installAll(env);
         const auto clients = sw::AgentConfig::discover(env);
-        QCOMPARE(clients.size(), 9);
+        QCOMPARE(clients.size(), 26);
         for (const auto &agent : clients) { QVERIFY2(agent.installed(), qPrintable(agent.name)); }
         env.variables["CODEX_HOME"] = directory.filePath("custom-codex");
         env.variables["PI_CODING_AGENT_DIR"] = directory.filePath("custom-pi");
@@ -242,7 +335,7 @@ private slots:
             panel.setStyleSheet(theme.stylesheet());
             QApplication::processEvents();
             auto logos = panel.findChildren<QLabel *>("agentLogo");
-            QCOMPARE(logos.size(), 9);
+            QCOMPARE(logos.size(), 26);
             for (auto logo : logos)
             {
                 const auto image = logo->pixmap().toImage().convertToFormat(QImage::Format_ARGB32);
@@ -284,6 +377,75 @@ private slots:
         }
     }
 
+    void searchableCardsAndManualExport()
+    {
+        QTemporaryDir directory;
+        auto env = environment(directory);
+        installAll(env);
+        sw::Engine engine;
+        sw::McpServer server(&engine);
+        QVERIFY(server.start(0));
+        QScrollArea container;
+        container.setWidgetResizable(true);
+        container.resize(860, 680);
+        auto panel = new sw::AgentPanel(&server, nullptr, [env] { return env; });
+        container.setWidget(panel);
+        container.setStyleSheet(sw::Theme::make(false).stylesheet());
+        container.show();
+        auto filter = panel->findChild<QLineEdit *>("agentFilter");
+        auto grid = panel->findChild<QGridLayout *>("agentGrid");
+        QVERIFY(filter && grid);
+        filter->setText("cLiNe");
+        QCOMPARE(grid->count(), 2);
+        filter->setText("cursor");
+        QCOMPARE(grid->count(), 1);
+        auto card = grid->itemAt(0)->widget();
+        QCOMPARE(card->property("agentId").toString(), QString("cursor"));
+        filter->setText("TRAE");
+        QCOMPARE(grid->count(), 1);
+        QVERIFY(!panel->findChild<QPushButton *>("configure_trae")->isEnabled());
+        QVERIFY(panel->findChild<QPushButton *>("export_trae")->isEnabled());
+        panel->findChild<QPushButton *>("export_trae")->click();
+        auto text = panel->findChild<QPlainTextEdit *>("agentExportText");
+        QVERIFY(text && text->isReadOnly());
+        auto config = QJsonDocument::fromJson(text->toPlainText().toUtf8()).object();
+        QVERIFY(config["mcpServers"].toObject()["serial-workbench"].toObject().contains("command"));
+        auto dialog = qobject_cast<QDialog *>(text->window());
+        QVERIFY(dialog);
+        const auto capture = qEnvironmentVariable("SW_UI_CAPTURE_DIR");
+        if (!capture.isEmpty())
+        {
+            QDir().mkpath(capture);
+            QTest::qWait(100);
+            QVERIFY(dialog->grab().save(capture + "/agent-export.png"));
+        }
+        dialog->close();
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        panel->findChild<QCheckBox *>("agentAutoStart")->setChecked(false);
+        panel->findChild<QPushButton *>("export_cline")->click();
+        text = panel->findChild<QPlainTextEdit *>("agentExportText");
+        QVERIFY(text);
+        config = QJsonDocument::fromJson(text->toPlainText().toUtf8()).object();
+        QCOMPARE(config["mcpServers"].toObject()["serial-workbench"].toObject()["type"].toString(),
+            QString("streamableHttp"));
+        text->window()->close();
+        filter->setText("not-a-client");
+        QCOMPARE(grid->count(), 0);
+        filter->clear();
+        QCOMPARE(grid->count(), 26);
+        if (!capture.isEmpty())
+        {
+            QTest::qWait(100);
+            QVERIFY(container.grab().save(capture + "/agent-scroll.png"));
+            filter->setText("copilot");
+            QTest::qWait(100);
+            QVERIFY(container.grab().save(capture + "/agent-filter.png"));
+        }
+        QVERIFY(!QFileInfo::exists(env.home + "/.cursor/mcp.json"));
+        QVERIFY(!QFileInfo::exists(env.home + "/.cline/data/settings/cline_mcp_settings.json"));
+        container.close();
+    }
+
     void cardsAndBatchUpdate()
     {
         QTemporaryDir directory;
@@ -299,7 +461,7 @@ private slots:
         auto grid = panel.findChild<QGridLayout *>("agentGrid");
         QVERIFY(grid);
         QCOMPARE(grid->columnCount(), 2);
-        QCOMPARE(grid->count(), 9);
+        QCOMPARE(grid->count(), 26);
         for (auto logo : panel.findChildren<QLabel *>("agentLogo")) { QVERIFY(!logo->pixmap().isNull()); }
         QVERIFY(panel.findChild<QPushButton *>("configure_codex")->isEnabled());
         QVERIFY(!panel.findChild<QPushButton *>("check_pi")->isEnabled());
