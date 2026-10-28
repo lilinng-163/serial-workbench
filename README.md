@@ -70,7 +70,7 @@ v0.15.36 adds a native CLI, automatic background MCP startup and shared GUI hand
 | `SerialWorkbench-<version>-windows-x64.exe` | You want a single-file launcher that extracts and reuses a local runtime cache. |
 | `SHA256SUMS.txt` | You want to verify downloaded files with `Get-FileHash -Algorithm SHA256`. |
 
-The installer includes the runtime libraries and MCP bridge. SSH uses the Windows OpenSSH client (`ssh.exe`). Close the application and its bridge before upgrading. Installer settings are kept in `%LOCALAPPDATA%/SerialWorkbench/settings.json`; portable settings live beside the executable. See [installation and upgrades](docs/windows-installer.md).
+The installer includes the runtime libraries and MCP bridge. SSH uses the Windows OpenSSH client (`ssh.exe`). The development installer detects GUI/background runtimes and MCP bridges and offers to save settings, close them and continue; silent mode requires explicit `/CLOSEAPPLICATIONS` consent. Reconnect your Agent after upgrading. Installer settings are kept in `%LOCALAPPDATA%/SerialWorkbench/settings.json`; portable settings live beside the executable. See [installation and upgrades](docs/windows-installer.md).
 
 ## Quick start
 

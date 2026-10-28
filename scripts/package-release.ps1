@@ -23,7 +23,7 @@ $stageRoot = Join-Path $repoRoot ('build/' + $stageName)
 $payload = Join-Path $stageRoot 'SerialWorkbench'
 New-Item -ItemType Directory -Path $payload, $outputPath -Force | Out-Null
 
-foreach ($name in 'SerialWorkbench.exe', 'SerialWorkbenchMCP.exe', 'SerialWorkbenchCLI.exe', 'SerialWorkbenchSSHAskpass.exe')
+foreach ($name in 'SerialWorkbench.exe', 'SerialWorkbenchMCP.exe', 'SerialWorkbenchCLI.exe', 'SerialWorkbenchSSHAskpass.exe', 'SerialWorkbenchMaintenance.exe')
 {
     Copy-Item -LiteralPath (Join-Path $packagePath $name) -Destination $payload
 }

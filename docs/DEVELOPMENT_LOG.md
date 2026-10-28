@@ -2,6 +2,17 @@
 
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
 
+## 2026-10-28 — 3D 建页窗口稳定、Agent 图标与占用升级修复
+
+- 从 `codex/model3d-telemetry` 的 `eb36797` 继续，工作区起始干净；检查 `origin/main..origin/deepseek-dev` 无待集成提交。仍为 v0.15.36 的本地开发测试包，本轮未创建 Release 或部署网站。
+- 首次给已显示窗口添加 QOpenGLWidget 会触发 Qt 原生窗口重建，已用 Windows 回归复现句柄改变。Window 在首次创建原生窗口前加入不渲染的隐藏 OpenGL 标记，主窗口及分离窗口预先选择正确表面类型。修复后建页不 Hide、不换句柄、不改变位置/尺寸；最大化、渲染、模型操作、分离/回收均通过。依据：[Qt QOpenGLWidget](https://doc.qt.io/qt-6/qopenglwidget.html#limitations-and-other-considerations) 及当前 Qt 6.11.1 源码；没有使用在本版本不足以解决问题的全局共享上下文属性。
+- 补齐新增客户端的 15 种透明矢量品牌图标，26 个入口均有实际资源；单色标识随浅深主题切换，Qwen 深色使用白色标识保证可读性。图标离线打包，来源及许可证见 `resources/agents/README.md`，新增 Codicons CC BY 4.0 许可。实际查看浅/深主题和滚动到新增 Agent 的截图。
+- 新增独立 Windows 原生安装维护程序，不加载目标目录 Qt/MinGW DLL。安装/卸载前按完整路径检查 EXE/DLL；明确确认后逐配置正常保存退出 GUI/后台实例，再结束同目录的 MCP 桥（含 CLI mcp）。普通 CLI 写配置等待自然退出；其他目录同名程序保持运行；无 CLI 的 GUI 可通过正常 WM_CLOSE 关闭。无响应、无法识别的相对配置、权限或其他文件锁仍提供重试/取消，不强杀工作台。
+- 安装期使用 Windows delete-on-close 文件句柄阻止新的 GUI/后台/STDIO 启动，完成/取消/进程退出自动释放；保留 skill 安装流程。静默模式默认拒绝关闭，只有 `/CLOSEAPPLICATIONS` 显式授权才关闭。中英 README 和安装文档同步。维护工具由 CMake 安装、正式打包脚本包含，并加入卸载清单。
+- 验证：Release 构建通过；全量 CTest 20/21，SSH DPAPI 缓存测试在受限账户异常，随后在真实 Windows 用户下独立复核通过，21 组已完成验证。Windows 首次建页/渲染组 4/4，图标组 3/3。最终包 `smoke_cli.py`、`smoke_model_mcp.py` 通过，HTTP/STDIO、权限、独立游标、后台 GUI 接续与 3D PNG 正常。
+- 最终安装包隔离回归通过：中文空格目录、原路径升级、默认 skill、GUI + 自定义后台配置 + 两个 MCP 桥 + CLI mcp 占用；取消不关闭程序；其他安装目录存活；维护期禁止启动；锁定 Qt DLL 在写文件前停止，解锁后可安装；升级/卸载保留设置及用户文件。另复制修复前测试包验证旧后台/桥关闭、缺 CLI 的 GUI 正常退出。测试使用独立注册项和临时配置，没有更新用户正式安装。证据：`build/upgrade-polish/`；最初夹具失败和最终通过日志均保留。没有验证所有机器、杀毒软件或显卡环境，也未做真实设备联调。
+- 最终安装包：`dist/local/upgrade-preview/SerialWorkbench-0.15.36-upgrade-preview-setup.exe`，16,959,045 字节，SHA-256 `316a24b6ca82912b6acf27240426eeb917023ad3db3788b04c9b5b3a26c1ad2c`。便携 ZIP 同目录 `SerialWorkbench-0.15.36-upgrade-preview-windows-x64.zip`，21,332,723 字节、275 文件，SHA-256 `4ba176a99b44338a7faece09995d19312126498b4c72559ae669302cf895b28e`。直接测试 EXE：`dist/SerialWorkbenchUpgradePreview/SerialWorkbench.exe`，SHA-256 `330c97b0044121440e421866b0fb02acb6f88d6b4a1fc98c98a0a286b0b54729`。ZIP CRC、逐文件摘要、5 个 EXE 的构建/便携/安装 payload 一致性验证通过；无个人设置。安装完成后需在 Agent 重新连接 MCP。
+
 
 ## 2026-10-28 — 3D MCP 与常见 Agent 接入，本地测试包
 

@@ -307,23 +307,23 @@ QList<AgentClient> AgentConfig::discover(const AgentEnvironment &environment)
     const auto kiloBase = environment.variable("XDG_CONFIG_HOME", home + "/.config") + "/kilo";
     const auto kiloPath = kiloBase + (QFileInfo::exists(kiloBase + "/kilo.jsonc") ? "/kilo.jsonc" : "/kilo.json");
     agents.append({
-        {"cursor", "Cursor", "", editorExecutable(environment, "cursor", "cursor", "Cursor"), home + "/.cursor/mcp.json", "json", {"mcpServers"}},
-        {"vscode", "VS Code · Local", "", vscode, environment.appData + "/Code/User/mcp.json", "json", {"servers"}},
-        {"vscode-insiders", "VS Code Insiders · Local", "", editorExecutable(environment, "code-insiders", "Microsoft VS Code Insiders", "Code - Insiders"), environment.appData + "/Code - Insiders/User/mcp.json", "json", {"servers"}},
-        {"copilot", "GitHub Copilot · CLI / VS Code", "", copilot, environment.variable("COPILOT_HOME", home + "/.copilot") + "/mcp-config.json", "json", {"mcpServers"}},
-        {"windsurf", "Windsurf · 旧版", "", editorExecutable(environment, "windsurf", "Windsurf", "Windsurf"), "", "json", {"mcpServers"}, false, true},
-        {"devin", "Devin · CLI / Desktop", "", editorExecutable(environment, "devin", "Devin", "Devin"), environment.appData + "/devin/mcp_config.json", "json", {"mcpServers"}},
-        {"cline", "Cline · CLI / 新版扩展", "", cline, environment.variable("CLINE_MCP_SETTINGS_PATH", home + "/.cline/data/settings/cline_mcp_settings.json"), "json", {"mcpServers"}},
-        {"cline-vscode", "Cline · VS Code 旧版", "", clineExtension, environment.appData + "/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json", "json", {"mcpServers"}},
-        {"kilo", "Kilo Code", "", kilo, kiloPath, "json", {"mcp"}},
-        {"kiro", "Kiro · IDE / CLI", "", editorExecutable(environment, "kiro-cli", "Kiro", "Kiro"), home + "/.kiro/settings/mcp.json", "json", {"mcpServers"}},
-        {"qoder", "Qoder · CLI / Desktop", "", editorExecutable(environment, "qoder", "Qoder", "Qoder"), home + "/.qoder/settings.json", "json", {"mcpServers"}},
-        {"zed", "Zed", "", editorExecutable(environment, "zed", "Zed", "Zed"), environment.appData + "/Zed/settings.json", "json", {"context_servers"}},
-        {"trae", "TRAE", "", editorExecutable(environment, "trae", "Trae", "Trae"), "", "json", {"mcpServers"}, false, true},
-        {"antigravity", "Google Antigravity", "", editorExecutable(environment, "agy", "Antigravity", "Antigravity"), home + "/.gemini/config/mcp_config.json", "json", {"mcpServers"}},
-        {"qwen", "Qwen Code", "", environment.executable("qwen"), home + "/.qwen/settings.json", "json", {"mcpServers"}},
-        {"kimi", "Kimi Code", "", environment.executable("kimi"), environment.variable("KIMI_CODE_HOME", home + "/.kimi-code") + "/mcp.json", "json", {"mcpServers"}},
-        {"continue", "Continue", "", extensionExecutable(environment, "Continue.continue"), "", "json", {"mcpServers"}, false, true}
+        {"cursor", "Cursor", "cursor.svg", editorExecutable(environment, "cursor", "cursor", "Cursor"), home + "/.cursor/mcp.json", "json", {"mcpServers"}},
+        {"vscode", "VS Code · Local", "vscode.svg", vscode, environment.appData + "/Code/User/mcp.json", "json", {"servers"}},
+        {"vscode-insiders", "VS Code Insiders · Local", "vscode.svg", editorExecutable(environment, "code-insiders", "Microsoft VS Code Insiders", "Code - Insiders"), environment.appData + "/Code - Insiders/User/mcp.json", "json", {"servers"}},
+        {"copilot", "GitHub Copilot · CLI / VS Code", "githubcopilot.svg", copilot, environment.variable("COPILOT_HOME", home + "/.copilot") + "/mcp-config.json", "json", {"mcpServers"}},
+        {"windsurf", "Windsurf · 旧版", "windsurf.svg", editorExecutable(environment, "windsurf", "Windsurf", "Windsurf"), "", "json", {"mcpServers"}, false, true},
+        {"devin", "Devin · CLI / Desktop", "devin-color.svg", editorExecutable(environment, "devin", "Devin", "Devin"), environment.appData + "/devin/mcp_config.json", "json", {"mcpServers"}},
+        {"cline", "Cline · CLI / 新版扩展", "cline.svg", cline, environment.variable("CLINE_MCP_SETTINGS_PATH", home + "/.cline/data/settings/cline_mcp_settings.json"), "json", {"mcpServers"}},
+        {"cline-vscode", "Cline · VS Code 旧版", "cline.svg", clineExtension, environment.appData + "/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json", "json", {"mcpServers"}},
+        {"kilo", "Kilo Code", "kilocode.svg", kilo, kiloPath, "json", {"mcp"}},
+        {"kiro", "Kiro · IDE / CLI", "kiro-color.svg", editorExecutable(environment, "kiro-cli", "Kiro", "Kiro"), home + "/.kiro/settings/mcp.json", "json", {"mcpServers"}},
+        {"qoder", "Qoder · CLI / Desktop", "qoder.svg", editorExecutable(environment, "qoder", "Qoder", "Qoder"), home + "/.qoder/settings.json", "json", {"mcpServers"}},
+        {"zed", "Zed", "zed.svg", editorExecutable(environment, "zed", "Zed", "Zed"), environment.appData + "/Zed/settings.json", "json", {"context_servers"}},
+        {"trae", "TRAE", "trae.svg", editorExecutable(environment, "trae", "Trae", "Trae"), "", "json", {"mcpServers"}, false, true},
+        {"antigravity", "Google Antigravity", "antigravity.svg", editorExecutable(environment, "agy", "Antigravity", "Antigravity"), home + "/.gemini/config/mcp_config.json", "json", {"mcpServers"}},
+        {"qwen", "Qwen Code", "qwen-color.svg", environment.executable("qwen"), home + "/.qwen/settings.json", "json", {"mcpServers"}},
+        {"kimi", "Kimi Code", "kimi.svg", environment.executable("kimi"), environment.variable("KIMI_CODE_HOME", home + "/.kimi-code") + "/mcp.json", "json", {"mcpServers"}},
+        {"continue", "Continue", "continue.svg", extensionExecutable(environment, "Continue.continue"), "", "json", {"mcpServers"}, false, true}
     });
     // Legacy Cline is offered for existing installations, never write a second
     // unused config just because the modern extension is installed.

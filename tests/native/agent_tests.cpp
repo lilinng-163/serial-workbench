@@ -325,10 +325,19 @@ private slots:
         auto env = environment(directory);
         sw::Engine engine;
         sw::McpServer server(&engine);
+        QScrollArea scroll;
         sw::AgentPanel panel(&server, nullptr, [env] { return env; });
         panel.setObjectName("root");
-        panel.resize(840, 1020);
-        panel.show();
+        scroll.setWidget(&panel);
+        scroll.setWidgetResizable(true);
+        scroll.resize(840, 1020);
+        scroll.show();
+        const auto clients = sw::AgentConfig::discover(env);
+        for (const auto &client : clients)
+        {
+            QVERIFY2(!client.logo.isEmpty(), qPrintable(client.id));
+            QVERIFY2(QFileInfo::exists(":/agents/" + client.logo), qPrintable(client.logo));
+        }
         for (bool dark : {false, true, false})
         {
             const auto theme = sw::Theme::make(dark);
@@ -340,6 +349,7 @@ private slots:
             {
                 const auto image = logo->pixmap().toImage().convertToFormat(QImage::Format_ARGB32);
                 QVERIFY(!image.isNull());
+                bool ink = false;
                 QCOMPARE(logo->pixmap().devicePixelRatio(), logo->devicePixelRatioF());
                 bool transparent = false;
                 for (int y = 0; y < image.height(); ++y)
@@ -347,9 +357,11 @@ private slots:
                     for (int x = 0; x < image.width(); ++x)
                     {
                         transparent |= image.pixelColor(x, y).alpha() == 0;
+                        ink |= image.pixelColor(x, y).alpha() > 200;
                     }
                 }
                 QVERIFY2(transparent, qPrintable(logo->parent()->property("agentId").toString()));
+                QVERIFY2(ink, qPrintable(logo->parent()->property("agentId").toString()));
                 const auto rendered = logo->grab().toImage();
                 QCOMPARE(rendered.pixelColor(0, 0).alpha(), 0);
                 if (logo->parent()->property("agentId") == "codex")
@@ -372,7 +384,14 @@ private slots:
             if (!capture.isEmpty())
             {
                 QDir().mkpath(capture);
-                QVERIFY(panel.grab().save(capture + (dark ? "/agent-logos-dark.png" : "/agent-logos-light.png")));
+                QVERIFY(scroll.grab().save(capture + (dark ? "/agent-logos-dark.png" : "/agent-logos-light.png")));
+                for (int percent : {50, 100})
+                {
+                    scroll.verticalScrollBar()->setValue(scroll.verticalScrollBar()->maximum() * percent / 100);
+                    QApplication::processEvents();
+                    QVERIFY(scroll.grab().save(capture + QString("/agent-logos-%1-%2.png").arg(dark ? "dark" : "light").arg(percent)));
+                }
+                scroll.verticalScrollBar()->setValue(0);
             }
         }
     }

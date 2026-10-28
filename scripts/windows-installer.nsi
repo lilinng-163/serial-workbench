@@ -37,7 +37,7 @@ VIAddVersionKey "LegalCopyright" "Apache-2.0"
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEFINISHPAGE_BITMAP "${BRAND_DIR}\installer-sidebar.bmp"
 !define MUI_WELCOMEPAGE_TITLE "安装 ${PRODUCT_NAME}"
-!define MUI_WELCOMEPAGE_TEXT "安装串口、网络和 SSH 调试工作台，并提供共享 MCP 接入。$\r$\n$\r$\n您可以选择安装目录和桌面快捷方式。软件已包含运行库，无需安装 Python 或 Qt。$\r$\n$\r$\n继续之前，请关闭正在运行的工作台。"
+!define MUI_WELCOMEPAGE_TEXT "安装串口、网络和 SSH 调试工作台，并提供共享 MCP 接入。$\r$\n$\r$\n您可以选择安装目录和桌面快捷方式。软件已包含运行库，无需安装 Python 或 Qt。$\r$\n$\r$\n升级时会检测可见窗口、后台工作台和 MCP 占用，并提供保存设置后关闭并继续的选项。"
 !define MUI_HEADERIMAGE
 !define MUI_HEADERIMAGE_BITMAP "${BRAND_DIR}\installer-header.bmp"
 !define MUI_HEADERIMAGE_RIGHT
@@ -64,50 +64,89 @@ UninstPage custom un.SettingsPage un.SettingsLeave
 Var RemoveSettings
 Var RemoveSettingsCheck
 
-; A running EXE cannot be opened exclusively for write. Check all programs
-; before installing/removing any file rather than silently killing processes.
-!macro VerifyClosed PREFIX
-Function ${PREFIX}VerifyClosed
-    ${If} ${FileExists} "$INSTDIR\SerialWorkbench.exe"
-        System::Call 'kernel32::CreateFileW(w "$INSTDIR\SerialWorkbench.exe", i 0xC0000000, i 0, p 0, i 3, i 0, p 0) p.r0'
-        ${If} $0 == -1
-            MessageBox MB_OK|MB_ICONSTOP "工作台正在运行或文件不可写。请关闭工作台并检查安装目录权限，然后重试。" /SD IDOK
-            SetErrorLevel 2
-            Quit
-        ${EndIf}
-        System::Call 'kernel32::CloseHandle(p r0)'
-    ${EndIf}
-    ${If} ${FileExists} "$INSTDIR\SerialWorkbenchMCP.exe"
-        System::Call 'kernel32::CreateFileW(w "$INSTDIR\SerialWorkbenchMCP.exe", i 0xC0000000, i 0, p 0, i 3, i 0, p 0) p.r0'
-        ${If} $0 == -1
-            MessageBox MB_OK|MB_ICONSTOP "MCP 桥接程序正在运行或文件不可写。请先在 Agent 中断开 MCP，再重试。" /SD IDOK
-            SetErrorLevel 2
-            Quit
-        ${EndIf}
-        System::Call 'kernel32::CloseHandle(p r0)'
-    ${EndIf}
-    ${If} ${FileExists} "$INSTDIR\SerialWorkbenchCLI.exe"
-        System::Call 'kernel32::CreateFileW(w "$INSTDIR\SerialWorkbenchCLI.exe", i 0xC0000000, i 0, p 0, i 3, i 0, p 0) p.r0'
-        ${If} $0 == -1
-            MessageBox MB_OK|MB_ICONSTOP "命令行工具正在运行或文件不可写。请先退出命令行调用，再重试。" /SD IDOK
-            SetErrorLevel 2
-            Quit
-        ${EndIf}
-        System::Call 'kernel32::CloseHandle(p r0)'
-    ${EndIf}
-    ${If} ${FileExists} "$INSTDIR\SerialWorkbenchSSHAskpass.exe"
-        System::Call 'kernel32::CreateFileW(w "$INSTDIR\SerialWorkbenchSSHAskpass.exe", i 0xC0000000, i 0, p 0, i 3, i 0, p 0) p.r0'
-        ${If} $0 == -1
-            MessageBox MB_OK|MB_ICONSTOP "SSH 正在等待认证或文件不可写。请关闭 SSH 认证窗口和工作台，再重试。" /SD IDOK
-            SetErrorLevel 2
-            Quit
-        ${EndIf}
-        System::Call 'kernel32::CloseHandle(p r0)'
+Var MaintenanceLock
+
+; Keep a delete-on-close lease until setup completes. New MCP clients cannot
+; relaunch the runtime while files are being replaced; cancellation/crashes
+; release the lease automatically. The helper runs outside the install tree.
+!macro Maintenance PREFIX
+Function ${PREFIX}ReleaseMaintenance
+    ${If} $MaintenanceLock != ""
+        System::Call 'kernel32::CloseHandle(p $MaintenanceLock)'
+        StrCpy $MaintenanceLock ""
     ${EndIf}
 FunctionEnd
+
+Function ${PREFIX}VerifyClosed
+    CreateDirectory "$INSTDIR"
+    System::Call 'kernel32::CreateFileW(w "$INSTDIR\.workbench-maintenance", i 0xC0010000, i 0, p 0, i 4, i 0x04000000, p 0) p.r0'
+    ${If} $0 == -1
+        MessageBox MB_OK|MB_ICONSTOP "无法准备安装目录。请检查该目录的写入权限，并确认没有另一个安装程序正在运行。" /SD IDOK
+        SetErrorLevel 4
+        Quit
+    ${EndIf}
+    StrCpy $MaintenanceLock $0
+    InitPluginsDir
+    SetOutPath "$PLUGINSDIR"
+    File /oname=SerialWorkbenchMaintenance.exe "${PAYLOAD_DIR}\SerialWorkbenchMaintenance.exe"
+
+    check:
+    ClearErrors
+    ExecWait '"$PLUGINSDIR\SerialWorkbenchMaintenance.exe" --check "$INSTDIR"' $0
+    ${If} ${Errors}
+        StrCpy $0 4
+    ${EndIf}
+    ${If} $0 == 0
+        Return
+    ${EndIf}
+    ${If} $0 == 2
+        ClearErrors
+        ${GetParameters} $1
+        ${GetOptions} $1 "/CLOSEAPPLICATIONS" $2
+        ${IfNot} ${Errors}
+            Goto close
+        ${EndIf}
+        MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION|MB_DEFBUTTON2 "此目录的工作台或 MCP 仍在运行（可能在后台）。$\r$\n$\r$\n点“确定”将保存工作台设置、关闭连接，并结束此目录的 MCP 桥接后继续。安装完成后，请在 Agent 中重新连接 MCP。$\r$\n$\r$\n其他目录的工作台和 Agent 本身不会关闭。" /SD IDCANCEL IDOK close
+        Goto cancelled
+    ${EndIf}
+    Goto retry
+
+    close:
+    ClearErrors
+    ExecWait '"$PLUGINSDIR\SerialWorkbenchMaintenance.exe" --close "$INSTDIR"' $0
+    ${If} ${Errors}
+        StrCpy $0 4
+    ${EndIf}
+    ${If} $0 == 0
+        Return
+    ${EndIf}
+
+    retry:
+    MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "文件暂时无法更新，尚未替换安装文件。$\r$\n$\r$\n请关闭无响应的工作台/命令行、断开 Agent MCP，并检查安装目录写权限或其他程序的文件占用，再点“重试”。工作台不会被强制结束。$\r$\n$\r$\n检测代码：$0" /SD IDCANCEL IDRETRY check
+    cancelled:
+    Call ${PREFIX}ReleaseMaintenance
+    SetErrorLevel 2
+    Quit
+FunctionEnd
 !macroend
-!insertmacro VerifyClosed ""
-!insertmacro VerifyClosed "un."
+!insertmacro Maintenance ""
+!insertmacro Maintenance "un."
+
+Function .onInstSuccess
+    Call ReleaseMaintenance
+FunctionEnd
+Function .onInstFailed
+    Call ReleaseMaintenance
+FunctionEnd
+Function .onGUIEnd
+    Call ReleaseMaintenance
+FunctionEnd
+Function un.onUninstFailed
+    Call un.ReleaseMaintenance
+FunctionEnd
+Function un.onGUIEnd
+    Call un.ReleaseMaintenance
+FunctionEnd
 
 Function .onInit
     SetShellVarContext current
@@ -393,6 +432,7 @@ Section "Uninstall"
     !include "${REMOVE_MANIFEST}"
     Delete "$INSTDIR\installation.json"
     Delete "$INSTDIR\Uninstall.exe"
+    Call un.ReleaseMaintenance
     RMDir "$INSTDIR"
     Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
     Delete "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk"

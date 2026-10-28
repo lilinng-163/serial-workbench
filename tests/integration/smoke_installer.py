@@ -17,6 +17,7 @@ import tempfile
 import time
 import winreg
 import zlib
+from installer_upgrade_checks import check_busy_upgrade, start_for_uninstall
 
 ROOT = Path(__file__).resolve().parents[2]
 PRODUCT = "Serial Workbench Installer Test"
@@ -248,7 +249,7 @@ def main():
             ready = directory / "ready.json"
             app = subprocess.Popen([
                 str(destination / "SerialWorkbench.exe"), "--mcp-port", "0",
-                "--ready-file", str(ready), "--quit-after", "6000"
+                "--ready-file", str(ready), "--quit-after", "120000"
             ], env=env, creationflags=subprocess.CREATE_NO_WINDOW)
             wait_for(ready.exists)
             assert json.loads(ready.read_text(encoding="utf-8"))["version"] == args.expected_version
@@ -256,7 +257,7 @@ def main():
             blocked = subprocess.run(subprocess.list2cmdline([str(setup), "/S"]) + " /D=" + str(destination),
                                      env=env, timeout=20, creationflags=subprocess.CREATE_NO_WINDOW)
             assert blocked.returncode == 2, "Running application must block install before changing files"
-            app.wait(timeout=12)
+            check_busy_upgrade(setup, destination, directory, env, settings, app)
             assert json.loads(settings.read_text(encoding="utf-8"))["appearance"]["theme"] == "dark"
             assert json.loads(settings.read_text(encoding="utf-8"))["appearance"]["window_background"]["position_x"] == 20
             assert json.loads(settings.read_text(encoding="utf-8"))["appearance"]["window_background"]["position_y"] == 80
@@ -270,8 +271,17 @@ def main():
                             "--app-dir", str(destination), "--expected-version", args.expected_version],
                            env=env, check=True, timeout=60)
 
-            subprocess.run([str(destination / "Uninstall.exe"), "/S"], env=env, check=True,
-                           timeout=30, creationflags=subprocess.CREATE_NO_WINDOW)
+            bridge = start_for_uninstall(destination, env, settings)
+            try:
+                subprocess.run([str(destination / "Uninstall.exe"), "/S", "/CLOSEAPPLICATIONS"], env=env, check=True,
+                               timeout=50, creationflags=subprocess.CREATE_NO_WINDOW)
+                bridge.wait(timeout=10)
+            finally:
+                if bridge.poll() is None:
+                    bridge.terminate()
+                    bridge.wait(timeout=10)
+                for stream in (bridge.stdin, bridge.stdout, bridge.stderr):
+                    stream.close()
             wait_for(lambda: registration() is None and not (destination / "SerialWorkbench.exe").exists())
             wait_for(lambda: not (destination / "Uninstall.exe").exists())
             assert settings.exists(), "Personal settings must be retained by default"
@@ -288,7 +298,7 @@ def main():
                 app.wait(timeout=10)
             uninstall = destination / "Uninstall.exe"
             if uninstall.is_file() and (destination / "installation.json").is_file():
-                subprocess.run([str(uninstall), "/S"], env=env, timeout=30,
+                subprocess.run([str(uninstall), "/S", "/CLOSEAPPLICATIONS"], env=env, timeout=50,
                                creationflags=subprocess.CREATE_NO_WINDOW)
                 wait_for(lambda: registration() is None and not (destination / "SerialWorkbench.exe").exists())
                 wait_for(lambda: not uninstall.exists())

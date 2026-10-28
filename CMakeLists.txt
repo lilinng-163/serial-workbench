@@ -38,7 +38,7 @@ install(DIRECTORY resources/fonts/LICENSES DESTINATION licenses/FusionPixel)
 install(FILES LICENSE DESTINATION .)
 
 install(FILES resources/agents/README.md resources/agents/CC0.txt
-    resources/agents/lobe-icons-LICENSE resources/agents/opencode-LICENSE
+    resources/agents/lobe-icons-LICENSE resources/agents/codicons-LICENSE resources/agents/opencode-LICENSE
     resources/agents/hermes-LICENSE DESTINATION licenses/AgentLogos)
 install(FILES third_party/tomlplusplus/LICENSE DESTINATION licenses/tomlplusplus)
 install(FILES third_party/fkyaml/LICENSE DESTINATION licenses/fkYAML)

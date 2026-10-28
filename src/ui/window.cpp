@@ -1663,6 +1663,12 @@ public:
 Window::Window(Engine *owner, McpServer *service, const QString &path, Window *main)
     : QMainWindow(main, Qt::Window), primary(main), engine(owner), mcp(service), settingsPath(path)
 {
+    // Declare OpenGL composition before the native window is first created.
+    // Qt otherwise recreates a visible raster window when the first 3D page
+    // is inserted. This hidden anchor never renders or allocates model data.
+    auto modelSurface = new QOpenGLWidget(this);
+    modelSurface->setObjectName("model3dSurfaceAnchor");
+    modelSurface->hide();
     installWindowChrome();
     rootWindow()->hosts.append(this);
     if (primary)

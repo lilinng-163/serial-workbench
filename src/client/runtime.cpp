@@ -30,6 +30,11 @@ QString siblingExecutable(const QString &name)
 #endif
 }
 
+bool maintenanceInProgress()
+{
+    return QFileInfo::exists(QCoreApplication::applicationDirPath() + "/.workbench-maintenance");
+}
+
 QString defaultSettingsPath()
 {
     const auto directory = QCoreApplication::applicationDirPath();
@@ -80,6 +85,7 @@ QJsonObject instanceRequest(const QString &settings, const QString &command)
 
 QJsonObject ensureInstance(const QString &settings, bool allowControl)
 {
+    if (maintenanceInProgress()) { failure("Serial Workbench is being updated. Reconnect MCP after setup finishes."); }
     auto existing = instanceRequest(settings, "status");
     if (!existing.isEmpty())
     {
@@ -185,6 +191,7 @@ void McpClient::close()
 
 int runStdio(const QString &settings, const QString &url)
 {
+    if (maintenanceInProgress()) { failure("Serial Workbench is being updated. Reconnect MCP after setup finishes."); }
     // Explicit URLs never launch local processes. Default mode discovers the
     // profile's actual port, including a GUI port changed after installation.
     McpClient client(url.isEmpty() ? ensureInstance(settings)["mcp_url"].toString() : url);

@@ -37,6 +37,7 @@ private:
     {
         const bool dark = palette().color(QPalette::WindowText).lightness() > 128;
         QString file = asset;
+        if (dark && asset == "qwen-color.svg") { file = "qwen-dark.svg"; }
         if (dark && (asset == "opencode.svg" || asset == "hermes.svg"))
         {
             file.replace(".svg", "-dark.svg");
@@ -44,7 +45,9 @@ private:
         auto image = asset.isEmpty()
             ? icon("code", palette().color(QPalette::WindowText)).pixmap(QSize(30, 30), devicePixelRatioF())
             : QIcon(":/agents/" + file).pixmap(QSize(30, 30), devicePixelRatioF());
-        if (asset == "codex.svg" || asset == "grok.svg")
+        if (QStringList {"codex.svg", "grok.svg", "cursor.svg", "githubcopilot.svg",
+                "windsurf.svg", "cline.svg", "kilocode.svg", "qoder.svg", "zed.svg",
+                "trae.svg", "antigravity.svg", "kimi.svg", "continue.svg"}.contains(asset))
         {
             QPainter painter(&image);
             painter.setCompositionMode(QPainter::CompositionMode_SourceIn);

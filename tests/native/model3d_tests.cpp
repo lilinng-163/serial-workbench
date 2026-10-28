@@ -404,6 +404,51 @@ private slots:
         QCOMPARE(sw::migrateInstrumentPages({QJsonObject {{"kind", "model3d"}}}).size(), 1);
     }
 
+    void firstModelKeepsNativeWindow()
+    {
+        if (QGuiApplication::platformName() == "offscreen") { QSKIP("Requires a native OpenGL window"); }
+        class Events : public QObject
+        {
+        public:
+            int hidden = 0;
+            int handles = 0;
+            bool eventFilter(QObject *, QEvent *event) override
+            {
+                if (event->type() == QEvent::Hide) { ++hidden; }
+                if (event->type() == QEvent::WinIdChange) { ++handles; }
+                return false;
+            }
+        } events;
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("stable-window.json"));
+        window.resize(1240, 800);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QTest::qWait(100);
+        window.installEventFilter(&events);
+        const auto handle = window.winId();
+        const auto geometry = window.geometry();
+        auto page = window.newInstrument("model3d");
+        QTRY_VERIFY(page->instrument->model->view->isValid());
+        QCOMPARE(window.winId(), handle);
+        QCOMPARE(events.handles, 0);
+        QCOMPARE(events.hidden, 0);
+        QCOMPARE(window.geometry(), geometry);
+        QCOMPARE(window.active, page);
+        QVERIFY(!page->instrument->model->view->grabFramebuffer().isNull());
+        window.showMaximized();
+        QTest::qWait(150);
+        auto next = window.newInstrument("model3d");
+        QTRY_VERIFY(next->instrument->model->view->isValid());
+        QCOMPARE(window.winId(), handle);
+        QCOMPARE(events.handles, 0);
+        QCOMPARE(events.hidden, 0);
+        QVERIFY(window.isMaximized());
+        capture(&window, "first-model-stable-window");
+        window.removeEventFilter(&events);
+    }
+
     void realWindowRenderingAndControls()
     {
         if (QGuiApplication::platformName() == "offscreen") { QSKIP("Requires a native OpenGL window"); }

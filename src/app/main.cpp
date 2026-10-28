@@ -101,6 +101,14 @@ int main(int argc, char *argv[])
         }
         return code;
     }
+    if (sw::maintenanceInProgress())
+    {
+        if (!parser.isSet("headless"))
+        {
+            QMessageBox::information(nullptr, "正在更新", "工作台正在安装或卸载，请完成后再打开。Agent 可在完成后重新连接 MCP。");
+        }
+        return 5;
+    }
     bool validPort = false;
     auto port = parser.value("mcp-port").toUInt(&validPort);
     if (!parser.isSet("mcp-port"))

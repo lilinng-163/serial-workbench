@@ -70,7 +70,7 @@ v0.15.36 新增原生命令行工具、MCP 后台自动启动与 GUI 共享接�
 | `SerialWorkbench-<版本>-windows-x64.exe` | 单文件启动器，自动展开并复用本地运行库缓存。 |
 | `SHA256SUMS.txt` | 使用 `Get-FileHash -Algorithm SHA256` 核对下载文件。 |
 
-安装包内含运行库与 MCP 桥。SSH 使用 Windows OpenSSH 客户端（`ssh.exe`）。升级前关闭程序及桥接进程；安装版配置保存在 `%LOCALAPPDATA%/SerialWorkbench/settings.json`，便携版保存在程序目录。详见[安装与升级](docs/windows-installer.md)。
+安装包内含运行库与 MCP 桥。SSH 使用 Windows OpenSSH 客户端（`ssh.exe`）。开发版安装器会检测可见窗口、后台实例与 MCP 桥接，提供保存设置后关闭并继续的选项；静默安装只有显式传入 `/CLOSEAPPLICATIONS` 才会关闭。升级后重新连接 Agent。安装版配置保存在 `%LOCALAPPDATA%/SerialWorkbench/settings.json`，便携版保存在程序目录。详见[安装与升级](docs/windows-installer.md)。
 
 ## 快速开始
 
