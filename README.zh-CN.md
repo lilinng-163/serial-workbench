@@ -30,6 +30,7 @@
 | 🔌 **连接调试** | 串口、TCP 客户端/服务端、UDP、SSH；独立标签、实时端口发现与串口断线恢复。 |
 | 🖥️ **SSH 终端** | 专用交互终端，保留 **一万行滚动历史**，支持选择复制、ANSI 颜色、输入法和远端 PTY 尺寸同步。 |
 | 📈 **数值波形** | 最多 16 路命名曲线，缩放、平移、光标检查；四路定宽实时读数，可自行选择通道。 |
+| 🧊 **3D 模型** | 导入 STL、OBJ、PLY，选择连接与命名数据流，绑定欧拉角/四元数，支持轴映射、手动 XYZ 平移、模型选色及平滑参数标签切换。 |
 | 🧩 **JSON / XML** | 独立页面共享连接，增量提取与结构化查看，并提供 JSON 助手。 |
 | 🕘 **版本回溯** | 在设置中查看最近三个正式版本的特性并下载安装包，窗口底部显示当前运行版本。 |
 | 🎛️ **串口控制** | 滑块、数字输入、开关、按钮和下拉框；控件组、自由拖动缩放并跟随窗口宽度、预设与各控件独立自动发送。 |
@@ -60,7 +61,7 @@
 
 **[下载最新版本 →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.36 新增原生命令行工具、MCP 后台自动启动与 GUI 共享接入，并修复 SSH 跨屏拖拽选择。[查看更新说明](docs/releases/0.15.36.md)。
+v0.15.37 新增串口驱动 3D 模型、MCP 模型配置与导出，改善实时拖动和收发页切换，扩展 Agent 接入并完善 Windows 升级。[查看更新说明](docs/releases/0.15.37.md)。
 
 | 文件 | 适合的使用方式 |
 | --- | --- |
@@ -69,14 +70,14 @@ v0.15.36 新增原生命令行工具、MCP 后台自动启动与 GUI 共享接�
 | `SerialWorkbench-<版本>-windows-x64.exe` | 单文件启动器，自动展开并复用本地运行库缓存。 |
 | `SHA256SUMS.txt` | 使用 `Get-FileHash -Algorithm SHA256` 核对下载文件。 |
 
-安装包内含运行库与 MCP 桥。SSH 使用 Windows OpenSSH 客户端（`ssh.exe`）。升级前关闭程序及桥接进程；安装版配置保存在 `%LOCALAPPDATA%/SerialWorkbench/settings.json`，便携版保存在程序目录。详见[安装与升级](docs/windows-installer.md)。
+安装包内含运行库与 MCP 桥。SSH 使用 Windows OpenSSH 客户端（`ssh.exe`）。安装器会检测可见窗口、后台实例与 MCP 桥接，提供保存设置后关闭并继续的选项；静默安装只有显式传入 `/CLOSEAPPLICATIONS` 才会关闭。升级后重新连接 Agent。安装版配置保存在 `%LOCALAPPDATA%/SerialWorkbench/settings.json`，便携版保存在程序目录。详见[安装与升级](docs/windows-installer.md)。
 
 ## 快速开始
 
 1. 安装或解压后启动 **Serial Workbench**。程序不会自动连接硬件。
 2. 选择 **串口 / TCP 客户端 / TCP 服务端 / UDP / SSH**，填写连接参数后建立连接。
 3. 串口、网络连接可使用收发日志与发送栏，或切换交互终端。**SSH 直接进入终端**，不提供日志模式切换和串口式发送栏。
-4. 点击 **+ → 新建控件页面**，添加波形、JSON、XML 或串口控制页面，再选择数据来源；多个页面可共享一个连接。
+4. 点击 **+ → 新建控件页面**，添加波形、JSON、XML、串口控制或 **3D 模型**页面，再选择数据来源；多个页面可共享一个连接。
 5. 打开 **设置 → AI / MCP**，将 AI 客户端接入正在运行的工作台。
 
 收发日志、串口收发小窗和 JSON/XML 记录列表使用统一搜索开关：**Aa** 区分大小写、**ab** 全词匹配、**.*** 正则表达式、**&&** 逻辑匹配，默认全部关闭。开启逻辑匹配后，`温度 && 报警 || 故障` 表示“同时包含温度与报警，或者包含故障”，`&&` 优先于 `||`；搜索内容本身含运算符时加双引号，例如 `"A||B"`。正则与逻辑可组合，正则项内的运算符也可用双引号保护。表达式无效时显示警示边框，悬停可查看原因，记录继续显示。搜索设置随页面或小窗保存；暂停显示时也能重新筛选，筛选不改变 MCP 共享历史。
@@ -124,6 +125,8 @@ printf("@wave temperature=%.2f,voltage=%.3f,rpm=%d\r\n",
 ```
 
 使用命名字段，以 CR、LF 或 CRLF 结束。每帧最多 16 路通道。纯数字、普通日志、JSON 和脚本结果分别处理，不会混入波形。详见[波形专用协议](docs/wave-protocol.md)。
+
+支持命名数据流：`@wave[imu] roll=10,pitch=20,yaw=30` 与 `@wave[motor] rpm=1200`。连接、对端和流名分别隔离，曲线与实时数值显示流名；模型页选择 `imu`，MCP 使用 `read_waveform` 的 `stream="imu"`。空流名只匹配旧的 `@wave ...`。模型位置与姿态分别更新；手动世界坐标 XYZ 平移无需遥测，模型颜色可跟随主题，也可用选色盘或十六进制输入。
 
 ## 命令行与后台运行
 
@@ -212,6 +215,8 @@ V1 `opencode.json` / `opencode.jsonc` 可合并以下条目：
 
 </details>
 
+当前提供 **26 个客户端适配入口**与 **17 个 skill 安装目标**，涵盖 Cursor、VS Code / Copilot、Cline、Kilo、Kiro、Qoder、Zed、Antigravity、Qwen Code 等。设置页可搜索，也可用 `SerialWorkbenchCLI agents` 查看；每个入口可导出配置，路径尚未确认或依版本变化的客户端通过导入接入。其他兼容 MCP 的客户端使用 `export-agent generic`。详见[格式与路径说明](docs/agent-integration.md)。
+
 ### AI 可以做什么
 
 | 目标 | MCP 工具 |
@@ -222,6 +227,9 @@ V1 `opencode.json` / `opencode.jsonc` 可合并以下条目：
 | 搜索界面显示内容 | `list_search_views`、`search_logs`，与 GUI 共用大小写、全词、正则和逻辑开关 |
 | 读取或试解析串口脚本 | `get_frame_script`、`validate_frame_script`，离线试解析不改变正在使用的脚本 |
 | 应用串口脚本 | `set_frame_script`，需要 AI 控制权限和最新 revision，保护 GUI 未保存的编辑 |
+| 导入 / 设置共享 3D 页面 | `open_model_view`、`configure_model_view`，导入本机 STL / OBJ / PLY，设置数据绑定、颜色、位置和视角；需要 AI 控制权限 |
+| 分析 / 截图 3D 模型 | `list_model_views`、`get_model_state`、`capture_model_view`，读取矩阵、边界、采用帧序号，并返回原生 MCP PNG 图片 |
+| 模型配置与 Agent 交接 | `export_model_configuration`、`import_model_configuration`，与 GUI 共用版本化 JSON，包含绑定、字段说明和示例帧；导入遵守写权限及最新 revision，不自动连接硬件 |
 | 了解使用流程与脚本语法 | `read_usage_guide` |
 | 发送数据或管理连接 | `send_data`、`open_connection`、`close_connection`，需要开启 AI 控制权限 |
 
@@ -230,6 +238,10 @@ V1 `opencode.json` / `opencode.jsonc` 可合并以下条目：
 > 读取我当前串口最近的 200 条记录，分析启动失败的原因。之后使用 next_cursor 继续，不要重复分析旧输出。
 
 > 检查 temperature 和 voltage 通道的突变，并与原始接收记录关联。
+
+> 导入我指定路径的 STL，只绑定这台设备的 imu 流，通过姿态状态和截图检查四元数映射是否正确。
+
+修改绑定前读取 [3D MCP 指南](skills/serial-workbench/references/model3d.md)。后台实例可不弹窗截图，但仍需要桌面 OpenGL 环境。保留的姿态或截图不能证明硬件已执行命令，要结合采用帧序号、错误和原始回包判断。
 
 附带的 [Serial Workbench skill](skills/serial-workbench/SKILL.md) 说明连接选择、增量读取、原生搜索与 C 风格帧脚本。AI 可直接调用 `read_usage_guide` 获取正文，也可在安装器中选装对应 Agent 的 skill。AI 打开的连接和应用的脚本会同步显示在界面中；活动提示可直接打开调用详情与调用日志。
 
@@ -247,6 +259,7 @@ V1 `opencode.json` / `opencode.jsonc` 可合并以下条目：
 | --- | --- |
 | [Agent 接入](docs/agent-integration.md) | 客户端格式、配置路径与连接检查 |
 | [波形专用协议](docs/wave-protocol.md) | 分帧、通道名、数值类型与限制 |
+| [3D 模型与姿态](docs/model3d.md) | 模型导入、串口字段绑定、欧拉角、四元数和坐标转换 |
 | [版本回溯](docs/version-history.md) | 最近正式版本的特性与安装包 |
 | [串口控制](docs/serial-controls.md) | 控件组、预设、模板和自动发送 |
 | [帧脚本](docs/frame-scripts.md) | C 风格解析 API、校验与示例 |
@@ -259,7 +272,7 @@ V1 `opencode.json` / `opencode.jsonc` 可合并以下条目：
 
 ## 从源码构建
 
-Windows 构建需要 **Qt 6.9+**（Widgets、Network、SerialPort、Core5Compat、Svg、Test）、**CMake 3.21+**、Ninja 和匹配的 C++17 编译器。当前发行包使用 Qt 6.11.1 与 MinGW 13.1。
+Windows 构建需要 **Qt 6.9+**（Widgets、Network、SerialPort、Core5Compat、Svg、OpenGLWidgets、Concurrent、Test）、**CMake 3.21+**、Ninja 和匹配的 C++17 编译器。当前发行包使用 Qt 6.11.1 与 MinGW 13.1。3D 视图需要支持 OpenGL 2.1 或以上的图形环境。
 
 ```powershell
 git clone https://github.com/lilinng-163/serial-workbench.git
@@ -275,7 +288,7 @@ $env:MINGW_BIN = 'C:/Qt/Tools/mingw1310_64/bin'
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r tests/integration/requirements.txt
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.36
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.37
 ```
 
 安装 NSIS，并提供匹配的 Qt 源码目录收集许可证，即可生成安装包、单文件启动器和便携 ZIP：

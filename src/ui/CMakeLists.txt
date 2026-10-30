@@ -22,6 +22,16 @@ add_library(workbench_ui OBJECT
     serial_control_packet.cpp
     instrument_config.cpp
     instrument_config.h
+    model3d_data.cpp
+    model3d_data.h
+    model3d_view.cpp
+    model3d_view.h
+    model3d_panel.cpp
+    model3d_tabs.cpp
+    model3d_tabs.h
+    model3d_api.cpp
+    model3d_mcp.cpp
+    model3d_panel.h
     json_tools.cpp
     json_tools.h
     update_service.cpp
@@ -60,7 +70,7 @@ add_library(workbench_ui OBJECT
 workbench_configure_target(workbench_ui)
 target_include_directories(workbench_ui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_include_directories(workbench_ui SYSTEM PRIVATE "${PROJECT_SOURCE_DIR}/third_party")
-target_link_libraries(workbench_ui PUBLIC workbench_mcp Qt6::Widgets Qt6::Svg)
+target_link_libraries(workbench_ui PUBLIC workbench_mcp Qt6::Widgets Qt6::Svg Qt6::OpenGLWidgets Qt6::Concurrent)
 
 set(asset_root "${PROJECT_SOURCE_DIR}/resources")
 qt_add_resources(workbench_ui workbench_assets
@@ -77,6 +87,22 @@ qt_add_resources(workbench_ui workbench_assets
         "${asset_root}/agents/opencode.svg"
         "${asset_root}/agents/opencode-dark.svg"
         "${asset_root}/agents/pi.svg"
+        "${asset_root}/agents/antigravity.svg"
+        "${asset_root}/agents/cline.svg"
+        "${asset_root}/agents/continue.svg"
+        "${asset_root}/agents/cursor.svg"
+        "${asset_root}/agents/devin-color.svg"
+        "${asset_root}/agents/githubcopilot.svg"
+        "${asset_root}/agents/kilocode.svg"
+        "${asset_root}/agents/kimi.svg"
+        "${asset_root}/agents/kiro-color.svg"
+        "${asset_root}/agents/qoder.svg"
+        "${asset_root}/agents/qwen-color.svg"
+        "${asset_root}/agents/qwen-dark.svg"
+        "${asset_root}/agents/trae.svg"
+        "${asset_root}/agents/vscode.svg"
+        "${asset_root}/agents/windsurf.svg"
+        "${asset_root}/agents/zed.svg"
         "${asset_root}/brand/lightning.svg"
         "${asset_root}/releases/history.json"
         "${asset_root}/icons/check.svg"

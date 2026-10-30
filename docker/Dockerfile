@@ -20,7 +20,7 @@ RUN set -eux; \
     apt-get -o Acquire::Retries=3 update; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         build-essential cmake ninja-build ccache gdb git ca-certificates \
-        qt6-base-dev qt6-serialport-dev qt6-5compat-dev qt6-svg-dev \
+        qt6-base-dev libqt6opengl6-dev qt6-serialport-dev qt6-5compat-dev qt6-svg-dev \
         qt6-image-formats-plugins fonts-noto-cjk fonts-dejavu-core \
         openssh-client python3; \
     rm -rf /var/lib/apt/lists/*

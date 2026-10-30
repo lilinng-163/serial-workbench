@@ -272,7 +272,7 @@ private slots:
         QVERIFY(QFileInfo::exists(directory.filePath(".pi/agent/skills/serial-workbench/SKILL.md")));
         QVERIFY(!QFileInfo::exists(directory.filePath(".gemini/skills/serial-workbench/SKILL.md")));
         QVERIFY(!QFileInfo::exists(directory.filePath(".codex/config.toml")));
-        QCOMPARE(dialog->findChildren<QCheckBox *>().size(), 8);
+        QCOMPARE(dialog->findChildren<QCheckBox *>().size(), 17);
         dialog->findChild<QPushButton *>("installSelectedSkills")->click();
         QVERIFY(dialog->findChild<QLabel *>("skillState_codex")->text().contains("0 个备份"));
         const auto captures = qEnvironmentVariable("MCP_WORKFLOW_CAPTURE_DIR");

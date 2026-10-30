@@ -50,7 +50,7 @@ async def workflow(bridge, profile, status, version, cli):
         async with ClientSession(read, write) as client:
             initialized = await client.initialize()
             assert initialized.serverInfo.version == version
-            assert len((await client.list_tools()).tools) == 17
+            assert len((await client.list_tools()).tools) == 24
             first = unpack(await client.call_tool("get_status", {}))
             assert first["process"]["pid"] == status["pid"]
             assert first["background"] and first["allow_ai_control"]
@@ -184,7 +184,7 @@ def main():
             assert "error" in cli("start", "--allow-control", expected=2)
             assert not cli("status")["allow_ai_control"]
             assert "error" in cli("call", "get_status", "--args", "[]", expected=2)
-            assert len(cli("tools")["tools"]) == 17
+            assert len(cli("tools")["tools"]) == 24
             print("PASS concurrent start, no windows, dynamic port, JSON errors and permission gate", flush=True)
             stop()
             status = cli("start", "--allow-control")

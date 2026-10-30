@@ -30,6 +30,7 @@ Built with **Qt 6 and C++17**. The Windows application and its native MCP bridge
 | 🔌 **Connections** | Serial, TCP client/server, UDP and SSH; independent tabs, live port discovery and serial recovery. |
 | 🖥️ **SSH terminal** | A dedicated interactive terminal with **10,000 lines of scrollback**, selection and copy, ANSI colors, IME input and remote PTY resizing. |
 | 📈 **Waveforms** | Up to 16 named curves, zoom, pan, cursor inspection and four fixed-width live readouts with selectable channels. |
+| 🧊 **3D models** | Import STL, OBJ and PLY; choose a connection and named data stream, bind Euler/quaternion telemetry, remap axes, adjust manual XYZ translation and model color, with smooth parameter-tab transitions. |
 | 🧩 **JSON / XML** | Separate pages sharing a connection, incremental extraction, structured inspection and a JSON assistant. |
 | 🕘 **Version history** | Review the latest three stable releases in Settings, download verified installers, and see the running version in the status bar. |
 | 🎛️ **Serial controls** | Sliders, numeric inputs, switches, buttons and choices; groups, draggable/resizable cards that follow window width, presets and per-control automatic sending. |
@@ -60,7 +61,7 @@ Screenshots are captured from the application using generated example data and l
 
 **[Download the latest release →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.36 adds a native CLI, automatic background MCP startup and shared GUI handover, plus multi-page SSH drag selection. [Release notes](docs/releases/0.15.36.md).
+v0.15.37 adds telemetry-driven 3D models, shared MCP model configuration and export, smoother live interaction, expanded Agent integrations and coordinated Windows upgrades. [Release notes](docs/releases/0.15.37.md).
 
 | Package | Use it when… |
 | --- | --- |
@@ -69,14 +70,14 @@ v0.15.36 adds a native CLI, automatic background MCP startup and shared GUI hand
 | `SerialWorkbench-<version>-windows-x64.exe` | You want a single-file launcher that extracts and reuses a local runtime cache. |
 | `SHA256SUMS.txt` | You want to verify downloaded files with `Get-FileHash -Algorithm SHA256`. |
 
-The installer includes the runtime libraries and MCP bridge. SSH uses the Windows OpenSSH client (`ssh.exe`). Close the application and its bridge before upgrading. Installer settings are kept in `%LOCALAPPDATA%/SerialWorkbench/settings.json`; portable settings live beside the executable. See [installation and upgrades](docs/windows-installer.md).
+The installer includes the runtime libraries and MCP bridge. SSH uses the Windows OpenSSH client (`ssh.exe`). The installer detects GUI/background runtimes and MCP bridges and offers to save settings, close them and continue; silent mode requires explicit `/CLOSEAPPLICATIONS` consent. Reconnect your Agent after upgrading. Installer settings are kept in `%LOCALAPPDATA%/SerialWorkbench/settings.json`; portable settings live beside the executable. See [installation and upgrades](docs/windows-installer.md).
 
 ## Quick start
 
 1. Install or extract the application, then launch **Serial Workbench**. It does not connect to hardware automatically.
 2. Choose **串口 / TCP 客户端 / TCP 服务端 / UDP / SSH**, fill in the connection parameters and connect.
 3. For serial/network sessions, use the receive log and send panel, or switch to an interactive terminal. **SSH opens directly in the terminal**, with no log-mode switch or serial send panel.
-4. Click **+ → 新建控件页面** to add a waveform, JSON, XML or serial-control page. Choose its data source; several pages can share one connection.
+4. Click **+ → 新建控件页面** to add a waveform, JSON, XML, serial-control or **3D 模型** (3D model) page. Choose its data source; several pages can share one connection.
 5. Open **设置 → AI / MCP** to connect your agent to the running application.
 
 The receive log, serial monitor window and JSON/XML record list share the same search controls: **Aa** (case sensitive), **ab** (whole word), **.*** (regular expression) and **&&** (logical matching). All switches start off. With logical matching enabled, `temperature && alarm || fault` means both `temperature` and `alarm`, or `fault` (`&&` takes precedence). Use double quotes around terms containing operators, such as `"A||B"`; quoted regex terms also work when both modes are enabled. Invalid expressions show a warning border and an explanation on hover, keeping records visible. Search settings are saved with the page/window; filtering changes only the display, including while paused, and leaves shared MCP history intact.
@@ -124,6 +125,8 @@ printf("@wave temperature=%.2f,voltage=%.3f,rpm=%d\r\n",
 ```
 
 Use named fields and terminate each line with CR, LF or CRLF. Up to 16 channels can share a frame. Plain numbers, ordinary logs, JSON and script output are handled separately. See the [wave/1 protocol](docs/wave-protocol.md).
+
+Named streams are also supported: `@wave[imu] roll=10,pitch=20,yaw=30` and `@wave[motor] rpm=1200`. Connections, peers and stream names remain separate; curves and live values show the stream name. Select `imu` in the 3D model page or pass `stream="imu"` to `read_waveform`. An empty stream name selects legacy `@wave ...` frames. Model translation and orientation update independently; manual world-space XYZ translation works without telemetry, and model colors can follow the theme or use a picker / hex input.
 
 ## CLI and background runtime
 
@@ -212,6 +215,8 @@ Without `--url`, the bridge starts or reuses the background runtime. An explicit
 
 </details>
 
+The application provides **26 client adapters** and **17 skill installation targets**, including Cursor, VS Code / Copilot, Cline, Kilo, Kiro, Qoder, Zed, Antigravity and Qwen Code. Use the searchable Settings panel or `SerialWorkbenchCLI agents`. Each adapter offers configuration export; clients with unverified or version-dependent storage paths use manual import. `export-agent generic` covers other compatible MCP clients. See the [format and path reference](docs/agent-integration.md).
+
 ### What the agent can do
 
 | Goal | MCP tools |
@@ -222,6 +227,9 @@ Without `--url`, the bridge starts or reuses the background runtime. An explicit
 | Search the GUI display | `list_search_views`, `search_logs` — share case, whole-word, regex and logical switches with the GUI |
 | Inspect or test a serial parser | `get_frame_script`, `validate_frame_script` — offline tests leave the live parser unchanged |
 | Apply a serial parser | `set_frame_script` — requires AI control permission and the latest revision; protects unsaved GUI edits |
+| Import / configure a shared 3D page | `open_model_view`, `configure_model_view` — local STL / OBJ / PLY, telemetry mappings, color, position and camera; requires AI control |
+| Inspect / capture a 3D model | `list_model_views`, `get_model_state`, `capture_model_view` — transforms, bounds, adopted frame sequences and native MCP PNG images |
+| Transfer model settings between Agent sessions | `export_model_configuration`, `import_model_configuration` — versioned JSON shared with GUI import/export, with bindings, a field guide and example frame; importing requires AI control and the latest revision and never opens hardware |
 | Learn the workflow / parser syntax | `read_usage_guide` |
 | Send data or manage connections | `send_data`, `open_connection`, `close_connection` — requires AI control permission |
 
@@ -230,6 +238,10 @@ Example prompts:
 > Read the last 200 events from my connected serial device and explain the startup failure. Continue with `next_cursor` so you do not analyze old output again.
 
 > Inspect the temperature and voltage channels. Find spikes and correlate them with the raw receive events.
+
+> Import the STL at this local path, bind only the imu stream from the selected device, then check the quaternion mapping using both state and a rendered capture.
+
+Read [the 3D MCP guide](skills/serial-workbench/references/model3d.md) before changing bindings. A background runtime can render without opening a window, but still needs a desktop OpenGL environment. Captures and retained poses do not prove that a physical device applied a command; use the adopted frame sequences, errors and original replies.
 
 The bundled [Serial Workbench skill](skills/serial-workbench/SKILL.md) explains connection selection, incremental reading, native search and C-style frame scripts. Agents can retrieve the guide directly with `read_usage_guide`; the installer preselects skill components for detected Agents, and Settings can update them later. AI-opened connections and applied scripts appear in the GUI. An activity notice links to call details and the audit log.
 
@@ -249,6 +261,7 @@ Detailed guides are currently in Chinese.
 | --- | --- |
 | [Agent integration](docs/agent-integration.md) | Client formats, configuration paths and connection checks |
 | [Waveform protocol](docs/wave-protocol.md) | Framing, channel names, numeric types and limits |
+| [3D models and orientation](docs/model3d.md) | Mesh import, serial field bindings, Euler angles, quaternions and coordinate conversion |
 | [Version history](docs/version-history.md) | Recent stable release notes and installers |
 | [Serial controls](docs/serial-controls.md) | Control groups, presets, templates and automatic sending |
 | [Frame scripts](docs/frame-scripts.md) | C-style parser API, validation and examples |
@@ -261,7 +274,7 @@ Detailed guides are currently in Chinese.
 
 ## Build from source
 
-Windows builds require **Qt 6.9+** (Widgets, Network, SerialPort, Core5Compat, Svg and Test), **CMake 3.21+**, Ninja and a matching C++17 compiler. The release is built with Qt 6.11.1 and MinGW 13.1.
+Windows builds require **Qt 6.9+** (Widgets, Network, SerialPort, Core5Compat, Svg, OpenGLWidgets, Concurrent and Test), **CMake 3.21+**, Ninja and a matching C++17 compiler. The release is built with Qt 6.11.1 and MinGW 13.1. The 3D viewport requires an OpenGL 2.1 or newer graphics environment.
 
 ```powershell
 git clone https://github.com/lilinng-163/serial-workbench.git
@@ -277,7 +290,7 @@ The build script compiles the application, runs native tests and deploys Qt libr
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r tests/integration/requirements.txt
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.36
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.37
 ```
 
 To create the installer, single-file launcher and portable ZIP, install NSIS and provide the matching Qt source tree for license notices:

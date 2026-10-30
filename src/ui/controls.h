@@ -142,6 +142,7 @@ class WavePlot : public QWidget
     explicit WavePlot(QWidget *parent = nullptr);
     Theme theme;
     QMap<QString, QVector<QPointF>> series;
+    static QString sampleCurveName(const QString &source, const QJsonObject &sample, const QString &field);
     void setSamples(const QJsonObject &data);
     bool updateChannel(Channel *channel, int limit);
     QRectF plotArea() const;

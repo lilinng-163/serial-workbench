@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "instrument_config.h"
 #include "window.h"
+#include "model3d_panel.h"
 #include <QJsonObject>
 
 namespace sw
 {
 void Instrument::clearDisplay()
 {
+    if (model) { model->clearDisplay(); return; }
     if (plot) { plot->clearSamples(waveChannel, points->value()); }
     if (waveChannel && isStructured())
     {
@@ -23,33 +25,55 @@ void Instrument::clearDisplay()
 
 void Instrument::refreshValues(Channel *channel)
 {
-    const auto snapshot = channel ? channel->waveform(1)["sources"].toObject() : QJsonObject();
+    QJsonObject counters;
+    if (channel)
+    {
+        for (auto source = channel->sources.cbegin(); source != channel->sources.cend(); ++source)
+        {
+            counters[source.key()] = source.value()->count;
+        }
+    }
+    const QJsonObject snapshot {{"channel", channel ? channel->id : QString()}, {"counters", counters}, {"limit", points->value()}};
     if (snapshot == valuesSnapshot) { return; }
     valuesSnapshot = snapshot;
     int row = 0;
-    for (auto source = snapshot.begin(); source != snapshot.end(); ++source)
+    if (channel)
     {
-        const auto samples = source.value().toObject()["samples"].toArray();
-        if (samples.isEmpty()) { continue; }
-        const auto sample = samples.last().toObject();
-        if (!plot->sampleIsCurrent(source.key(), sample["index"].toInteger())) { continue; }
-        const auto values = sample["values"].toObject();
-        for (auto field = values.begin(); field != values.end(); ++field)
+        for (auto source = channel->sources.cbegin(); source != channel->sources.cend(); ++source)
         {
-            const auto name = source.key() == "default" ? field.key() : source.key() + "/" + field.key();
-            const QStringList columns {
-                plot->curveLabel(name), QLocale::c().toString(field.value().toDouble(), 'g', QLocale::FloatingPointShortest),
-                source.key() == "default" ? "本连接" : source.key(), QString::number(sample["index"].toInteger())
-            };
-            auto item = table->topLevelItem(row);
-            if (!item) { item = new QTreeWidgetItem(table); }
-            for (int column = 0; column < columns.size(); ++column)
+            QMap<QString, QJsonObject> latest;
+            const auto &buffer = *source.value();
+            int remaining = points->value();
+            for (auto sample = buffer.samples.rbegin(); sample != buffer.samples.rend() && remaining-- > 0; ++sample)
             {
-                if (item->text(column) != columns[column]) { item->setText(column, columns[column]); }
+                if (!plot->sampleIsCurrent(source.key(), (*sample)["index"].toInteger())) { break; }
+                const auto stream = (*sample)["stream"].toString();
+                if (!latest.contains(stream)) { latest.insert(stream, *sample); }
+                if (latest.size() == buffer.waveStreams.size()) { break; }
             }
-            item->setToolTip(0, field.key());
-            item->setToolTip(1, columns[1] + "\n来源：" + columns[2] + "\n采样序号：" + columns[3]);
-            ++row;
+            for (const auto &sample : latest)
+            {
+                const auto values = sample["values"].toObject();
+                for (auto field = values.begin(); field != values.end(); ++field)
+                {
+                    const auto name = WavePlot::sampleCurveName(source.key(), sample, field.key());
+                    const auto stream = sample["stream"].toString();
+                    const QStringList columns {
+                        plot->curveLabel(name), QLocale::c().toString(field.value().toDouble(), 'g', QLocale::FloatingPointShortest),
+                        (source.key() == "default" ? "本连接" : source.key()) + (stream.isEmpty() ? "" : " / " + stream),
+                        QString::number(sample["index"].toInteger())
+                    };
+                    auto item = table->topLevelItem(row);
+                    if (!item) { item = new QTreeWidgetItem(table); }
+                    for (int column = 0; column < columns.size(); ++column)
+                    {
+                        if (item->text(column) != columns[column]) { item->setText(column, columns[column]); }
+                    }
+                    item->setToolTip(0, name);
+                    item->setToolTip(1, columns[1] + "\n来源：" + columns[2] + "\n采样序号：" + columns[3]);
+                    ++row;
+                }
+            }
         }
     }
     while (table->topLevelItemCount() > row) { delete table->takeTopLevelItem(row); }
@@ -83,7 +107,7 @@ QJsonArray migrateInstrumentPages(const QJsonArray &pages)
                 result.append(separate);
             }
         }
-        else if (kind == "waveform" || kind == "json" || kind == "xml" || kind == "control")
+        else if (kind == "waveform" || kind == "json" || kind == "xml" || kind == "control" || kind == "model3d")
         {
             result.append(page);
         }

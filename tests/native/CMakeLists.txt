@@ -4,6 +4,11 @@ add_executable(wave_benchmark wave_benchmark.cpp)
 workbench_configure_target(wave_benchmark)
 target_link_libraries(wave_benchmark PRIVATE workbench_ui Qt6::Test)
 
+# Manual before/after profiling; uses loopback and an isolated settings file.
+add_executable(stream_ui_benchmark stream_ui_benchmark.cpp)
+workbench_configure_target(stream_ui_benchmark)
+target_link_libraries(stream_ui_benchmark PRIVATE workbench_ui Qt6::Test)
+
 qt_add_executable(native_tests tests.cpp)
 add_executable(fake_ssh fake_ssh.cpp)
 if(MINGW)
@@ -24,6 +29,17 @@ add_test(NAME native_tests COMMAND "${CMAKE_COMMAND}" -E env
     -o "${PROJECT_BINARY_DIR}/native-tests.txt,txt"
 )
 set_tests_properties(native_tests PROPERTIES TIMEOUT 60)
+
+qt_add_executable(stream_ui_tests stream_ui_tests.cpp)
+workbench_configure_target(stream_ui_tests)
+target_link_libraries(stream_ui_tests PRIVATE workbench_ui Qt6::Test)
+add_test(NAME stream_ui_tests COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=${workbench_test_path}"
+    $<TARGET_FILE:stream_ui_tests>
+    -platform offscreen
+    -o "${PROJECT_BINARY_DIR}/stream-ui-tests.txt,txt"
+)
+set_tests_properties(stream_ui_tests PROPERTIES TIMEOUT 30)
 
 qt_add_executable(frame_script_tests script_tests.cpp)
 workbench_configure_target(frame_script_tests)
@@ -226,3 +242,35 @@ add_test(NAME theme_color_tests COMMAND "${CMAKE_COMMAND}" -E env
     -o "${PROJECT_BINARY_DIR}/theme-color-tests.txt,txt"
 )
 set_tests_properties(theme_color_tests PROPERTIES TIMEOUT 30)
+
+qt_add_executable(model3d_tests model3d_tests.cpp)
+workbench_configure_target(model3d_tests)
+target_link_libraries(model3d_tests PRIVATE workbench_ui Qt6::Test)
+add_test(NAME model3d_tests COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=${workbench_test_path}"
+    $<TARGET_FILE:model3d_tests>
+    -platform offscreen
+    -o "${PROJECT_BINARY_DIR}/model3d-tests.txt,txt"
+)
+set_tests_properties(model3d_tests PROPERTIES TIMEOUT 45)
+
+qt_add_executable(wave_stream_tests wave_stream_tests.cpp)
+workbench_configure_target(wave_stream_tests)
+target_link_libraries(wave_stream_tests PRIVATE workbench_ui Qt6::Test)
+add_test(NAME wave_stream_tests COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=${workbench_test_path}"
+    $<TARGET_FILE:wave_stream_tests>
+    -platform offscreen
+    -o "${PROJECT_BINARY_DIR}/wave-stream-tests.txt,txt"
+)
+set_tests_properties(wave_stream_tests PROPERTIES TIMEOUT 30)
+
+qt_add_executable(model3d_mcp_tests model3d_mcp_tests.cpp)
+workbench_configure_target(model3d_mcp_tests)
+target_link_libraries(model3d_mcp_tests PRIVATE workbench_ui Qt6::Test)
+add_test(NAME model3d_mcp_tests COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=${workbench_test_path}"
+    $<TARGET_FILE:model3d_mcp_tests> -platform offscreen
+    -o "${PROJECT_BINARY_DIR}/model3d-mcp-tests.txt,txt"
+)
+set_tests_properties(model3d_mcp_tests PROPERTIES TIMEOUT 45)

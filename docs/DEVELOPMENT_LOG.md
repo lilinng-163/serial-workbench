@@ -1,6 +1,112 @@
 # 开发交接记录
 
+## 2026-10-30 — v0.15.37 发行验证完成，准备推送与镜像部署
+
+- 用户授权推送 GitHub 并同步网站。重新 fetch 后确认 `origin/main` 与 `origin/deepseek-dev` 同为 `643e9eb`，无新增 DeepSeek 提交；保留 `codex/model3d-telemetry` 的四个既有提交与全部未提交工作。版本从 0.15.36 提升为 0.15.37；本次汇总 3D、命名流、模型 MCP/配置交接、Agent/安装升级及实时拖动/收发页卡顿修复。
+- 发布说明与中英 README 同步，离线回溯快照更新为 0.15.36 / 35 / 34。网站源码同步 0.15.37 下载链接、摘要及功能说明，保留备案和视频入口；生成网页并通过两个部署摘要回归。网站专用维护脚本、模型、固件、用户设置和本地证据仍被忽略，未纳入提交。
+- 正式版本 Release 构建与全量 CTest **22/22** 通过。实际打包目录的 native / CLI / 3D MCP 集成通过，覆盖 24 工具、HTTP/STDIO、共享独立读取、权限、命名流、原生搜索/脚本、后台复用、模型导入/截图与 GUI 接续；检查最终模型 PNG。实机证据沿用上一节 ESP32-S3 连续 1317 帧验证，未重复烧录。
+- 最终安装、升级及卸载测试通过：透明图标、Unicode 路径、17 个 skill 目标隔离安装、自动识别旧路径、后台与多个桥接退出、其他安装隔离、维护期禁止重启、DLL 锁定后重试、无 SDK 运行及保留个人文件。便携 ZIP 清单、单文件首次/缓存启动和缺失缓存修复均通过。原始日志及 package.json 保存在 `build/release-0.15.37-verification/`。
+- 最终安装包 16,977,873 字节，SHA-256 `65305acd1cffc52dbb705f551e848ba14b35037b6b190b4244672a1c8f6d30f3`。另生成单文件 EXE、便携 ZIP 和 SHA256SUMS。当前停点：发行验证完成；后续 GitHub 发布和网站公网完整下载结果另行记录，不把准备工作当作已经部署。
+
+
+## 2026-10-29 — 恢复 ESP32 测试分支并完成卡顿修复实机复测
+
+- 用户说明 ESP32 曾用于其他工作，要求切回原分支。核对 MCU 仓库根目录为 `D:/MCU/esp32/esp32_practise`，当前 `test_any`、之前 `master` 均在 `d26ad0a`；已切回 `master`，保留 `test_any`、`.vscode/settings.json` 未提交修改及所有其他未跟踪工程。Serial Workbench 仍在 `codex/model3d-telemetry`，未切换或重置。
+- 第一段实机观察中工作台测试进程中途关闭，未计为成功。重新连接后读到 `soft_i2c: no ACK from 0x50`，确认板上是另一份固件；原 `custom_serial` 源码仍是 fixture 演示。显式加载工程原有 ESP-IDF 6.1/Python 环境（系统默认已切到 IDF 5.5，第一次激活失败日志保留），构建后通过 MCP 释放 COM8，再烧录 bootloader、分区表和 app；三项写入摘要校验通过。app 200496 字节，SHA-256 `1c180166fc3019a6a041beb825c1df5028f2301d1a500d7bfd0085f9a546f2d0`。
+- 使用修复版 `SerialWorkbenchStreamPreview` 重新连接 COM8 / 115200，原耳机夹具自动绑定 `fixture`。持续约 65 秒核对 74 个模型姿态状态，覆盖三个演示轴和三种相机位置；采集 1317 个连续设备帧，约 20.002Hz，无帧号缺口、解析拒绝或渲染错误，最大旋转矩阵元素误差 2.59e-7。实际执行正反向鼠标拖动并从模型页切回收发页；原生搜索返回的显示尾帧持续赶上当轮先前采样的接收帧，未观察到持续积压（不是逐帧显示延迟测量）。
+- 原始 RX 字节验证 `STREAM_FIX_ECHO_20261029` 的 CRLF 回显成功；实际 MSAA 8×。已恢复测试前相机，保留手动位置、颜色和绑定，保持 COM8 连接供用户继续体验。证据位于 `build/stream-ui-performance/hardware-run2/`，包含构建/烧录、逐次状态、1317 帧数据及 `summary.json`。此记录完成上一节待补的 MCU 实测；未推送、发布或部署。
+
+## 2026-10-29 — 实时 3D 拖动与收发页切换卡顿
+
+- 保留 `codex/model3d-telemetry` 上已有未提交的模型、图标、标签动效工作。收发页原先隐藏时停止消费显示游标，返回时每次同步补画 500 条；日志逐条触发文本排版与滚动，并逐条刷新隐藏终端。现在隐藏页继续按 64 条小批更新，积压时用单次计时器让出事件循环后继续，用户暂停仍保留游标；日志合并编辑事务，终端字节合并但保留重置/文件传输边界。GUI 和 MCP 游标、历史上限及权限语义未变。
+- Journal 按有序序号二分定位游标，避免每个页面实时读取都扫描完整历史。模型鼠标与遥测合并约 16ms 内的重绘请求；相机数值框在拖动中约 33ms 同步一次，松手和配置操作立即同步，MCP 始终读取最新相机状态。没有降低网格精度或抗锯齿设置。
+- 新增 `stream_ui_tests`，覆盖权限过滤分页/历史淘汰、分段 UTF-8/ANSI/CRLF、多来源日志、筛选与选区、隐藏页持续更新、暂停/恢复、终端重置边界、相机字段拖动中刷新和松手同步。首次完整 CTest 21/22，唯一失败是沙箱 DPAPI 凭据测试；实际 Windows 用户环境补测通过。最后一轮重绘修改后相关 CTest 3/3，真实 Windows 串流测试 6/6、模型测试 16/16（含实际 OpenGL、0/2/4/8× MSAA）。
+- 新增手动工具 `stream_ui_benchmark`。同一回环报文、1410 面耳机夹具和实际 8× MSAA：6000 条积压补画基线约 6173ms，最终约 1742ms；单批最长约 1164ms 降到 86ms，鼠标事件平均约 0.327ms 降到 0.036ms。不同轮次受桌面/GPU 调度影响仍有峰值，不能据此保证所有机器无掉帧。报告、各轮原始结果和 Windows 截图在 `build/stream-ui-performance/`。
+- 独立可运行预览为 `dist/SerialWorkbenchStreamPreview/Start-Preview.cmd`，使用自己的配置；EXE SHA-256 为 `E0F8DEEE926D409C9E5D23DE06D2A5C9014CF0DF533CC8BE39F4BC83D2B8264F`。通过真实窗口拖动耳机夹具并经 MCP 核对相机变化，随后恢复原视角；模型手动平移 `[0,-2,-7]`、颜色和绑定保留。
+- 本轮系统/MCP 串口列表为空，COM8 与上轮 ESP32 均未在线；已请求用户接回设备，当前不能声称完成修复版 MCU 实测。预览已打开，下一步连接 COM8 后验证真实 20Hz 数据下的连续拖动与切页。未提交、推送、发布或修改网站，个人预览配置和性能证据仍在 Git 忽略目录内。
+
+## 2026-10-29 — ESP32-S3 串口与最新 3D 测试版实机联调
+
+- 按用户要求继续原 ESP-IDF 6.1 `custom_serial` 工程，备份旧 `main.cpp` 后重写为可读的 UART0 演示：115200 / 8N1、20 Hz，24 秒依次绕 X/Y/Z 进行 0→60°→0° 演示；同一 `fixture` 流输出 roll/pitch/yaw 和等价 WXYZ 四元数、轴标记及帧号，保留原始串口回显。不输出虚构的 IMU 位移。工程内 `MODEL_DEMO.md` 同步说明字段、绑定、回显和烧录。
+- ESP-IDF 6.1 编译通过；COM8 实机识别为 ESP32-S3，bootloader / partition / app 烧录摘要验证全部通过。app 为 200496 字节，SHA-256 `9e8e318fe560ec2d37b281dfe5c75f8f3f77caacf906e3a95fb7894cc879f882`。第一次手动环境缺少 ESP_IDF_VERSION，随后加载官方 export.ps1 并设置本次进程 UTF-8 后成功，原失败日志保留。
+- 使用已验证的 `SerialWorkbenchIconTabsPreview` 与独立联调配置，通过其 MCP 共享真实串口并导入 1410 面耳机夹具。欧拉角 77 个状态、四元数 76 个状态逐一按实际采用的串口样本序号核对旋转矩阵，覆盖三个轴 60°；最大矩阵元素误差分别为 2.27e-7 / 1.07e-6。连续 600 帧无帧号间断，实测速率 20.012 Hz，拒绝行数为 0；发送测试文本后从 RX 原始字节确认相同 CRLF 回显。没有使用 loopback 代替实机证据。
+- 已查看实际 Windows 窗口和逐轴 MCP 截图，8× MSAA 请求/实际均为 8。测试保留用户实时调整的手动平移和相机；初次验证脚本要求位置恒为零，在用户调节平移后失败，已改为核对当前绑定与手动平移之和，未回写覆盖用户位置。完成后恢复欧拉角、保持实时更新并导出版本化模型配置供新会话使用。
+- 证据、截图、配置和本地联调脚本位于 `build/esp32-model-live-20261029/`；固件和说明在用户原 MCU 工程。当前工作区原有 3D / 图标 / 动效改动保留，本轮未修改工作台业务代码，未重复原生全套测试，未提交、推送、发布或部署网站。实测为生成姿态的 MCU 串口联调，不是 IMU 精度验证。
+
+## 2026-10-29 — 透明任务栏 Logo 与模型参数标签动效
+
+- Codex 在 `codex/model3d-telemetry` / `f3fa579` 及上一轮未提交的 3D 改动上继续，保留全部既有工作。本轮不提交、不推送、不发布，也不覆盖用户已安装程序。
+- 图标：SVG/ICO 源资源本就透明；深绿色圆角底来自 `WindowChrome::captionIcon()` 的运行时绘制。去除该底层，保留多尺寸矢量 Logo 的 alpha，所有使用窗口装饰的主窗口/对话框同步受益。未改动 Logo 形状或安装位图。
+- 模型参数标签：新增局部 `ModelTabs` / `ModelTabBar`，保持原生点击与键盘选择。选中圆角底和强调指示条在 180ms 内平滑移动，快速连续选择从可见位置重定向；悬停约 110ms，内容仅在参数页内部做 130ms 轻淡入，结束清除效果，不移动页面或作用于 OpenGL 视口。隐藏、布局变化及时停止/对齐，主题变化使用当前配色，系统禁用控件动画时不执行选中/内容过渡。其他标签、拖拽分离与连接逻辑未改动。
+- 验证：Release 构建成功，完整 CTest **21/21**（`build/icon-tabs-final-ctest.txt`）；Windows 模型 **16/16**、窗口装饰 **5/5**。验证快速切换、键盘操作、页面几何不变、多尺寸图标透明像素，以及 Windows `WM_GETICON` 实际 HICON 的透明通道。已查看真实窗口截图，证据在 `build/model3d-tabs-polish/`、`build/model3d-tabs-windows.txt`、`build/transparent-icon-windows.txt`。
+- 独立测试包：`dist/SerialWorkbenchIconTabsPreview/Start-Preview.cmd` 使用独立配置启动，避免复用运行中的旧版。包内程序与构建产物 SHA-256 一致：`93474a40e9642f3f8b0e0a7ecfa38da5ba9bb3a613a58fe539507ddfe59ff621`。HTTP/STDIO、24 工具、权限及共享读取集成验证通过（`build/icon-tabs-package-smoke.txt`），仅使用隔离配置和回环。
+- 代码探索使用项目图和精确覆盖检查；记录显示部分解析及 metadata_changed，依赖处均用当前源码补核。测试包仍是 0.15.36 开发预览，未声称已更新正式安装或网站。
+
+## 2026-10-28 — 3D 视图改进、配置交接与四元数常量修复
+
+- 执行者：Codex；继续 `codex/model3d-telemetry` / `f3fa579`，保留上一轮仅记录的待办。用户随后明确要求实现全部待办。
+- 界面：通道空项明确显示“未绑定（使用偏移常量）”，底层仍为空字段；标签面板消除额外衔接间隙。隐藏常用界面的旋转顺序与内外禀选择框，显示实际约定，保留旧配置及 MCP 参数，避免悄悄改变已有姿态。
+- 视图：适配使用完整变换后的模型中心，并在手动调整相机前按视口宽高比变化重新适配；新增视角页显示、编辑方位、仰角、距离、观察中心，鼠标/适配/MCP 修改后同步，不改串口模型姿态。新增关闭/2×/4×/8× MSAA，使用动态多采样帧缓冲，GUI/MCP 报告实际档位，截图沿用请求质量。
+- 姿态：四元数常量 W 原先在偏移上额外叠加默认 1，导致绕 Z 轴 60°/90° 变为 30°/45°；统一为空字段直接使用偏移常量，常量单位四元数需明确 W=1。新增 0°/60°/90°/180° 回归。
+- 配置：GUI 导入/导出版本化 JSON，包含路径、字段与单位、变换、外观、相机/质量以及 Agent 字段指南和示例帧；不包含网格、密码、私钥，不自动连接设备。新增 `export_model_configuration` / `import_model_configuration` MCP 工具，共用格式校验、协议权限和最新 revision。文件缺失/损坏、非法设置、版本冲突及只读拒绝均验证；安装 skill、内置指南、中英 README、模型说明同步。
+- 验证：Release 构建通过；完整 CTest **21/21**（真实用户环境，`build/model3d-refinement-final-ctest.txt`）；新增几何适配用例后相关两组再次通过。Windows 模型 **15/15**、Windows MCP **6/6**，截图已实际查看，显卡 MSAA 实际档位为 0/2/4/8。证据在 `build/model3d-refinement-windows-final.txt`、`build/model3d-refinement-mcp-windows.txt` 和 `build/model3d-refinement-captures/`。
+- 首次失败保留：原生工具数量断言随新增接口从 22 调整为 24；受限账户 SSH DPAPI 失败在真实用户环境通过。新增测试保存临时 QJsonValueRef 导致访问异常，经 GDB 定位后改为持有 QJsonValue，保留最初日志；不是以重跑替代修复。抗锯齿 GL 资源重建推迟到有效当前上下文中进行。
+- 独立测试包：`dist/SerialWorkbench3DRefinementPreview/SerialWorkbench.exe`。包内 CLI/后台启动、HTTP/STDIO、权限、共享读取、24 工具和 skill 安装的集成测试通过；在精简 PATH 下验证新增配置工具真实 HTTP 往返、常量四元数 Z90 和 PNG 截图。证据为 `build/model3d-refinement-{cli,package}-smoke.txt`、`build/model3d-refinement-wire/`；测试只使用隔离配置及回环，不影响用户现有实例。
+- 边界：仍为 0.15.36 开发测试包，不是正式新版；未覆盖已安装软件，未提交或推送 GitHub，未发布 Release 或部署网站。未声称其他显卡、Linux 或实际 IMU 角度解算协议已实测；代码图服务断开时采用源码读取，未声称图验证完成。下一步如需交接/发布，在当前工作区先审查 diff 并按用户要求提交、同步分支或打包安装器。
+
+## 2026-10-28 — 记录 3D 模型后续待办，暂未实现
+
+- 用户先要求记录、暂不实现。待办汇总到 [3D 模型后续改进清单](MODEL3D_TODO.md)，包括空字段说明、标签衔接、旋转顺序入口简化、适配视图、相机参数同步、可调抗锯齿、配置导入导出及 MCP 支持、四元数角度异常。
+- 起点为 `codex/model3d-telemetry` / `f3fa579`，工作区起始干净；已 fetch 并阅读入口与交接记录。图工具断开后直接读源码，确认旋转顺序实际参与计算，不能用单轴演示推断无效，也不能破坏已有配置。
+- 本次只写待办文档，不修改业务代码，不运行功能测试，不提交或推送，不发布 Release 或部署网站。开始实现前以用户后续确认的范围为准。
+
 每项任务完成或代理交接前，在本文件顶部新增记录。保持简洁，写事实与准确停点，不把聊天全文放进仓库。
+
+## 2026-10-28 — 3D 建页窗口稳定、Agent 图标与占用升级修复
+
+- 从 `codex/model3d-telemetry` 的 `eb36797` 继续，工作区起始干净；检查 `origin/main..origin/deepseek-dev` 无待集成提交。仍为 v0.15.36 的本地开发测试包，本轮未创建 Release 或部署网站。
+- 首次给已显示窗口添加 QOpenGLWidget 会触发 Qt 原生窗口重建，已用 Windows 回归复现句柄改变。Window 在首次创建原生窗口前加入不渲染的隐藏 OpenGL 标记，主窗口及分离窗口预先选择正确表面类型。修复后建页不 Hide、不换句柄、不改变位置/尺寸；最大化、渲染、模型操作、分离/回收均通过。依据：[Qt QOpenGLWidget](https://doc.qt.io/qt-6/qopenglwidget.html#limitations-and-other-considerations) 及当前 Qt 6.11.1 源码；没有使用在本版本不足以解决问题的全局共享上下文属性。
+- 补齐新增客户端的 15 种透明矢量品牌图标，26 个入口均有实际资源；单色标识随浅深主题切换，Qwen 深色使用白色标识保证可读性。图标离线打包，来源及许可证见 `resources/agents/README.md`，新增 Codicons CC BY 4.0 许可。实际查看浅/深主题和滚动到新增 Agent 的截图。
+- 新增独立 Windows 原生安装维护程序，不加载目标目录 Qt/MinGW DLL。安装/卸载前按完整路径检查 EXE/DLL；明确确认后逐配置正常保存退出 GUI/后台实例，再结束同目录的 MCP 桥（含 CLI mcp）。普通 CLI 写配置等待自然退出；其他目录同名程序保持运行；无 CLI 的 GUI 可通过正常 WM_CLOSE 关闭。无响应、无法识别的相对配置、权限或其他文件锁仍提供重试/取消，不强杀工作台。
+- 安装期使用 Windows delete-on-close 文件句柄阻止新的 GUI/后台/STDIO 启动，完成/取消/进程退出自动释放；保留 skill 安装流程。静默模式默认拒绝关闭，只有 `/CLOSEAPPLICATIONS` 显式授权才关闭。中英 README 和安装文档同步。维护工具由 CMake 安装、正式打包脚本包含，并加入卸载清单。
+- 验证：Release 构建通过；全量 CTest 20/21，SSH DPAPI 缓存测试在受限账户异常，随后在真实 Windows 用户下独立复核通过，21 组已完成验证。Windows 首次建页/渲染组 4/4，图标组 3/3。最终包 `smoke_cli.py`、`smoke_model_mcp.py` 通过，HTTP/STDIO、权限、独立游标、后台 GUI 接续与 3D PNG 正常。
+- 最终安装包隔离回归通过：中文空格目录、原路径升级、默认 skill、GUI + 自定义后台配置 + 两个 MCP 桥 + CLI mcp 占用；取消不关闭程序；其他安装目录存活；维护期禁止启动；锁定 Qt DLL 在写文件前停止，解锁后可安装；升级/卸载保留设置及用户文件。另复制修复前测试包验证旧后台/桥关闭、缺 CLI 的 GUI 正常退出。测试使用独立注册项和临时配置，没有更新用户正式安装。证据：`build/upgrade-polish/`；最初夹具失败和最终通过日志均保留。没有验证所有机器、杀毒软件或显卡环境，也未做真实设备联调。
+- 最终安装包：`dist/local/upgrade-preview/SerialWorkbench-0.15.36-upgrade-preview-setup.exe`，16,959,045 字节，SHA-256 `316a24b6ca82912b6acf27240426eeb917023ad3db3788b04c9b5b3a26c1ad2c`。便携 ZIP 同目录 `SerialWorkbench-0.15.36-upgrade-preview-windows-x64.zip`，21,332,723 字节、275 文件，SHA-256 `4ba176a99b44338a7faece09995d19312126498b4c72559ae669302cf895b28e`。直接测试 EXE：`dist/SerialWorkbenchUpgradePreview/SerialWorkbench.exe`，SHA-256 `330c97b0044121440e421866b0fb02acb6f88d6b4a1fc98c98a0a286b0b54729`。ZIP CRC、逐文件摘要、5 个 EXE 的构建/便携/安装 payload 一致性验证通过；无个人设置。安装完成后需在 Agent 重新连接 MCP。
+
+
+## 2026-10-28 — 3D MCP 与常见 Agent 接入，本地测试包
+
+- 从 `codex/model3d-telemetry` 的 `ac01ff5` 继续；开始时工作区干净，检查 `origin/main..origin/deepseek-dev` 无待集成提交。用户要求 AI 能直接导入模型、设置绑定并分析，以及扩大常见 Agent 接入范围。本轮仍为基于 v0.15.36 的开发测试版，未创建新 Release、未更新网站或修改用户当前安装。
+- 新增 `list_model_views`、`open_model_view`、`get_model_state`、`configure_model_view`、`capture_model_view`，共 22 个 MCP 工具。通过本机绝对路径异步导入 STL/OBJ/PLY，读取加载错误、三角面、最终矩阵、保守包围盒、颜色和采用帧序号；局部配置补丁支持精确连接/对端/命名流、位置、欧拉角、四元数、轴转换、比例、颜色与视角。导入/设置需要 AI 控制，关闭协议隐藏对应页面；revision 与正在编辑的输入保护 GUI 设置，无效补丁整体拒绝，导入失败保留旧模型。
+- 截图使用与 GUI 相同的渲染器，在不显示的 OpenGL 视口返回原生 MCP PNG image 与对应状态；HTTP/STDIO 保持图片内容，不将 base64 塞进状态正文。后台实例可导入、配置、读取和截图，打开 GUI 后沿用同一页面。修正窄视口适配时模型裁边；外观/暂停更新保留最近无效帧的错误与采用序号，防止把旧姿态当作新反馈。
+- Agent 页扩展为 26 个适配入口（包含不同客户端版本/模式），新增搜索、逐项配置导出和通用导出；CLI 增加 `agents` / `export-agent`。涵盖 Cursor、VS Code Local/Insiders、Copilot、Devin、Cline 新旧入口、Kilo、Kiro、Qoder、Zed、Antigravity、Qwen、Kimi 等。Windsurf 旧版、TRAE、Continue 与无法判定版本的 Kimi 采用导入；自动配置保留其他字段、先备份、重复配置幂等。官方路径/格式来源、手动入口及限制记录在 `docs/agent-integration.md`，没有声明所有第三方客户端已经逐一实连。
+- 安装器及设置页支持 17 个 skill 目标；新增 3D / Agent 指南，共 5 个内嵌主题和随包文件。中英 README、模型/安装/接入文档同步。安装测试先断言全部目标位于隔离用户目录，发现 Qt Windows home 查询忽略进程 USERPROFILE 后，修正 Agent 目录解析遵循该变量；首轮在写入前中止，没有触碰真实 Agent skill 或 MCP 配置。
+- 验证：Release 构建通过；最终全量 CTest 20/21，新增测试中的临时 `QJsonValueRef` 夹具悬空问题改为值拷贝后，3D MCP 组单独复核通过，21 组均完成验证。更早一轮主题组超时，单独复核 16/16，最终全量中正常通过。Windows 3D MCP 最终 **5/5**、Agent 窗口 **21/21**（其后 USERPROFILE 回归随 CTest Agent 组通过）、skill 对话框 **3/3**。已实际查看模型、窄视口、Agent 搜索/导出和紧凑 skill 对话框截图。skill 结构与 Python 测试语法检查通过。
+- 打包验证：精简 PATH 下 `smoke_native.py`、`smoke_cli.py`、新增 `smoke_model_mcp.py` 通过；官方 MCP SDK 验证共享独立读取、命名流隔离、欧拉角/四元数、修订冲突、HTTP/STDIO PNG、后台无窗口与 GUI 接续。最终安装器通过 Unicode 路径安装、默认勾选新增 Agent skill、升级保留用户数据、无 SDK 启动、运行中保护、22 工具及卸载保留个人文件。只使用 loopback，未做真实 MCU/IMU 联调。初次失败、复核和最终证据均在 `build/model3d-mcp/`。
+- 测试 EXE：`dist/SerialWorkbenchMcp3DPreview/SerialWorkbench.exe`，SHA-256 `98a34d3718556ac5297c40ba1712252465b1672de0346f43aa602985b93007cb`。ZIP：`dist/local/mcp3d-preview/SerialWorkbench-mcp3d-preview-windows-x64.zip`，21,134,751 字节，276 文件 CRC/逐项摘要通过，SHA-256 `77a3a0f29db1afcd200fac7ef1ea8a48d58e3551c3a7574bb09d99e0eca3bb36`。测试安装包同目录 `SerialWorkbench-0.15.36-windows-x64-setup.exe`，15,831,156 字节，SHA-256 `361492cba006dcd0b1304e437fa23175759a54b2e445a99fc3b7ea2ecc36327c`。构建、便携目录和安装 payload 的四个 EXE 摘要一致；不带个人设置。
+- 使用与边界：运行新测试版，在设置 → AI / MCP 更新所需 Agent 配置并重载，才能发现新增工具；旧安装的运行进程不自动升级。截图仍需要桌面 OpenGL 环境，视觉分析取决于客户端和模型能力；数值状态可独立读取，保守包围盒不是碰撞/结构安全分析。Windows 默认安装位置、CLI 和部分 VS Code 扩展可自动检测，其他 Profile/WSL/远程/便携客户端使用导出。后续若发布正式版，需另行提升版本号、生成发行说明并执行发布流程。
+
+## 2026-10-26 — 3D 调节修复与命名 wave 数据流，测试版 2
+
+- 在 `codex/model3d-telemetry` 的 `840efbe` 上继续。用户反馈模型设置数字截断、位置不生效，希望独立调整颜色，并明确两个串口或同一串口的不同 wave 不能混用。本轮仍为基于 v0.15.36 的本地测试版。
+- 模型设置将倍率、偏移改为整行输入，去掉固定六位尾零但保留输入精度，欧拉顺序与旋转约定分行，右侧可拉宽。新增世界坐标手动 XYZ 平移与“模型”页：跟随主题/选色盘/#RGB/#RRGGBB，颜色、平移随页面保存。
+- 修复缺少角度字段导致位置整帧拒绝的问题：位置与姿态独立验证和更新，各自保留最近有效数据；无数据时手动位置、常量偏移也立即生效。多帧批次从后向前选择各部分最新有效帧，不跨帧拼接姿态分量；最后一帧无关数据不会遮住前面的有效帧。调节倍率可使用上次有效位置，不因最近仅有姿态帧而失效。
+- 新增兼容格式 `@wave[imu] roll=10,pitch=20,yaw=30`。连接、网络对端、流名分别隔离，模型页选择精确流名；空名只匹配旧 `@wave ...`。曲线与实时数值显示 `[流名]/字段`，不同流的同名数值不会连在一起。每个来源最多 32 种流名，所有流共用 5000 条历史与累计序号，沿用 8192 字节/16 字段上限。
+- MCP `read_waveform` 增加可选 `stream`，先筛选再限制条数，返回 `available_streams` 和命名样本的 `stream`；省略参数读取全部，空串只读旧格式。保持共享历史、协议开关与写权限。中英 README、模型/波形指南、随包 skill 和内嵌 `read_usage_guide` 同步；skill 结构校验通过。
+- 验证：Release 构建通过，完整 CTest **20/20**（`build/model3d-refinement/full-ctest-initial.txt`）；补齐最近有效位置缓存后，最终 Windows 模型组 **12/12**，125% DPI 渲染组 **3/3**。已检查默认与 125% 的长数字、手动位置、颜色及浅深主题截图。保留 Qt 6.11.1 初次建窗的 wrapper texture / No fbo 诊断；随后有效 OpenGL 上下文、帧缓冲与屏幕结果正常。未做真实 MCU / IMU 联调。
+- 打包：新目录 `dist/SerialWorkbenchModel3DPreview2/SerialWorkbench.exe`，保留原测试版目录；包含运行库、许可证、说明与更新的 skill，不带个人设置。最终包在精简 PATH、无 SDK 的环境中通过 `smoke_native.py`，验证 HTTP/STDIO 多流筛选、旧格式、共享独立读取、权限、搜索与脚本同步（`package-smoke.txt`）。EXE SHA-256：`e5c3351888a43129568732469119d2b18ddc56e9b46b24398e3fcdc185701955`。
+- ZIP：`dist/local/model3d-preview2/SerialWorkbench-model3d-preview2-windows-x64.zip`，20,506,525 字节，273 个文件 CRC/逐文件摘要与包目录一致。SHA-256：`943ff5282c37e8d05e40e42ede0605071f462658eff662c08eed31d7d7e4056c`。证据统一在 `build/model3d-refinement/`。同名、同格式且无流标记的不同含义报文无法推断用途，需发送端标记或脚本依据真实协议识别。
+
+## 2026-10-26 — 3D 模型与通道姿态，本地测试版
+
+- 用户要求：导入 STL 等常见模型，通过串口通道数值设置位置和姿态，支持欧拉角、四元数与自定义 XYZ。开始时工作区干净，`origin/main..origin/deepseek-dev` 无待集成提交；从 `643e9eb` 建立 `codex/model3d-telemetry`。正式版本仍为 v0.15.36，本项未创建 Release、未发布网站。
+- 新增“+ → 新建控件页面 → 3D 模型”：后台导入 STL（文本/二进制/多 solid）、OBJ、PLY（文本/大小端），三角化多边形，拒绝损坏、越界和超限文件，失败保留当前模型。限制 64 MiB / 50 万三角面，当前不导入纹理、材质或骨骼动画。
+- 模型页直接读取选定连接、对端的最新 `@wave` 或脚本结果，不新开串口、不消费日志、不自动发送或启用解析器。独立绑定位置 XYZ、欧拉角 XYZ 或四元数 WXYZ，支持倍率/偏移、六种旋转顺序、内禀/外禀、角度/弧度、四元数归一化、轴交换/反向；初始模型对齐、比例和旋转原点单独设置。缺字段和无效帧保留上一有效姿态，重连等待新帧，切换来源立即更新动画定时器的数据指针。
+- Qt OpenGL 视图支持鼠标旋转/平移/缩放、适配与预设视角、主题配色、标签分离/回收；模型路径、绑定、坐标系、暂停和视角随页面保存。增加 OpenGLWidgets / Concurrent 构建依赖与 Docker OpenGL 开发包；中英 README、模型指南、脚本指南和工程结构同步。
+- 验证：Release 构建通过；完整 CTest **19/19**（`build/model3d-full-ctest.txt`）。随后修正来源切换与 16ms 动画定时器的短暂竞争，新增专项回归；最终 Windows 模型组 **10/10**（`build/model3d-delivery-windows-tests.txt`），离屏组 9 通过、1 渲染用例按平台跳过。覆盖 STL/OBJ/PLY、损坏文件、欧拉角/四元数、左右手轴转换、共享历史、暂停/复位、重连、来源切换、文件失败回退、页面保存恢复。
+- 真实窗口：已查看浅/深主题截图，修复网格深度写入造成的模型切边和透明混合；姿态 A→B→A 的帧缓冲逐像素一致，鼠标旋转、分离及回收通过。Qt 6.11.1 首次建窗仍记录短暂的 wrapper texture / No fbo 诊断，随后有效上下文、帧缓冲与屏幕渲染验证通过；日志保留。截图在 `build/model3d-verification/delivery-captures/`。未声称其他显卡、Linux Docker 实机渲染或真实 MCU/IMU 联调。
+- 测试包：`dist/SerialWorkbenchModel3DPreview/SerialWorkbench.exe`，含 OpenGL 运行库、许可证和使用说明；EXE 与构建产物 SHA-256 一致：`060f2c7a2b34dd87bf4dca7a19269e8ae2c0e043ced3ca1a751058c970417c0f`。精简 PATH 后 `smoke_native.py` 与 `smoke_cli.py` 全部通过，使用隔离配置和 loopback 验证 HTTP/STDIO、17 工具、权限、独立读取、搜索/脚本、后台复用及 GUI 交接；日志为 `build/model3d-package-smoke.txt` / `build/model3d-cli-smoke.txt`。
+- 便携 ZIP：`dist/local/model3d-preview/SerialWorkbench-model3d-preview-windows-x64.zip`，21,160,769 字节，SHA-256 `b536ad8a8944d270ac4b827da9790e545a8ed250b3060130b7614201ac9b8fd0`。ZIP CRC 与 273 个文件逐项摘要匹配，未包含个人配置；核验记录 `build/model3d-verification/artifact-verification.json`。
 
 ## 2026-10-25 — v0.15.36 原生 CLI 与后台 MCP 已发布
 

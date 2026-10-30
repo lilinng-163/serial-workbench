@@ -83,7 +83,56 @@ private slots:
         sw::McpServer server(&engine);
         sw::Window window(&engine, &server, directory.filePath("settings.json"));
         verifyFrame(&window);
+        for (int size : {16, 20, 24, 32, 48, 64})
+        {
+            const auto icon = window.windowIcon().pixmap(size).toImage().convertToFormat(QImage::Format_ARGB32);
+            QVERIFY(!icon.isNull());
+            QCOMPARE(qAlpha(icon.pixel(0, 0)), 0);
+            QCOMPARE(qAlpha(icon.pixel(icon.width() - 1, icon.height() - 1)), 0);
+            int visible = 0;
+            int transparent = 0;
+            for (int y = 0; y < icon.height(); ++y)
+            {
+                for (int x = 0; x < icon.width(); ++x)
+                {
+                    if (qAlpha(icon.pixel(x, y))) { ++visible; }
+                    else { ++transparent; }
+                }
+            }
+            QVERIFY(visible > 0);
+            QVERIFY(transparent > icon.width() * icon.height() / 2);
+        }
         QVERIFY(window.windowFlags().testFlag(Qt::WindowMaximizeButtonHint));
+#ifdef Q_OS_WIN
+        if (QGuiApplication::platformName() == "windows")
+        {
+            const auto handle = reinterpret_cast<HWND>(window.winId());
+            const auto icon = reinterpret_cast<HICON>(SendMessageW(handle, WM_GETICON, ICON_BIG, 0));
+            QVERIFY(icon);
+            ICONINFO info = {};
+            QVERIFY(GetIconInfo(icon, &info));
+            BITMAP bitmap = {};
+            const bool valid = GetObject(info.hbmColor, sizeof(bitmap), &bitmap) != 0;
+            QImage image(qMax(1L, bitmap.bmWidth), qMax(1L, bitmap.bmHeight), QImage::Format_ARGB32);
+            image.fill(Qt::transparent);
+            BITMAPINFO format = {};
+            format.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+            format.bmiHeader.biWidth = image.width();
+            format.bmiHeader.biHeight = -image.height();
+            format.bmiHeader.biPlanes = 1;
+            format.bmiHeader.biBitCount = 32;
+            format.bmiHeader.biCompression = BI_RGB;
+            const auto dc = GetDC(nullptr);
+            const int rows = GetDIBits(dc, info.hbmColor, 0, image.height(), image.bits(), &format, DIB_RGB_COLORS);
+            ReleaseDC(nullptr, dc);
+            DeleteObject(info.hbmColor);
+            DeleteObject(info.hbmMask);
+            QVERIFY(valid);
+            QCOMPARE(rows, image.height());
+            QCOMPARE(qAlpha(image.pixel(0, 0)), 0);
+            QCOMPARE(qAlpha(image.pixel(image.width() - 1, image.height() - 1)), 0);
+        }
+#endif
         QVERIFY(window.centralWidget()->y() >= window.windowHandle()->safeAreaMargins().top());
         window.openSettings();
         verifyFrame(window.settingsDialog);

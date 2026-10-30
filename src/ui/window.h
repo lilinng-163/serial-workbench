@@ -11,6 +11,7 @@ namespace sw
 class Window;
 class UpdateDialog;
 class SerialControlPanel;
+class ModelPanel;
 
 class Instrument : public QWidget
 {
@@ -19,6 +20,7 @@ public:
     Instrument(const QString &kind, QWidget *parent = nullptr);
     QString kind;
     SerialControlPanel *controls = nullptr;
+    ModelPanel *model = nullptr;
     QPointer<Window> helpWindow;
     IconButton *freeze = nullptr;
     QSpinBox *points = nullptr;
@@ -94,6 +96,7 @@ public:
     IconButton *repeat = nullptr;
     QSpinBox *interval = nullptr;
     QTimer repeatTimer;
+    QTimer catchupTimer;
     QByteArray repeatedPayload;
     QString repeatedPeer;
     QPushButton *sendButton = nullptr;
@@ -139,6 +142,7 @@ class Window : public QMainWindow
     Q_OBJECT
 public:
     void installMcpUi();
+    void installModelMcp();
     void checkAgentEndpoints();
     void showAuditDetail(const QJsonObject &entry);
     void showAiActivity(const QJsonObject &entry);

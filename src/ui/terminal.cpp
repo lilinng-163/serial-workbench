@@ -171,6 +171,24 @@ void LogView::setFilter(const SearchFilter &criteria)
 
 void LogView::feed(const QJsonObject &event)
 {
+    feedBatch({event});
+}
+
+void LogView::feedBatch(const QJsonArray &events)
+{
+    if (events.isEmpty()) { return; }
+    const int previous = verticalScrollBar()->value();
+    // One layout/scroll per batch, including when old blocks are evicted.
+    // Decoder, ANSI and partial-line state still advance in event order.
+    QTextCursor edit(document());
+    edit.beginEditBlock();
+    for (const auto &value : events) { appendEvent(value.toObject()); }
+    edit.endEditBlock();
+    verticalScrollBar()->setValue(follow ? verticalScrollBar()->maximum() : previous);
+}
+
+void LogView::appendEvent(const QJsonObject &event)
+{
     const QString direction = event["direction"].toString();
     const QString key = direction + ":" + event["peer"].toString();
     if (event["stream_reset"].toBool())
@@ -191,7 +209,6 @@ void LogView::feed(const QJsonObject &event)
     {
         text = event["message"].toString() + "\n";
     }
-    const int previous = verticalScrollBar()->value();
     const auto ensureLine = [&]
     {
         if (!stream.block.isValid())
@@ -309,7 +326,6 @@ void LogView::feed(const QJsonObject &event)
             document()->markContentsDirty(stream.block.position(), stream.block.length());
         }
     }
-    verticalScrollBar()->setValue(follow ? verticalScrollBar()->maximum() : previous);
 }
 
 void LogView::wheelEvent(QWheelEvent *event)

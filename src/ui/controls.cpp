@@ -533,6 +533,9 @@ QString Theme::stylesheet() const
         QTabBar::tab:selected { color: $text; background: $panel; }
         QTabBar#connections::tab { padding: 10px 11px; }
         QTabWidget QTabBar::tab { margin-left: 0; margin-right: 12px; }
+        QTabWidget#model3dMappingTabs { background: transparent; }
+        QTabWidget#model3dMappingTabs::pane { padding: 0; border: none; border-top-left-radius: 0; top: -1px; }
+        QTabWidget#model3dMappingTabs QTabBar::tab { margin: 0 3px 0 0; padding: 8px 10px; }
         QMenu, QFrame[roundedPopup="true"] { background: $panel; border: 1px solid $line; border-radius: 10px; padding: 5px; }
         QFrame[roundedPopup="true"] QAbstractItemView { border: none; background: $panel; padding: 2px; }
         QMenu::item { padding: 10px 28px 10px 16px; border: none; border-radius: 6px; }
@@ -743,6 +746,14 @@ void drawIcon(QPainter &p, const QString &name, QRectF rect, const QColor &color
         p.drawRoundedRect(QRectF(7, 2, 3, 6), 1, 1);
         p.drawRoundedRect(QRectF(15, 9, 3, 6), 1, 1);
         p.drawRoundedRect(QRectF(5, 16, 3, 6), 1, 1);
+    }
+    else if (name == "cube")
+    {
+        QPolygonF outline {{12, 2}, {21, 7}, {21, 17}, {12, 22}, {3, 17}, {3, 7}, {12, 2}};
+        p.drawPolyline(outline);
+        p.drawLine(QPointF(3, 7), QPointF(12, 12));
+        p.drawLine(QPointF(21, 7), QPointF(12, 12));
+        p.drawLine(QPointF(12, 12), QPointF(12, 22));
     }
     else if (name == "widgets")
     {

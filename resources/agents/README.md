@@ -19,3 +19,21 @@ Monochrome marks use their black/white variants; brand colors and proportions ar
 preserved. The UI adds no background tile or border. Sources checked 2026-10-15.
 Lobe Icons' MIT license is included in `lobe-icons-LICENSE`. Existing CC0 notices
 are retained for previously distributed assets. No endorsement is implied.
+
+## Additional Agent marks (2026-10-28)
+
+All marks are bundled offline with transparent backgrounds. Cursor, GitHub
+Copilot, Windsurf, Cline, Kilo Code, Qoder, TRAE, Antigravity and Kimi use the
+monochrome SVG variants from [Lobe Icons](https://github.com/lobehub/lobe-icons/tree/master/packages/static-svg/icons),
+alongside the color variants for Devin, Kiro and Qwen (`lobe-icons-LICENSE`).
+Antigravity uses the upstream monochrome variant because the color variant uses
+SVG filters that are not portable across Qt renderers. Only SVG dimensions and
+currentColor defaults were normalized; shapes were retained. Monochrome marks
+adapt to light and dark themes. Qwen uses its upstream monochrome mark in white on dark surfaces for legibility.
+
+- VS Code: [Microsoft Codicons vscode.svg](https://github.com/microsoft/vscode-codicons/blob/main/src/icons/vscode.svg), CC BY 4.0 (`codicons-LICENSE`); colored blue for the card.
+- Zed: [Simple Icons zedindustries.svg](https://github.com/simple-icons/simple-icons/blob/develop/icons/zedindustries.svg), CC0 (`CC0.txt`).
+- Continue: [ContinueSignet.tsx](https://github.com/continuedev/continue/blob/main/gui/src/components/svg/ContinueSignet.tsx), Continue authors, Apache-2.0; extracted the original path, removed JSX attributes and cropped the empty viewBox margin.
+
+Product names and marks belong to their respective owners. Their inclusion
+identifies compatible clients and does not imply endorsement.

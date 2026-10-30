@@ -28,6 +28,7 @@ struct AgentClient
     QString format;
     QStringList section;
     bool modernOpenCode = false;
+    bool manualConfig = false;
     bool installed() const { return !executable.isEmpty(); }
 };
 

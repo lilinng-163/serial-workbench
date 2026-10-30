@@ -28,6 +28,7 @@ public:
     std::function<QJsonObject(Channel *, const QJsonObject &)> searchHandler;
     std::function<void(Channel *, const QString &, bool, const std::optional<QString> &)> scriptHandler;
     std::function<QString(Channel *)> scriptSampleHandler;
+    std::function<QJsonObject(const QString &, const QJsonObject &)> modelHandler;
     QJsonArray agentChecks;
 
 signals:

@@ -24,7 +24,18 @@ QJsonArray AgentSkill::targets(const AgentEnvironment &e)
         QJsonObject {{"agent", "grok"}, {"name", "Grok Build"},
             {"path", e.home + "/.grok/skills/serial-workbench"}},
         QJsonObject {{"agent", "gemini"}, {"name", "Gemini CLI"},
-            {"path", e.home + "/.gemini/skills/serial-workbench"}}
+            {"path", e.home + "/.gemini/skills/serial-workbench"}},
+        QJsonObject {{"agent", "cursor"}, {"name", "Cursor"}, {"path", e.home + "/.cursor/skills/serial-workbench"}},
+        QJsonObject {{"agent", "copilot"}, {"name", "GitHub Copilot · CLI / VS Code"},
+            {"path", e.variable("COPILOT_HOME", e.home + "/.copilot") + "/skills/serial-workbench"}},
+        QJsonObject {{"agent", "windsurf"}, {"name", "Windsurf"}, {"path", e.home + "/.codeium/windsurf/skills/serial-workbench"}},
+        QJsonObject {{"agent", "devin"}, {"name", "Devin"}, {"path", e.appData + "/devin/skills/serial-workbench"}},
+        QJsonObject {{"agent", "cline"}, {"name", "Cline"}, {"path", e.home + "/.cline/skills/serial-workbench"}},
+        QJsonObject {{"agent", "kilo"}, {"name", "Kilo Code"}, {"path", e.home + "/.kilo/skills/serial-workbench"}},
+        QJsonObject {{"agent", "kiro"}, {"name", "Kiro"}, {"path", e.home + "/.kiro/skills/serial-workbench"}},
+        QJsonObject {{"agent", "antigravity"}, {"name", "Antigravity App / IDE"}, {"path", e.home + "/.gemini/config/skills/serial-workbench"}},
+        QJsonObject {{"agent", "kimi"}, {"name", "Kimi Code"},
+            {"path", e.variable("KIMI_CODE_HOME", e.home + "/.kimi-code") + "/skills/serial-workbench"}}
     };
     const auto agents = AgentConfig::discover(e);
     for (int index = 0; index < result.size(); ++index)
@@ -33,13 +44,26 @@ QJsonArray AgentSkill::targets(const AgentEnvironment &e)
         bool installed = false;
         for (const auto &agent : agents)
         {
-            if (agent.id == target["agent"].toString()) { installed = agent.installed(); }
+            if (agent.id != target["agent"].toString()) { continue; }
+            installed = agent.installed();
+            if (agent.id == "kimi" && agent.configPath == e.home + "/.kimi/mcp.json")
+            {
+                // Legacy Kimi prioritizes its own skills directory.
+                target["path"] = e.home + "/.kimi/skills/serial-workbench";
+            }
+            if (agent.id == "antigravity" && !e.executable("agy").isEmpty()
+                && agent.executable == e.executable("agy"))
+            {
+                target["name"] = "Antigravity CLI";
+                target["path"] = e.home + "/.gemini/antigravity-cli/skills/serial-workbench";
+            }
         }
         bool present = false;
         bool current = true;
-        for (const auto &topic : QStringList {"overview", "frame_script", "cli"})
+        for (const auto &topic : QStringList {"overview", "frame_script", "cli", "model3d", "agents"})
         {
-            const auto relative = topic == "overview" ? "SKILL.md" : topic == "cli" ? "references/cli.md" : "references/frame-script.md";
+            const auto relative = topic == "overview" ? QString("SKILL.md")
+                : "references/" + (topic == "frame_script" ? QString("frame-script") : topic) + ".md";
             QFile file(target["path"].toString() + "/" + relative);
             present = present || file.exists();
             current = file.open(QIODevice::ReadOnly) && file.readAll() == UsageGuide::text(topic).toUtf8() && current;
@@ -77,7 +101,8 @@ QJsonObject AgentSkill::install(const QString &agent, const AgentEnvironment &en
     if (QFileInfo(directory).isSymLink()) { fail("skill 目标是链接，请选择普通目录"); }
     const QMap<QString, QString> files {{"SKILL.md", UsageGuide::text("overview")},
         {"references/frame-script.md", UsageGuide::text("frame_script")},
-        {"references/cli.md", UsageGuide::text("cli")}};
+        {"references/cli.md", UsageGuide::text("cli")}, {"references/model3d.md", UsageGuide::text("model3d")},
+        {"references/agents.md", UsageGuide::text("agents")}};
     QJsonArray installed;
     QJsonArray backups;
     for (auto file = files.begin(); file != files.end(); ++file)

@@ -4,6 +4,7 @@
 
 #include <QTextCodec>
 #include <cmath>
+#include <algorithm>
 #include <stdexcept>
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -168,10 +169,14 @@ QJsonObject Journal::read(qint64 after, int limit, const QString &id,
     }
     QJsonArray page;
     bool more = false;
-    for (const auto &entry : events)
+    // Sequence numbers stay sorted even when the bounded history evicts rows.
+    // Readers at the live cursor must not rescan the entire retained history.
+    const auto begin = std::upper_bound(events.begin(), events.end(), after,
+        [](qint64 cursor, const auto &entry) { return cursor < entry.first["seq"].toInteger(); });
+    for (auto it = begin; it != events.end(); ++it)
     {
-        const auto &event = entry.first;
-        if (event["seq"].toInteger() > after && (id.isEmpty() || event["channel_id"].toString() == id)
+        const auto &event = it->first;
+        if ((id.isEmpty() || event["channel_id"].toString() == id)
             && (!visible || visible(event)))
         {
             if (page.size() >= limit)
@@ -893,6 +898,8 @@ QJsonObject Channel::send(const QByteArray &data, const QString &peer, const QSt
 
 void Channel::parseWave(Source &source, const QByteArray &data)
 {
+    static const QRegularExpression streamPattern(QStringLiteral(
+        R"(\A[\p{L}_][\p{L}\p{N}_-]{0,31}\z)"));
     static const QRegularExpression fieldPattern(QStringLiteral(
         R"(\A[ \t]*([\p{L}_][\p{L}\p{N}_]{0,63})[ \t]*=[ \t]*([+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)[ \t]*\z)"));
 
@@ -911,7 +918,7 @@ void Channel::parseWave(Source &source, const QByteArray &data)
             source.discarding = false;
             continue;
         }
-        if (!line.startsWith("@wave "))
+        if (!line.startsWith("@wave ") && !line.startsWith("@wave["))
         {
             continue;
         }
@@ -921,7 +928,25 @@ void Channel::parseWave(Source &source, const QByteArray &data)
             continue;
         }
 
-        const auto fields = QString::fromUtf8(line.mid(6)).split(',', Qt::KeepEmptyParts);
+        QString stream;
+        int payloadOffset = 6;
+        if (line.startsWith("@wave["))
+        {
+            const int close = line.indexOf(']', 6);
+            stream = QString::fromUtf8(line.mid(6, close - 6));
+            if (close < 0 || line.mid(close, 2) != "] " || !streamPattern.match(stream).hasMatch())
+            {
+                ++source.rejected;
+                continue;
+            }
+            payloadOffset = close + 2;
+        }
+        if (!source.waveStreams.contains(stream) && source.waveStreams.size() >= 32)
+        {
+            ++source.rejected;
+            continue;
+        }
+        const auto fields = QString::fromUtf8(line.mid(payloadOffset)).split(',', Qt::KeepEmptyParts);
         QJsonObject values;
         bool valid = fields.size() <= 16;
 
@@ -943,7 +968,13 @@ void Channel::parseWave(Source &source, const QByteArray &data)
 
         if (valid)
         {
-            source.samples.push_back({{"index", ++source.count}, {"time", QDateTime::currentMSecsSinceEpoch() / 1000.0}, {"values", values}});
+            QJsonObject sample {{"index", ++source.count}, {"time", QDateTime::currentMSecsSinceEpoch() / 1000.0}, {"values", values}};
+            if (!stream.isEmpty())
+            {
+                sample["stream"] = stream;
+            }
+            source.waveStreams.insert(stream);
+            source.samples.push_back(sample);
             if (source.samples.size() > 5000)
             {
                 source.samples.pop_front();
@@ -956,7 +987,7 @@ void Channel::parseWave(Source &source, const QByteArray &data)
     }
     if (source.wavePending.size() > 8192)
     {
-        if (!source.discarding && source.wavePending.startsWith("@wave "))
+        if (!source.discarding && (source.wavePending.startsWith("@wave ") || source.wavePending.startsWith("@wave[")))
         {
             ++source.rejected;
         }
@@ -1193,7 +1224,7 @@ void Channel::parseStructured(Source &source, const QByteArray &data, qint64 eve
     }
 }
 
-QJsonObject Channel::waveform(int limit) const
+QJsonObject Channel::waveform(int limit, std::optional<QString> stream) const
 {
     if (limit < 1 || limit > 5000)
     {
@@ -1204,14 +1235,24 @@ QJsonObject Channel::waveform(int limit) const
     {
         QJsonArray samples;
         const auto &source = *it.value();
-        const int skip = std::max(0, static_cast<int>(source.samples.size()) - limit);
-        for (int i = skip; i < static_cast<int>(source.samples.size()); ++i)
+        for (auto sample = source.samples.rbegin(); sample != source.samples.rend() && samples.size() < limit; ++sample)
         {
-            samples.append(source.samples[i]);
+            if (!stream || (*sample)["stream"].toString() == *stream)
+            {
+                samples.prepend(*sample);
+            }
         }
-        result[it.key()] = QJsonObject {{"samples", samples}, {"total_samples", source.count}, {"rejected_lines", source.rejected}};
+        auto streams = source.waveStreams.values();
+        streams.sort();
+        result[it.key()] = QJsonObject {{"samples", samples}, {"total_samples", source.count},
+            {"rejected_lines", source.rejected}, {"available_streams", QJsonArray::fromStringList(streams)}};
     }
-    return {{"channel_id", id}, {"protocol", "wave/1"}, {"sources", result}};
+    QJsonObject response {{"channel_id", id}, {"protocol", "wave/1"}, {"sources", result}};
+    if (stream)
+    {
+        response["stream"] = *stream;
+    }
+    return response;
 }
 
 QJsonObject Channel::structured(qint64 after, int limit, const QJsonObject &cursors) const

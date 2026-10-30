@@ -158,6 +158,12 @@ AgentEnvironment AgentEnvironment::current()
 {
     AgentEnvironment environment;
     environment.home = QDir::homePath();
+#ifdef Q_OS_WIN
+    // Agent CLIs resolve ~ from USERPROFILE. Qt's known-folder lookup can
+    // instead return the logged-in user's directory in an isolated process.
+    const auto profile = qEnvironmentVariable("USERPROFILE");
+    if (!profile.isEmpty()) { environment.home = QDir::fromNativeSeparators(profile); }
+#endif
     environment.appData = qEnvironmentVariable("APPDATA", environment.home + "/.config");
     environment.localAppData = qEnvironmentVariable("LOCALAPPDATA");
     const auto system = QProcessEnvironment::systemEnvironment();
@@ -229,6 +235,33 @@ static QString desktopExecutable(const AgentEnvironment &environment, const QStr
     return {};
 }
 
+static QString editorExecutable(const AgentEnvironment &e, const QString &command, const QString &folder, const QString &binary)
+{
+    const auto cli = e.executable(command);
+    if (!cli.isEmpty()) { return cli; }
+    for (const auto &root : {e.localAppData + "/Programs", e.variable("ProgramFiles", ""), e.localAppData})
+    {
+        if (root.isEmpty()) { continue; }
+        const auto path = root + "/" + folder + "/" + binary + ".exe";
+        if (QFileInfo(path).isFile()) { return path; }
+    }
+    return {};
+}
+
+static QString extensionExecutable(const AgentEnvironment &e, const QString &id)
+{
+    const auto base = e.home + "/.vscode/extensions";
+    for (const auto &name : QDir(base).entryList({id + "-*"}, QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name))
+    {
+        QFile manifest(base + "/" + name + "/package.json");
+        if (!manifest.open(QIODevice::ReadOnly)) { continue; }
+        const auto value = QJsonDocument::fromJson(manifest.readAll()).object();
+        const auto extensionId = value["publisher"].toString() + "." + value["name"].toString();
+        if (extensionId.compare(id, Qt::CaseInsensitive) == 0) { return manifest.fileName(); }
+    }
+    return {};
+}
+
 QList<AgentClient> AgentConfig::discover(const AgentEnvironment &environment)
 {
     const auto home = environment.home;
@@ -263,6 +296,47 @@ QList<AgentClient> AgentConfig::discover(const AgentEnvironment &environment)
             }
         }
     }
+    const auto vscode = editorExecutable(environment, "code", "Microsoft VS Code", "Code");
+    const auto clineExtension = extensionExecutable(environment, "saoudrizwan.claude-dev");
+    auto cline = environment.executable("cline");
+    if (cline.isEmpty()) { cline = clineExtension; }
+    auto copilot = environment.executable("copilot");
+    if (copilot.isEmpty()) { copilot = extensionExecutable(environment, "github.copilot-chat"); }
+    auto kilo = environment.executable("kilo");
+    if (kilo.isEmpty()) { kilo = extensionExecutable(environment, "kilocode.kilo-code"); }
+    const auto kiloBase = environment.variable("XDG_CONFIG_HOME", home + "/.config") + "/kilo";
+    const auto kiloPath = kiloBase + (QFileInfo::exists(kiloBase + "/kilo.jsonc") ? "/kilo.jsonc" : "/kilo.json");
+    agents.append({
+        {"cursor", "Cursor", "cursor.svg", editorExecutable(environment, "cursor", "cursor", "Cursor"), home + "/.cursor/mcp.json", "json", {"mcpServers"}},
+        {"vscode", "VS Code · Local", "vscode.svg", vscode, environment.appData + "/Code/User/mcp.json", "json", {"servers"}},
+        {"vscode-insiders", "VS Code Insiders · Local", "vscode.svg", editorExecutable(environment, "code-insiders", "Microsoft VS Code Insiders", "Code - Insiders"), environment.appData + "/Code - Insiders/User/mcp.json", "json", {"servers"}},
+        {"copilot", "GitHub Copilot · CLI / VS Code", "githubcopilot.svg", copilot, environment.variable("COPILOT_HOME", home + "/.copilot") + "/mcp-config.json", "json", {"mcpServers"}},
+        {"windsurf", "Windsurf · 旧版", "windsurf.svg", editorExecutable(environment, "windsurf", "Windsurf", "Windsurf"), "", "json", {"mcpServers"}, false, true},
+        {"devin", "Devin · CLI / Desktop", "devin-color.svg", editorExecutable(environment, "devin", "Devin", "Devin"), environment.appData + "/devin/mcp_config.json", "json", {"mcpServers"}},
+        {"cline", "Cline · CLI / 新版扩展", "cline.svg", cline, environment.variable("CLINE_MCP_SETTINGS_PATH", home + "/.cline/data/settings/cline_mcp_settings.json"), "json", {"mcpServers"}},
+        {"cline-vscode", "Cline · VS Code 旧版", "cline.svg", clineExtension, environment.appData + "/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json", "json", {"mcpServers"}},
+        {"kilo", "Kilo Code", "kilocode.svg", kilo, kiloPath, "json", {"mcp"}},
+        {"kiro", "Kiro · IDE / CLI", "kiro-color.svg", editorExecutable(environment, "kiro-cli", "Kiro", "Kiro"), home + "/.kiro/settings/mcp.json", "json", {"mcpServers"}},
+        {"qoder", "Qoder · CLI / Desktop", "qoder.svg", editorExecutable(environment, "qoder", "Qoder", "Qoder"), home + "/.qoder/settings.json", "json", {"mcpServers"}},
+        {"zed", "Zed", "zed.svg", editorExecutable(environment, "zed", "Zed", "Zed"), environment.appData + "/Zed/settings.json", "json", {"context_servers"}},
+        {"trae", "TRAE", "trae.svg", editorExecutable(environment, "trae", "Trae", "Trae"), "", "json", {"mcpServers"}, false, true},
+        {"antigravity", "Google Antigravity", "antigravity.svg", editorExecutable(environment, "agy", "Antigravity", "Antigravity"), home + "/.gemini/config/mcp_config.json", "json", {"mcpServers"}},
+        {"qwen", "Qwen Code", "qwen-color.svg", environment.executable("qwen"), home + "/.qwen/settings.json", "json", {"mcpServers"}},
+        {"kimi", "Kimi Code", "kimi.svg", environment.executable("kimi"), environment.variable("KIMI_CODE_HOME", home + "/.kimi-code") + "/mcp.json", "json", {"mcpServers"}},
+        {"continue", "Continue", "continue.svg", extensionExecutable(environment, "Continue.continue"), "", "json", {"mcpServers"}, false, true}
+    });
+    // Legacy Cline is offered for existing installations, never write a second
+    // unused config just because the modern extension is installed.
+    for (auto &agent : agents)
+    {
+        if (agent.id == "cline-vscode" && !QFileInfo::exists(agent.configPath)) { agent.manualConfig = true; }
+        if (agent.id == "kimi" && environment.variables.value("KIMI_CODE_HOME").isEmpty() && !QFileInfo::exists(agent.configPath))
+        {
+            const auto legacy = home + "/.kimi/mcp.json";
+            if (QFileInfo::exists(legacy)) { agent.configPath = legacy; }
+            else { agent.manualConfig = true; }
+        }
+    }
     return agents;
 }
 
@@ -273,14 +347,15 @@ QJsonObject AgentConfig::entry(const AgentClient &agent, const QString &url, con
         if (!QFileInfo::exists(bridge)) { fail("STDIO 桥接程序不存在：" + bridge); }
         QJsonArray args;
         if (!settings.isEmpty()) { args = {"--settings", QFileInfo(settings).absoluteFilePath()}; }
-        if (agent.id == "opencode")
+        if (agent.id == "opencode" || agent.id == "kilo")
         {
             QJsonArray command {bridge};
             for (const auto &argument : args) { command.append(argument); }
             return {{"type", "local"}, {"command", command}, {"enabled", true}};
         }
         QJsonObject result {{"command", bridge}, {"args", args}};
-        if (agent.id == "claude-code") { result["type"] = "stdio"; }
+        if (QStringList {"claude-code", "cursor", "vscode", "vscode-insiders", "copilot", "qoder"}.contains(agent.id)) { result["type"] = "stdio"; }
+        if (agent.id == "copilot") { result["tools"] = QJsonArray {"*"}; }
         if (agent.id == "openclaw") { result["transport"] = "stdio"; result["enabled"] = true; }
         if (agent.format == "toml" || agent.format == "yaml") { result["enabled"] = true; }
         return result;
@@ -290,10 +365,16 @@ QJsonObject AgentConfig::entry(const AgentClient &agent, const QString &url, con
         if (!QFileInfo::exists(bridge)) { fail("STDIO 桥接程序不存在：" + bridge); }
         return {{"command", bridge}, {"args", QJsonArray {"--url", url}}};
     }
-    if (agent.id == "opencode") { return {{"type", "remote"}, {"url", url}, {"enabled", true}}; }
-    if (agent.id == "gemini") { return {{"httpUrl", url}}; }
+    if (agent.id == "opencode" || agent.id == "kilo") { return {{"type", "remote"}, {"url", url}, {"enabled", true}}; }
+    if (agent.id == "gemini" || agent.id == "qwen") { return {{"httpUrl", url}}; }
+    if (agent.id == "antigravity") { return {{"serverUrl", url}}; }
     if (agent.id == "openclaw") { return {{"transport", "streamable-http"}, {"url", url}, {"enabled", true}}; }
     if (agent.id == "claude-code") { return {{"type", "http"}, {"url", url}}; }
+    if (agent.id == "copilot") { return {{"type", "http"}, {"url", url}, {"tools", QJsonArray {"*"}}}; }
+    if (QStringList {"vscode", "vscode-insiders", "qoder"}.contains(agent.id)) { return {{"type", "http"}, {"url", url}}; }
+    if (agent.id == "cline" || agent.id == "cline-vscode") { return {{"type", "streamableHttp"}, {"url", url}}; }
+    if (agent.id == "continue") { return {{"type", "streamable-http"}, {"url", url}}; }
+    if (QStringList {"cursor", "windsurf", "devin", "kiro", "zed", "trae", "kimi", "generic"}.contains(agent.id)) { return {{"url", url}}; }
     return {{"url", url}, {"enabled", true}};
 }
 
@@ -434,6 +515,7 @@ static QString readConfig(const AgentClient &agent)
 
 QString AgentConfig::check(const AgentClient &agent, const QString &url, const QString &bridge, const QString &settings)
 {
+    if (agent.manualConfig) { return "请导出配置，在客户端 MCP 设置中导入并验证"; }
     if (!agent.installed()) { fail("未检测到已安装的 " + agent.name); }
     if (!QFileInfo::exists(agent.configPath)) { return "尚未配置"; }
     const auto text = readConfig(agent);
@@ -449,6 +531,7 @@ QString AgentConfig::check(const AgentClient &agent, const QString &url, const Q
     const bool v2 = agent.id == "opencode" && (agent.modernOpenCode || node.contains("servers"));
     if (v2) { node = node["servers"].toObject(); }
     const auto saved = node["serial-workbench"].toObject();
+    if (saved["disabled"].toBool() || (saved.contains("enabled") && !saved["enabled"].toBool())) { return "服务已禁用，需要更新配置"; }
     auto expected = entry(agent, url, bridge, settings);
     if (v2) { expected.remove("enabled"); expected["disabled"] = false; }
     for (auto item = expected.begin(); item != expected.end(); ++item)
@@ -460,6 +543,7 @@ QString AgentConfig::check(const AgentClient &agent, const QString &url, const Q
 
 QString AgentConfig::configure(const AgentClient &agent, const QString &url, const QString &bridge, const QString &settings)
 {
+    if (agent.manualConfig || agent.configPath.isEmpty()) { fail("此客户端需导入配置，请使用导出配置 / export-agent"); }
     if (!agent.installed()) { fail("未检测到已安装的 " + agent.name); }
     if (QFileInfo::exists(agent.configPath) && check(agent, url, bridge, settings) == "配置地址一致")
     {

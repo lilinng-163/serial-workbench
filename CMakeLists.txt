@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(SerialWorkbench
-    VERSION 0.15.36
+    VERSION 0.15.37
     DESCRIPTION "Native serial and network workbench with shared MCP access"
     LANGUAGES CXX
 )
@@ -16,7 +16,7 @@ include(CTest)
 include(GNUInstallDirs)
 include(cmake/ProjectOptions.cmake)
 
-find_package(Qt6 6.9 REQUIRED COMPONENTS Widgets Network SerialPort Core5Compat Svg)
+find_package(Qt6 6.9 REQUIRED COMPONENTS Widgets Network SerialPort Core5Compat Svg OpenGLWidgets Concurrent)
 if(BUILD_TESTING)
     find_package(Qt6 6.9 REQUIRED COMPONENTS Test)
 endif()
@@ -38,7 +38,7 @@ install(DIRECTORY resources/fonts/LICENSES DESTINATION licenses/FusionPixel)
 install(FILES LICENSE DESTINATION .)
 
 install(FILES resources/agents/README.md resources/agents/CC0.txt
-    resources/agents/lobe-icons-LICENSE resources/agents/opencode-LICENSE
+    resources/agents/lobe-icons-LICENSE resources/agents/codicons-LICENSE resources/agents/opencode-LICENSE
     resources/agents/hermes-LICENSE DESTINATION licenses/AgentLogos)
 install(FILES third_party/tomlplusplus/LICENSE DESTINATION licenses/tomlplusplus)
 install(FILES third_party/fkyaml/LICENSE DESTINATION licenses/fkYAML)

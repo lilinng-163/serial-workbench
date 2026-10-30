@@ -24,12 +24,14 @@ int main(int argc, char *argv[])
     parser.addOption({"headless", "Run the shared runtime without showing windows"});
     parser.addOption({"allow-control", "Explicitly enable and save AI control when starting a new background instance"});
     parser.addOption({"configure-agent", "Configure an Agent for automatic background MCP startup", "agent"});
+    parser.addOption({"export-agent", "Export an Agent MCP configuration without writing client files", "agent"});
+    parser.addOption({"list-agents", "List Agent IDs, detection, configuration and skill destinations"});
     parser.addOption({"demo", "Show generated example data"});
     parser.addOption({"view", "Preview waveform, json, xml, settings, dark, search, terminal, ssh, detached, floating-wave, narrow or protocol", "name"});
     parser.addOption({"screenshot", "Save window preview", "path"});
     parser.addOption({"ready-file", "Write startup timing", "path"});
     parser.addOption({"quit-after", "Close after milliseconds", "ms"});
-    parser.addOption({"install-skill", "Install the bundled skill for codex/claude-code/opencode/pi/hermes/openclaw/grok/gemini without opening the GUI", "agent"});
+    parser.addOption({"install-skill", "Install the bundled skill for an Agent ID from --list-agents without opening the GUI", "agent"});
     parser.addOption({"skill-report", "Write the skill installation result to a JSON file", "path"});
     parser.addOption({"detect-skill-agents", "Detect installed skill-capable Agents without opening the GUI; write INI to --skill-report"});
     parser.process(app);
@@ -44,21 +46,42 @@ int main(int argc, char *argv[])
         catch (const std::exception &) { return 3; }
         return 0;
     }
-    if (parser.isSet("install-skill") || parser.isSet("configure-agent"))
+    if (parser.isSet("install-skill") || parser.isSet("configure-agent") || parser.isSet("export-agent") || parser.isSet("list-agents"))
     {
         QJsonObject result;
         int code = 0;
         try
         {
-            if (parser.isSet("install-skill")) { result = sw::AgentSkill::install(parser.value("install-skill")); }
+            if (parser.isSet("list-agents"))
+            {
+                QJsonArray clients;
+                for (const auto &agent : sw::AgentConfig::discover())
+                {
+                    clients.append(QJsonObject {{"id", agent.id}, {"name", agent.name}, {"installed", agent.installed()},
+                        {"config_path", agent.configPath}, {"manual_import", agent.manualConfig}, {"format", agent.format}});
+                }
+                result = {{"agents", clients}, {"skill_targets", sw::AgentSkill::targets()}};
+            }
+            else if (parser.isSet("install-skill")) { result = sw::AgentSkill::install(parser.value("install-skill")); }
             else
             {
                 bool found = false;
-                for (const auto &agent : sw::AgentConfig::discover())
+                auto clients = sw::AgentConfig::discover();
+                if (parser.isSet("export-agent")) { clients.append({"generic", "通用 MCP", "", "", "", "json", {"mcpServers"}, false, true}); }
+                for (const auto &agent : clients)
                 {
-                    if (agent.id != parser.value("configure-agent")) { continue; }
-                    result = {{"agent", agent.id}, {"message", sw::AgentConfig::configure(agent, QString(),
-                        sw::siblingExecutable("SerialWorkbenchMCP"), settingsPath)}, {"reload_required", true}};
+                    if (agent.id != parser.value(parser.isSet("export-agent") ? "export-agent" : "configure-agent")) { continue; }
+                    if (parser.isSet("export-agent"))
+                    {
+                        result = {{"agent", agent.id}, {"format", agent.format}, {"config_path", agent.configPath},
+                            {"configuration", sw::AgentConfig::updated(agent, agent.format == "json" ? "{}" : "", QString(),
+                                sw::siblingExecutable("SerialWorkbenchMCP"), settingsPath)}, {"files_changed", false}};
+                    }
+                    else
+                    {
+                        result = {{"agent", agent.id}, {"message", sw::AgentConfig::configure(agent, QString(),
+                            sw::siblingExecutable("SerialWorkbenchMCP"), settingsPath)}, {"reload_required", true}};
+                    }
                     found = true;
                     break;
                 }
@@ -77,6 +100,14 @@ int main(int argc, char *argv[])
             if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) { return 4; }
         }
         return code;
+    }
+    if (sw::maintenanceInProgress())
+    {
+        if (!parser.isSet("headless"))
+        {
+            QMessageBox::information(nullptr, "正在更新", "工作台正在安装或卸载，请完成后再打开。Agent 可在完成后重新连接 MCP。");
+        }
+        return 5;
     }
     bool validPort = false;
     auto port = parser.value("mcp-port").toUInt(&validPort);

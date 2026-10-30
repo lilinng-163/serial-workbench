@@ -1,5 +1,23 @@
 [
   {
+    "tag_name": "v0.15.36",
+    "name": "Serial Workbench 0.15.36",
+    "body": "# Serial Workbench 0.15.36\n\n无需先打开工作台，命令行和 Agent 现在可以自动启动后台 MCP，并与 GUI 共享连接和数据。\n\n- **原生命令行**：新增 `SerialWorkbenchCLI.exe`，支持 `start`、`status`、`show`、`stop`、`tools`、`call`、`mcp`，以 JSON 输出结果；可直接调用原生搜索、脚本试解析和其他 MCP 工具。\n- **后台自动接入**：STDIO 桥默认启动或复用同一配置的后台实例，发现实际 MCP 端口；Agent 退出后后台继续运行。`show` 打开同一个实例，保留连接、搜索和脚本状态。\n- **权限保持明确**：新配置默认只读；建立连接、发送数据和应用脚本仍需开启 AI 控制。首次启动可显式使用 `start --allow-control`；不会自动提高已运行实例的权限，也不会自动连接设备。需要交互认证的 SSH 可打开 GUI 后重连。\n- **Agent 与 skill 同步**：设置中可选择后台自动启动，命令行支持 `install-skill` 和 `configure-agent`。内置、安装器与 GUI 分发的 skill 均增加 CLI、配置路径和后台生命周期说明；MCP 可读取 `read_usage_guide(topic=\"cli\")`。\n- **SSH 跨屏复制**：按住鼠标向终端上下边缘拖动可连续滚动并选择多行历史，滚轮也可扩展选区；新输出不再打断拖拽。\n\n推荐 Windows x64 安装包。发行包包含 CLI、MCP 桥和运行库，无需另装 Python 或 Qt。\n\n升级前关闭 GUI 和 Agent 的 MCP 桥；如后台仍在运行，执行旧安装目录中的 `SerialWorkbenchCLI.exe stop`。升级保留个人配置。升级后在“设置 → AI / MCP”更新 skill、配置 Agent 并重载该 Agent 的 MCP。\n\n```powershell\n.\\SerialWorkbenchCLI.exe start\n.\\SerialWorkbenchCLI.exe call get_status\n.\\SerialWorkbenchCLI.exe show\n```\n\n验证：原生 CTest 18/18；最终包的 CLI 自动启动/权限/共享读写/搜索/脚本/GUI 接续，隔离安装升级卸载，便携 ZIP 和单文件启动均通过。九类 Agent 配置验证使用隔离样本，未逐一实连第三方 Agent；设备链路使用回环与模拟 SSH，未声称真实硬件测试。\n\n## English\n\n- Add a native JSON CLI for runtime lifecycle and direct MCP tool calls, including native log search and frame-script validation.\n- Auto-start or reuse the selected settings profile through the STDIO bridge, discover its actual port, and keep the shared runtime alive when an Agent exits. Open the same instance with `show` without losing connections or GUI state.\n- Keep new profiles read-only by default. Connection control, writes and script application still require explicit AI permission. `start --allow-control` applies only to a new instance; devices are not connected automatically. Interactive SSH authentication requires the GUI.\n- Add automatic startup to Agent settings, CLI skill installation/configuration, and bundled CLI documentation available through `read_usage_guide`.\n- Fix SSH selection across scrollback boundaries with edge dragging and wheel scrolling.\n\nClose the GUI and MCP bridges before upgrading. Stop a running background instance with the old installation's CLI. Settings are retained; update skills and reload Agent MCP connections afterward. The setup, portable ZIP and single-file EXE include native runtimes and require no Python or Qt SDK.\n",
+    "published_at": "2026-10-25T04:34:42Z",
+    "html_url": "https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.36",
+    "draft": false,
+    "prerelease": false,
+    "assets": [
+      {
+        "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.36/SerialWorkbench-0.15.36-windows-x64-setup.exe",
+        "digest": "sha256:25d652923248ab6ce69f2b6a2e340a0c266b298d878cd4af4bc897374c2cadf9",
+        "name": "SerialWorkbench-0.15.36-windows-x64-setup.exe",
+        "size": 15555295,
+        "state": "uploaded"
+      }
+    ]
+  },
+  {
     "tag_name": "v0.15.35",
     "name": "Serial Workbench 0.15.35",
     "body": "# Serial Workbench 0.15.35\r\n\r\n主题配色与浅深模式一致性更新。\r\n\r\n- **清晰的主题色**：保留所选按钮填充原色，链接、图标、TX 日志、波形、焦点边框和选区自动调整明暗，修复白色撞色在浅主题、黑色撞色在深主题中难以辨认的问题。\r\n- **统一窗口配色**：工作台、设置、分离窗口、收发小窗、工具提示和禁用文字共用主题调色板；深色数字箭头、黑白勾选标记与主题同步。\r\n- **独立选择撞色**：无需先修改主色，即可设置按钮、链接与选中效果的撞色；选色盘和 `#RRGGBB` / `#RGB` 输入继续支持保存恢复。\r\n- **一致的协议选择框**：“串口 / TCP / UDP / SSH”下拉框与其他输入框使用相同底色和边框，取消单独的高亮底色。\r\n- **JSON 助手链接**：说明链接跟随当前主题，不再固定使用绿色、橙色或系统蓝色。\r\n\r\n推荐下载 `SerialWorkbench-0.15.35-windows-x64-setup.exe`。另提供单文件 EXE、便携 ZIP 和 `SHA256SUMS.txt`，运行无需安装 Qt 或 Python。升级前关闭工作台与 MCP 桥，安装器沿用原目录并保留配置。Agent 用户升级后重载 MCP，并在设置中检查 skill 与接入地址。\r\n\r\n## English\r\n\r\n- Preserve the chosen button fill while adjusting accent text, icons, TX logs, waveforms, focus borders and selections for readable light/dark themes, including black and white accents.\r\n- Share theme palettes across the workspace, Settings, detached windows, receive monitors, tooltips and disabled text. Adapt dark spin arrows and black/white checkmarks.\r\n- Choose a contrast color independently of the main color, through the picker or `#RRGGBB` / `#RGB` input, with persistent settings.\r\n- Match the protocol selector background and border to the other inputs.\r\n- Follow the active theme for JSON assistant reference links.\r\n\r\nThe Windows x64 setup installer is recommended. Single-file and portable builds plus checksums are also available. Close the application and MCP bridge before upgrading; existing paths and settings are retained. Reload Agent MCP connections after upgrading.\r\n",
@@ -31,24 +49,6 @@
         "digest": "sha256:871b35fc9c4413fb98d7ce2fc10ced9f390bb2da5d79b28070f8d3379e3dd224",
         "name": "SerialWorkbench-0.15.34-windows-x64-setup.exe",
         "size": 15481362,
-        "state": "uploaded"
-      }
-    ]
-  },
-  {
-    "tag_name": "v0.15.33",
-    "name": "Serial Workbench 0.15.33",
-    "body": "# Serial Workbench 0.15.33\n\n主题色自定义与界面一致性更新。\n\n- **主题色**：设置 → 外观 → 主题色，支持选色盘、`#RRGGBB` / `#RGB` 输入、格式提示和恢复默认；应用或离开输入框立即保存，重启后恢复。\n- **浅色/深色同步**：自定义色同步背景、面板、按钮、选中状态、标题栏、关于页链接、分离窗口和串口收发小窗；按钮文字按相对亮度自动选择黑色或白色。\n- **可读性**：检查极浅、极深与高饱和颜色；深色主题的选色盘、窄设置窗口和背景图组合也保持可用。\n- **保持不变**：GUI 与 AI 继续共享连接并各自读取历史；MCP 的 17 个工具、协议权限、脚本读写/离线试解析和原生搜索保持 0.15.31 / 0.15.32 的行为。\n\n推荐下载 `SerialWorkbench-0.15.33-windows-x64-setup.exe`。另提供单文件 EXE、便携 ZIP 和 `SHA256SUMS.txt`，运行无需安装 Qt 或 Python。升级前关闭工作台与 MCP 桥；安装器沿用原目录并保留配置。使用 Agent 的用户升级后重载 MCP 连接，并在设置中检查 skill 与地址。\n\n## English\n\n- **Theme color**: choose with the color picker or enter `#RRGGBB` / `#RGB` in Settings → Appearance → Theme color. Invalid values keep the current color; Apply, leaving the field or Return saves immediately and the choice survives restarts.\n- **Light/dark sync**: the chosen accent tints backgrounds, panels, buttons, selections, window captions, About links, detached windows and the serial receive monitor. Button text switches between black and white based on relative luminance.\n- **Readability**: extreme light, dark and saturated colors are checked, together with the dark-theme picker, narrow Settings layouts and background images.\n- **Preserved behavior**: shared GUI/AI connections with independent reads, all 17 MCP tools, protocol permissions, parser read/write/offline validation and native GUI search remain unchanged.\n\nThe Windows x64 setup installer is recommended. Single-file and portable builds plus SHA-256 checksums are also available; no Qt or Python SDK is required. Close the application and MCP bridge before upgrading. Existing installation paths and settings are retained. Reload the Agent MCP connection and check its skill and endpoint in Settings after upgrading.\n",
-    "published_at": "2026-10-19T05:31:38Z",
-    "html_url": "https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.33",
-    "draft": false,
-    "prerelease": false,
-    "assets": [
-      {
-        "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.33/SerialWorkbench-0.15.33-windows-x64-setup.exe",
-        "digest": "sha256:444b7c931c5c9ee483fe5a2eabc394cc77428881b2d744cb3d935f45300aa843",
-        "name": "SerialWorkbench-0.15.33-windows-x64-setup.exe",
-        "size": 15465318,
         "state": "uploaded"
       }
     ]

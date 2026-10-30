@@ -48,7 +48,7 @@ async def check(url, bridge, allow, expected_version=None):
             initialized = await client.initialize()
             if expected_version:
                 assert initialized.serverInfo.version == expected_version
-            assert len((await client.list_tools()).tools) == 17
+            assert len((await client.list_tools()).tools) == 24
             assert "read_usage_guide" in initialized.instructions
             guide = unpack(await client.call_tool("read_usage_guide", {}))
             assert guide["guide"] and guide["skill_path_scope"] == "server_host"
@@ -73,7 +73,7 @@ async def check(url, bridge, allow, expected_version=None):
             async with stdio_client(params) as (sr, sw):
                 async with ClientSession(sr, sw) as second:
                     await second.initialize()
-                    assert len((await second.list_tools()).tools) == 17
+                    assert len((await second.list_tools()).tools) == 24
                     other = unpack(await second.call_tool("read_all_events", {}))
                     assert other["session_id"] == events["session_id"]
                     assert other["events"][:len(events["events"])] == events["events"]
@@ -125,6 +125,34 @@ async def check(url, bridge, allow, expected_version=None):
                     unchanged = unpack(await client.call_tool("read_waveform", {"channel_id": channel_id}))
                     assert unchanged["sources"]["default"]["total_samples"] == sample_count
                     assert unchanged["sources"]["default"]["rejected_lines"] == 0
+                    unpack(await second.call_tool("send_data", {
+                        "channel_id": channel_id,
+                        "payload": "@wave[imu] yaw=10\n@wave[motor] yaw=100\n@wave[imu] yaw=20\n",
+                    }))
+                    for _ in range(50):
+                        named = unpack(await client.call_tool("read_waveform", {
+                            "channel_id": channel_id, "stream": "imu", "limit": 1,
+                        }))
+                        selected = named["sources"]["default"]["samples"]
+                        if selected and selected[-1]["values"]["yaw"] == 20:
+                            break
+                        await asyncio.sleep(.02)
+                    else:
+                        raise TimeoutError("Named wave stream did not reach MCP")
+                    assert len(selected) == 1 and selected[0]["stream"] == "imu"
+                    assert named["sources"]["default"]["available_streams"] == ["", "imu", "motor"]
+                    motor = unpack(await second.call_tool("read_waveform", {
+                        "channel_id": channel_id, "stream": "motor", "limit": 1,
+                    }))
+                    assert motor["sources"]["default"]["samples"][0]["values"]["yaw"] == 100
+                    legacy = unpack(await client.call_tool("read_waveform", {
+                        "channel_id": channel_id, "stream": "", "limit": 1,
+                    }))
+                    assert legacy["sources"]["default"]["samples"][0]["values"] == values
+                    assert named == unpack(await second.call_tool("read_waveform", {
+                        "channel_id": channel_id, "stream": "imu", "limit": 1,
+                    }))
+                    print("PASS named wave streams over HTTP/STDIO, filtered limits and legacy compatibility")
                     views = unpack(await client.call_tool("list_search_views", {"channel_id": channel_id}))["views"]
                     log_view = next(v for v in views if v["kind"] == "log")
                     found = unpack(await client.call_tool("search_logs", {
@@ -163,7 +191,7 @@ async def check(url, bridge, allow, expected_version=None):
                     assert invalid.isError
                     status = unpack(await client.call_tool("get_status"))
                     assert status["session_id"] == events["session_id"]
-                    print("PASS HTTP/stdio, 17 tools, shared history, baud reconfiguration, long poll, loopback, strict wave/1, integer/double values, reconnect, validation")
+                    print("PASS HTTP/stdio, 24 tools, shared history, baud reconfiguration, long poll, loopback, strict wave/1, integer/double values, reconnect, validation")
 
 
 def main():

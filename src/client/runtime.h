@@ -9,6 +9,7 @@ namespace sw
 QString defaultSettingsPath();
 QString instanceName(const QString &settings);
 QString siblingExecutable(const QString &name);
+bool maintenanceInProgress();
 QJsonObject instanceRequest(const QString &settings, const QString &command);
 QJsonObject ensureInstance(const QString &settings, bool allowControl = false);
 
