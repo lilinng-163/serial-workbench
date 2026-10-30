@@ -67,7 +67,20 @@
 
 `channel_id`、`file_path`、`fit` 位于工具参数顶层。`channel_id=""` 解除绑定；`file_path` 替换模型并异步导入。加载期间不可继续修改或截图，先等待完成。
 
-## 分析时区分事实
+## 配置文件与新 Agent 接续
+
+GUI“导出配置 / 导入配置”与 MCP 使用同一个版本化 JSON 格式，不需要重装软件。
+
+1. `export_model_configuration(view_id)` 只读返回 `{format:"serial-workbench.model3d", version:1, settings, connection_hint, guide}`。客户端可将返回对象保存为 UTF-8 JSON；工具本身不写任意服务器文件。
+2. 新会话先读取该 JSON 的 `guide` 与 `settings`：字段名是设备报文等号左侧的名字，绑定数组按位置 XYZ、欧拉角 XYZ（通常 roll/pitch/yaw）或四元数 WXYZ 排列，报文字段的先后顺序不决定欧拉角组合约定。`guide.example_wave` 是格式示例，不是传感器测量记录。
+3. `import_model_configuration(view_id, expected_revision, configuration=完整JSON对象)` 应用配置，需要 AI 控制、对应协议开放及刚读取的 revision。模型文件仍在工作台所在机器，导出不包含网格；路径缺失或文件无效时修正 settings.file 后重试。空 file 保留当前网格。
+4. 导入不连接硬件、不发送数据、不按旧 ID 自动换连接。使用 `list_connections` 选择实际来源，再通过 `configure_model_view(channel_id=...)` 绑定；核对来源、流名、帧序号和错误，不能把导入成功当成设备数据验证成功。connection_hint 仅包含名称、协议、波特率，排除密码和私钥。
+
+视角页的方位、仰角、距离、观察中心会随鼠标旋转/平移/缩放实时同步；这些是相机参数，不是模型姿态。`configure_model_view(settings={antialiasing:0|2|4|8})` 动态选择 MSAA。`model.antialiasing_requested` / `model.antialiasing_effective` 分别报告请求/实际值，显卡可能降级。捕获图片沿用该质量；初次渲染前 effective 可为 0。
+
+常用界面已隐藏欧拉角顺序和内外禀选择，旧配置与 MCP 的 `mapping.order` / `mapping.intrinsic` 继续保留并展示实际约定。单轴非零时各顺序等效，多个角非零时才有组合差异。空通道项明确显示“未绑定（使用偏移常量）”，底层 field 仍为空，四元数常量 W 必须明确设置 offset（单位四元数 W=1，XYZ=0），不会额外加默认 1。
+
+## 姿态和截图的证据边界
 
 `model_matrix_rows` 为 4×4 行数组，乘列向量，已包含遥测、手动平移、轴转换、对齐、缩放和中心平移。`world_bounds_*` 是变换后局部包围盒八角的保守边界，不是精确的三角网格碰撞检测。
 

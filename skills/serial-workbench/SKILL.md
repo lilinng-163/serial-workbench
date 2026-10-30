@@ -26,7 +26,7 @@ description: Use Serial Workbench CLI or MCP to share serial/network/SSH connect
 | 数值波形、实时数值 | `read_waveform(channel_id, stream?, limit?)`，接受完整的 `@wave temperature=25.5,voltage=3.3` 或 `@wave[imu] roll=10,pitch=20,yaw=30`，以 CR、LF 或 CRLF 结束 |
 | JSON / XML | `read_structured`，需在界面启用提取；原文和结构化记录独立保留 |
 | 自定义串口帧 | `read_script_results`，需在串口收发页启用脚本，字段位于 `sources.default.records[].value` |
-| 3D 模型、姿态和视口 | `list_model_views` / `open_model_view` / `get_model_state` / `configure_model_view` / `capture_model_view`，先读 [3D 指南](references/model3d.md) 或 `read_usage_guide(topic="model3d")` |
+| 3D 模型、姿态、视口和配置交接 | `list_model_views` / `open_model_view` / `get_model_state` / `configure_model_view` / `capture_model_view`；`export_model_configuration` / `import_model_configuration` 与 GUI 共用配置。先读 [3D 指南](references/model3d.md) 或 `read_usage_guide(topic="model3d")` |
 
 Agent 配置和安装 skill 先读 [接入指南](references/agents.md)，也可 `read_usage_guide(topic="agents")`。用 CLI `agents` 获取实际支持 ID，不猜客户端配置路径。
 

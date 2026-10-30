@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "model3d_view.h"
 #include <QOpenGLContext>
+#include <QOpenGLExtraFunctions>
 #include <QtMath>
 #include <cmath>
 
@@ -14,8 +15,12 @@ ModelView::ModelView(QWidget *parent) : QOpenGLWidget(parent)
     QSurfaceFormat surface;
     surface.setVersion(2, 1);
     surface.setDepthBufferSize(24);
-    surface.setSamples(4);
+    surface.setSamples(0);
     setFormat(surface);
+    frameTimer.setTimerType(Qt::PreciseTimer);
+    frameTimer.setSingleShot(true);
+    frameTimer.setInterval(16);
+    connect(&frameTimer, &QTimer::timeout, this, qOverload<>(&ModelView::update));
     setMesh(exampleModelMesh());
 }
 
@@ -29,6 +34,7 @@ void ModelView::cleanup()
     if (context())
     {
         makeCurrent();
+        multisampleBuffer.reset();
         meshBuffer.destroy();
         lineBuffer.destroy();
         program.reset();
@@ -93,8 +99,15 @@ void ModelView::setPose(const ModelPose &value)
     if (value.valid())
     {
         currentPose = value;
-        update();
+        requestFrame();
     }
+}
+
+void ModelView::requestFrame()
+{
+    // Input and telemetry share one repaint request. Keep the newest state,
+    // without rendering separately for every high-rate mouse move/sample.
+    if (!frameTimer.isActive()) { frameTimer.start(); }
 }
 
 void ModelView::setTheme(const Theme &value)
@@ -124,20 +137,26 @@ void ModelView::setModelTransform(double scale, bool center, const QVector3D &an
 
 void ModelView::fit()
 {
-    target = currentPose.position;
-    if (!centered)
-    {
-        QMatrix4x4 modelAlignment;
-        modelAlignment.rotate(alignment.z(), 0, 0, 1);
-        modelAlignment.rotate(alignment.y(), 0, 1, 0);
-        modelAlignment.rotate(alignment.x(), 1, 0, 0);
-        target += currentPose.matrix.mapVector(modelAlignment.mapVector(mesh.center() * modelScale));
-    }
+    fittedCamera = true;
+    target = modelMatrix().map(mesh.center());
     const double aspect = double(width()) / qMax(1, height());
     const double halfVertical = qDegreesToRadians(20.0);
     const double halfHorizontal = std::atan(std::tan(halfVertical) * aspect);
     const double limitingAngle = qMin(halfVertical, halfHorizontal);
     distance = qMax(0.001, mesh.radius() * modelScale * 1.1 / std::sin(limitingAngle));
+    update();
+    emit cameraChanged();
+}
+
+void ModelView::setAntialiasing(int samples)
+{
+    if (requestedSamples == samples) { return; }
+    requestedSamples = samples;
+    qualityReported = false;
+    // A hidden/offscreen widget may have a context object without a usable
+    // surface. Recreate GL resources only inside paintGL with a current context.
+    qualityDirty = true;
+    effectiveSamples = 0;
     update();
 }
 
@@ -158,12 +177,14 @@ QJsonObject ModelView::cameraSettings() const
 void ModelView::restoreCamera(const QJsonObject &settings)
 {
     if (settings.isEmpty()) { return; }
+    fittedCamera = false;
     yaw = std::remainder(settings["yaw"].toDouble(42), 360);
     elevation = qBound(-89.9, settings["elevation"].toDouble(26), 89.9);
     distance = qBound(0.001, settings["distance"].toDouble(6), 1e12);
     const auto point = settings["target"].toArray();
     for (int i = 0; i < 3; ++i) { target[i] = qBound(-1e12, i < point.size() ? point[i].toDouble() : 0, 1e12); }
     update();
+    emit cameraChanged();
 }
 
 QMatrix4x4 ModelView::modelMatrix() const
@@ -201,7 +222,8 @@ QJsonObject ModelView::modelState() const
     return {{"triangles", mesh.vertices.size() / 3}, {"local_min", vector(mesh.minimum)},
         {"local_max", vector(mesh.maximum)}, {"world_bounds_min", vector(low)}, {"world_bounds_max", vector(high)},
         {"position", vector(currentPose.position)}, {"model_matrix_rows", rows},
-        {"effective_color", modelColor().name()}, {"render_error", error}};
+        {"effective_color", modelColor().name()}, {"render_error", error},
+        {"antialiasing_requested", requestedSamples}, {"antialiasing_effective", effectiveSamples}};
 }
 
 QImage ModelView::capture(int maxSize)
@@ -218,6 +240,7 @@ QImage ModelView::capture(int maxSize)
     renderer.setPose(currentPose);
     renderer.setModelColor(customColor);
     renderer.setModelTransform(modelScale, centered, alignment);
+    renderer.setAntialiasing(requestedSamples);
     renderer.restoreCamera(cameraSettings());
     renderer.show();
     auto frame = renderer.grabFramebuffer();
@@ -245,8 +268,34 @@ void ModelView::lines(const QList<QVector3D> &points, const QColor &color, const
 
 void ModelView::paintGL()
 {
+    const int previousSamples = effectiveSamples;
     QPainter painter(this);
     painter.beginNativePainting();
+    if (qualityDirty)
+    {
+        multisampleBuffer.reset();
+        qualityDirty = false;
+    }
+    const QSize pixels = size() * devicePixelRatioF();
+    const bool canBlit = context()->format().majorVersion() >= 3
+        || context()->hasExtension("GL_ARB_framebuffer_object");
+    effectiveSamples = 0;
+    if (requestedSamples > 0 && canBlit && program)
+    {
+        if (!multisampleBuffer || multisampleBuffer->size() != pixels)
+        {
+            QOpenGLFramebufferObjectFormat format;
+            format.setAttachment(QOpenGLFramebufferObject::CombinedDepthStencil);
+            format.setSamples(requestedSamples);
+            multisampleBuffer = std::make_unique<QOpenGLFramebufferObject>(pixels, format);
+        }
+        if (multisampleBuffer->isValid())
+        {
+            multisampleBuffer->bind();
+            effectiveSamples = multisampleBuffer->format().samples();
+        }
+    }
+    else { effectiveSamples = 0; }
     // QPainter leaves depth writes disabled. Reset before clearing so old poses
     // cannot survive in the depth buffer and cut holes into the next frame.
     glDepthMask(GL_TRUE);
@@ -273,6 +322,8 @@ void ModelView::paintGL()
         qMax(distance * 10, radius * 100));
     const auto vp = projection * view;
     glEnable(GL_DEPTH_TEST);
+    if (effectiveSamples > 0) { glEnable(GL_MULTISAMPLE); }
+    else { glDisable(GL_MULTISAMPLE); }
     glDisable(GL_CULL_FACE);
     glEnable(GL_BLEND);
     glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
@@ -319,7 +370,21 @@ void ModelView::paintGL()
     }
     program->release();
     glDisable(GL_DEPTH_TEST);
+    if (multisampleBuffer && requestedSamples > 0 && multisampleBuffer->isValid())
+    {
+        auto functions = context()->extraFunctions();
+        functions->glBindFramebuffer(GL_READ_FRAMEBUFFER, multisampleBuffer->handle());
+        functions->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, defaultFramebufferObject());
+        functions->glBlitFramebuffer(0, 0, pixels.width(), pixels.height(),
+            0, 0, pixels.width(), pixels.height(), GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        functions->glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
+    }
     painter.endNativePainting();
+    if (!qualityReported || previousSamples != effectiveSamples)
+    {
+        qualityReported = true;
+        emit renderQualityChanged(effectiveSamples);
+    }
     painter.setRenderHint(QPainter::Antialiasing);
     painter.setPen(theme.muted);
     painter.drawText(QRect(16, 10, width() - 32, 24), "世界坐标 · Z 向上");
@@ -340,40 +405,55 @@ void ModelView::paintGL()
 void ModelView::mousePressEvent(QMouseEvent *event)
 {
     previousMouse = event->position();
+    navigating = event->buttons() & (Qt::LeftButton | Qt::MiddleButton);
     setFocus();
     event->accept();
+}
+
+void ModelView::resizeGL(int, int)
+{
+    // Initial fitting often happens before the splitter gives us its final aspect.
+    // Refit on resize until the user explicitly adjusts the camera.
+    if (fittedCamera) { fit(); }
 }
 
 void ModelView::mouseMoveEvent(QMouseEvent *event)
 {
     const auto delta = event->position() - previousMouse;
     previousMouse = event->position();
+    navigating = event->buttons() & (Qt::LeftButton | Qt::MiddleButton);
+    if (!navigating || delta.isNull()) { return; }
     if (event->buttons() & Qt::LeftButton)
     {
+        fittedCamera = false;
         yaw = std::remainder(yaw - delta.x() * .4, 360);
         elevation = qBound(-89.9, elevation + delta.y() * .4, 89.9);
     }
     else if (event->buttons() & Qt::MiddleButton)
     {
+        fittedCamera = false;
         const float a = qDegreesToRadians(yaw);
         const float e = qDegreesToRadians(elevation);
         const QVector3D right(-std::sin(a), std::cos(a), 0);
         const QVector3D up(-std::sin(e) * std::cos(a), -std::sin(e) * std::sin(a), std::cos(e));
         target += (up * delta.y() - right * delta.x()) * (distance * .75 / qMax(1, height()));
     }
-    update();
+    requestFrame();
+    emit cameraChanged();
 }
 
 void ModelView::mouseReleaseEvent(QMouseEvent *event)
 {
+    navigating = event->buttons() & (Qt::LeftButton | Qt::MiddleButton);
     emit cameraChanged();
     event->accept();
 }
 
 void ModelView::wheelEvent(QWheelEvent *event)
 {
+    fittedCamera = false;
     distance = qBound(0.001, distance * std::pow(.85, event->angleDelta().y() / 120.0), 1e12);
-    update();
+    requestFrame();
     emit cameraChanged();
     event->accept();
 }

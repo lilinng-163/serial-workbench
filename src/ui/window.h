@@ -96,6 +96,7 @@ public:
     IconButton *repeat = nullptr;
     QSpinBox *interval = nullptr;
     QTimer repeatTimer;
+    QTimer catchupTimer;
     QByteArray repeatedPayload;
     QString repeatedPeer;
     QPushButton *sendButton = nullptr;

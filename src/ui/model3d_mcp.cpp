@@ -101,7 +101,20 @@ void Window::installModelMcp()
         if (!pane) { fail("3D 页面不存在或协议访问已关闭，请先 list_model_views"); }
         auto model = pane->instrument->model;
         if (name == "get_model_state") { return snapshot(pane); }
+        if (name == "export_model_configuration") { return model->exportConfiguration(); }
         if (model->loading()) { fail("模型仍在后台导入，请等待 get_model_state.loading=false"); }
+        if (name == "import_model_configuration")
+        {
+            if (arguments["expected_revision"] != snapshot(pane)["revision"])
+            {
+                fail("3D 设置已变化，请重新 get_model_state 后使用最新 expected_revision");
+            }
+            if (!arguments["configuration"].isObject()) { fail("configuration 必须为配置对象"); }
+            if (pane->channel && !server->protocolEnabled(pane->channel->config.kind)) { fail("协议访问已关闭"); }
+            model->importConfiguration(arguments["configuration"].toObject());
+            guard->saveSettings();
+            return snapshot(pane);
+        }
         if (name == "configure_model_view")
         {
             if (arguments["expected_revision"] != snapshot(pane)["revision"])

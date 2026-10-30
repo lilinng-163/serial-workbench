@@ -6,6 +6,7 @@
 #include <QOpenGLFunctions>
 #include <QOpenGLBuffer>
 #include <QOpenGLShaderProgram>
+#include <QOpenGLFramebufferObject>
 
 namespace sw
 {
@@ -29,13 +30,18 @@ public:
     QString renderError() const { return error; }
     QJsonObject modelState() const;
     QImage capture(int maxSize);
+    void setAntialiasing(int samples);
+    int antialiasing() const { return requestedSamples; }
+    bool isNavigating() const { return navigating; }
 
 signals:
     void cameraChanged();
+    void renderQualityChanged(int samples);
 
 protected:
     void initializeGL() override;
     void paintGL() override;
+    void resizeGL(int width, int height) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
@@ -44,6 +50,7 @@ protected:
 
 private:
     void cleanup();
+    void requestFrame();
     QMatrix4x4 modelMatrix() const;
     void lines(const QList<QVector3D> &points, const QColor &color, const QMatrix4x4 &matrix);
     Theme theme;
@@ -63,5 +70,13 @@ private:
     float distance = 6;
     QVector3D target;
     QPointF previousMouse;
+    bool navigating = false;
+    QTimer frameTimer;
+    int requestedSamples = 4;
+    int effectiveSamples = 0;
+    bool qualityReported = false;
+    bool qualityDirty = true;
+    bool fittedCamera = true;
+    std::unique_ptr<QOpenGLFramebufferObject> multisampleBuffer;
 };
 }

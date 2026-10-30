@@ -17,9 +17,8 @@ QIcon captionIcon()
         image.fill(Qt::transparent);
         QPainter painter(&image);
         painter.setRenderHint(QPainter::Antialiasing);
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(QColor("#293e35"));
-        painter.drawRoundedRect(QRectF(0, 0, size, size), size / 5.0, size / 5.0);
+        // Windows uses this icon for both the caption and taskbar. Keep the
+        // source SVG's alpha; an opaque badge hides its transparent silhouette.
         QIcon(":/brand/lightning.svg").paint(&painter, QRect(1, 1, size - 2, size - 2));
         result.addPixmap(image);
     }

@@ -33,6 +33,47 @@ class ModelMcpTests : public QObject
     }
 
 private slots:
+    void configurationHandoffAndPermissions()
+    {
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("handoff.json"));
+        engine.allowControl = true;
+        const auto opened = mcp.call("open_model_view", {{"file_path", mesh()}}).toObject();
+        const auto id = opened["view_id"].toString();
+        QTRY_VERIFY(!get(mcp, id)["loading"].toBool());
+        const auto document = mcp.call("export_model_configuration", {{"view_id", id}}).toObject();
+        const auto before = get(mcp, id);
+        const QJsonObject arguments {{"view_id", id}, {"expected_revision", before["revision"]}, {"configuration", document}};
+        engine.allowControl = false;
+        QVERIFY(mcp.call("export_model_configuration", {{"view_id", id}}).isObject());
+        QVERIFY_EXCEPTION_THROWN(mcp.call("import_model_configuration", arguments), std::exception);
+        engine.allowControl = true;
+        mcp.call("import_model_configuration", arguments);
+        QCOMPARE(get(mcp, id)["settings"], before["settings"]);
+        configure(mcp, id, {{"antialiasing", 8}});
+        QCOMPARE(get(mcp, id)["settings"].toObject()["antialiasing"].toInt(), 8);
+        QVERIFY_EXCEPTION_THROWN(mcp.call("import_model_configuration", arguments), std::exception);
+        const QJsonValue saved = get(mcp, id).value("settings");
+        QVERIFY_EXCEPTION_THROWN(configure(mcp, id, {{"antialiasing", 3}, {"scale", 2}}), std::exception);
+        QCOMPARE(get(mcp, id)["settings"], saved);
+        auto invalid = document;
+        auto badSettings = invalid["settings"].toObject();
+        badSettings["file"] = directory.filePath("missing.stl");
+        invalid["settings"] = badSettings;
+        const auto importInvalid = [&](const QJsonObject &value)
+        {
+            return mcp.call("import_model_configuration", {{"view_id", id},
+                {"expected_revision", get(mcp, id)["revision"]}, {"configuration", value}});
+        };
+        QVERIFY_EXCEPTION_THROWN(importInvalid(invalid), std::exception);
+        QCOMPARE(get(mcp, id)["settings"], saved);
+        badSettings["file"] = fixture("broken.obj", "not a mesh");
+        invalid["settings"] = badSettings;
+        QVERIFY_EXCEPTION_THROWN(importInvalid(invalid), std::exception);
+        QCOMPARE(get(mcp, id)["settings"], saved);
+    }
+
     void initTestCase()
     {
         QVERIFY(directory.isValid());

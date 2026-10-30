@@ -3185,7 +3185,7 @@ private slots:
     {
         sw::Engine engine;
         sw::McpServer mcp(&engine);
-        QCOMPARE(mcp.tools().size(), 22);
+        QCOMPARE(mcp.tools().size(), 24);
         QVERIFY_EXCEPTION_THROWN(mcp.call("open_connection", {{"config", QJsonObject {{"kind", "serial"}, {"port", "loop://"}}}}), std::runtime_error);
         engine.allowControl = true;
         mcp.call("open_connection", {{"config", QJsonObject {{"kind", "serial"}, {"port", "loop://"}}}});

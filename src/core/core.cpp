@@ -4,6 +4,7 @@
 
 #include <QTextCodec>
 #include <cmath>
+#include <algorithm>
 #include <stdexcept>
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -168,10 +169,14 @@ QJsonObject Journal::read(qint64 after, int limit, const QString &id,
     }
     QJsonArray page;
     bool more = false;
-    for (const auto &entry : events)
+    // Sequence numbers stay sorted even when the bounded history evicts rows.
+    // Readers at the live cursor must not rescan the entire retained history.
+    const auto begin = std::upper_bound(events.begin(), events.end(), after,
+        [](qint64 cursor, const auto &entry) { return cursor < entry.first["seq"].toInteger(); });
+    for (auto it = begin; it != events.end(); ++it)
     {
-        const auto &event = entry.first;
-        if (event["seq"].toInteger() > after && (id.isEmpty() || event["channel_id"].toString() == id)
+        const auto &event = it->first;
+        if ((id.isEmpty() || event["channel_id"].toString() == id)
             && (!visible || visible(event)))
         {
             if (page.size() >= limit)

@@ -3,11 +3,13 @@
 #include <QtConcurrentRun>
 #include <QMimeData>
 #include <QColorDialog>
+#include <QSaveFile>
 
 namespace sw
 {
 namespace
 {
+const QString unboundLabel = QStringLiteral("未绑定（使用偏移常量）");
 class CompactDoubleSpinBox : public QDoubleSpinBox
 {
 public:
@@ -74,9 +76,10 @@ ModelPanel::BindingRow ModelPanel::bindingRow(QGridLayout *layout, int row,
     result.field = new Combo;
     result.field->setEditable(true);
     result.field->setInsertPolicy(QComboBox::NoInsert);
+    result.field->addItem(unboundLabel);
     result.field->lineEdit()->setPlaceholderText("留空使用常量");
     result.field->lineEdit()->setMaxLength(256);
-    result.field->setEditText(initial);
+    result.field->setEditText(initial.isEmpty() ? unboundLabel : initial);
     result.field->setObjectName(id + "Field");
     result.gain = numeric(this, -1e9, 1e9, 6);
     result.gain->setValue(1);
@@ -157,8 +160,10 @@ ModelPanel::ModelPanel(QWidget *parent) : QWidget(parent)
     auto streamForm = new QFormLayout;
     streamForm->addRow("数据流", stream);
     sideBody->addLayout(streamForm);
-    auto tabs = new QTabWidget;
+    auto tabs = new ModelTabs;
+    mappingTabs = tabs;
     tabs->setObjectName("model3dMappingTabs");
+    tabs->setDocumentMode(true);
     QVBoxLayout *positionBody;
     auto positionPage = formPage(positionBody);
     positionBody->addWidget(note("手动平移 · 世界坐标\n始终生效，并叠加到通道位置上；无需等待姿态数据。"));
@@ -199,9 +204,14 @@ ModelPanel::ModelPanel(QWidget *parent) : QWidget(parent)
     convention->addItem("外禀 / 固定轴", false);
     convention->setObjectName("model3dConvention");
     convention->setMinimumWidth(160);
-    orderRow->addRow("顺序", order);
-    orderRow->addRow("约定", convention);
-    eulerBody->addLayout(orderRow);
+    // Preserve old configurations and MCP semantics without exposing confusing selectors.
+    delete orderRow;
+    order->setParent(this);
+    convention->setParent(this);
+    order->hide();
+    convention->hide();
+    rotationConvention = note("姿态约定：ZYX 内禀；字段名来自所选数据流。");
+    eulerBody->addWidget(rotationConvention);
     units = new Combo;
     units->addItem("角度 °", false);
     units->addItem("弧度 rad", true);
@@ -214,7 +224,7 @@ ModelPanel::ModelPanel(QWidget *parent) : QWidget(parent)
         angles[i] = bindingRow(angleGrid, i, QString("绕 %1").arg(QString("XYZ")[i]), defaults[i], QString("modelAngle%1").arg(i));
     }
     eulerBody->addLayout(angleGrid);
-    eulerBody->addWidget(note("正向遵循右手定则。按上方顺序组合旋转；例如 ZYX 内禀为 Rz · Ry · Rx。"));
+    eulerBody->addWidget(note("绕 X / Y / Z 分别选择设备发送的字段名。正向遵循右手定则；报文字段排列顺序不影响绑定。"));
     eulerBody->addStretch();
     rotationPages->addWidget(eulerPage);
     QVBoxLayout *quaternionBody;
@@ -289,6 +299,84 @@ ModelPanel::ModelPanel(QWidget *parent) : QWidget(parent)
     modelBody->addLayout(modelForm);
     modelBody->addStretch();
     tabs->addTab(modelPage, "模型");
+    QVBoxLayout *cameraBody;
+    auto cameraPage = formPage(cameraBody);
+    cameraBody->addWidget(note("相机只改变观察视角，不改变模型姿态或串口绑定。拖动、滚轮和适配后数值实时更新。"));
+    auto cameraForm = new QFormLayout;
+    const QStringList cameraLabels {"方位角 °", "仰角 °", "观察距离", "观察中心 X", "观察中心 Y", "观察中心 Z"};
+    for (int i = 0; i < 6; ++i)
+    {
+        cameraFields[i] = numeric(this, i == 2 ? .001 : i < 2 ? (i == 0 ? -360 : -89.9) : -1e12,
+            i < 2 ? (i == 0 ? 360 : 89.9) : 1e12, 6);
+        cameraFields[i]->setObjectName(QString("modelCamera%1").arg(i));
+        cameraForm->addRow(cameraLabels[i], cameraFields[i]);
+        connect(cameraFields[i], &QDoubleSpinBox::valueChanged, this, [this]
+        {
+            if (restoring) { return; }
+            view->restoreCamera({{"yaw", cameraFields[0]->value()}, {"elevation", cameraFields[1]->value()},
+                {"distance", cameraFields[2]->value()}, {"target", QJsonArray {cameraFields[3]->value(),
+                    cameraFields[4]->value(), cameraFields[5]->value()}}});
+            saveTimer.start();
+        });
+    }
+    cameraBody->addLayout(cameraForm);
+    antialiasing = new Combo;
+    antialiasing->setObjectName("modelAntialiasing");
+    for (int samples : {0, 2, 4, 8})
+    {
+        antialiasing->addItem(samples ? QString("%1× MSAA").arg(samples) : "关闭", samples);
+    }
+    antialiasing->setCurrentIndex(2);
+    cameraForm->addRow("抗锯齿", antialiasing);
+    cameraBody->addWidget(note("抗锯齿质量受显卡支持限制；MCP 模型状态报告请求值与实际生效值。"));
+    auto qualityStatus = note("实际抗锯齿：等待渲染");
+    qualityStatus->setObjectName("modelAntialiasingStatus");
+    cameraBody->addWidget(qualityStatus);
+    connect(view, &ModelView::renderQualityChanged, qualityStatus, [qualityStatus](int samples)
+    {
+        qualityStatus->setText(samples ? QString("实际抗锯齿：%1× MSAA").arg(samples) : "实际抗锯齿：关闭 / 显卡不支持");
+    }, Qt::QueuedConnection);
+    connect(antialiasing, &QComboBox::currentIndexChanged, this, [this]
+    {
+        view->setAntialiasing(antialiasing->currentData().toInt());
+        if (!restoring) { saveTimer.start(); }
+    });
+    cameraBody->addStretch();
+    tabs->addTab(cameraPage, "视角");
+    auto configurationRow = new QHBoxLayout;
+    auto exportConfig = new QPushButton("导出配置");
+    exportConfig->setObjectName("exportModelConfiguration");
+    auto importConfig = new QPushButton("导入配置");
+    importConfig->setObjectName("importModelConfiguration");
+    configurationRow->addWidget(exportConfig);
+    configurationRow->addWidget(importConfig);
+    sideBody->addLayout(configurationRow);
+    connect(exportConfig, &QPushButton::clicked, this, [this]
+    {
+        const auto path = QFileDialog::getSaveFileName(this, "导出模型配置", "model3d.json", "JSON (*.json)");
+        if (path.isEmpty()) { return; }
+        QSaveFile file(path);
+        const auto bytes = QJsonDocument(exportConfiguration()).toJson();
+        if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit())
+        {
+            QMessageBox::warning(this, "导出失败", file.errorString());
+        }
+    });
+    connect(importConfig, &QPushButton::clicked, this, [this]
+    {
+        const auto path = QFileDialog::getOpenFileName(this, "导入模型配置", {}, "JSON (*.json)");
+        if (path.isEmpty()) { return; }
+        try
+        {
+            QFile file(path);
+            if (!file.open(QIODevice::ReadOnly) || file.size() > 1024 * 1024) { fail("配置不可读或超过 1 MiB"); }
+            QJsonParseError error;
+            const auto document = QJsonDocument::fromJson(file.readAll(), &error);
+            if (error.error != QJsonParseError::NoError || !document.isObject()) { fail("配置必须为有效 JSON 对象"); }
+            importConfiguration(document.object());
+        }
+        catch (const std::exception &error) { QMessageBox::warning(this, "导入失败", QString::fromUtf8(error.what())); }
+    });
     sideBody->addWidget(tabs, 1);
     sideBody->addWidget(note("分流示例：@wave[imu] roll=10,pitch=20,yaw=30\n选择 imu，只驱动此模型。旧 @wave 对应空流名；报文以换行结束。"));
     auto sideScroll = scrollPanel(side);
@@ -305,7 +393,25 @@ ModelPanel::ModelPanel(QWidget *parent) : QWidget(parent)
     saveTimer.setInterval(250);
     saveTimer.setSingleShot(true);
     connect(&saveTimer, &QTimer::timeout, this, &ModelPanel::changed);
-    connect(view, &ModelView::cameraChanged, this, [this] { if (!restoring) { saveTimer.start(); } });
+    cameraFieldsTimer.setInterval(33);
+    cameraFieldsTimer.setSingleShot(true);
+    connect(&cameraFieldsTimer, &QTimer::timeout, this, &ModelPanel::syncCameraFields);
+    connect(view, &ModelView::cameraChanged, this, [this]
+    {
+        // Keep high-rate mouse input out of six spin-box layouts. During a
+        // drag the fields stay live at 30 Hz; release and API changes flush now.
+        if (view->isNavigating() && !restoring)
+        {
+            if (!cameraFieldsTimer.isActive()) { cameraFieldsTimer.start(); }
+        }
+        else
+        {
+            cameraFieldsTimer.stop();
+            syncCameraFields();
+        }
+        if (!restoring) { saveTimer.start(); }
+    });
+    syncCameraFields();
     connect(fit, &QPushButton::clicked, this, [this] { view->fit(); saveTimer.start(); });
     connect(camera, &QComboBox::activated, this, [this, camera] { view->setView(camera->currentData().toString()); });
     connect(import, &QPushButton::clicked, this, [this]
@@ -408,7 +514,8 @@ ModelMapping ModelPanel::mapping() const
     {
         for (int i = 0; i < int(rows.size()); ++i)
         {
-            bindings[i] = {rows[i].field->currentText().trimmed(), rows[i].gain->value(), rows[i].offset->value()};
+            const auto text = rows[i].field->currentText().trimmed();
+            bindings[i] = {text == unboundLabel ? QString() : text, rows[i].gain->value(), rows[i].offset->value()};
         }
     };
     read(position, result.position);
@@ -485,7 +592,7 @@ void ModelPanel::refreshFieldNames(const QJsonObject &values)
             const QSignalBlocker blocker(row.field);
             const auto text = row.field->currentText();
             row.field->clear();
-            row.field->addItem("");
+            row.field->addItem(unboundLabel);
             row.field->addItems(fields);
             row.field->setEditText(text);
         }
@@ -690,6 +797,7 @@ void ModelPanel::loadFile(const QString &path)
 void ModelPanel::setTheme(const Theme &theme)
 {
     view->setTheme(theme);
+    mappingTabs->setTheme(theme);
 }
 
 QJsonObject ModelPanel::settings() const
@@ -700,7 +808,7 @@ QJsonObject ModelPanel::settings() const
         {"manual_position", QJsonArray {manualPosition[0]->value(), manualPosition[1]->value(), manualPosition[2]->value()}},
         {"follow_theme", followTheme->isChecked()}, {"color", customColor.name()},
         {"alignment", QJsonArray {alignment[0]->value(), alignment[1]->value(), alignment[2]->value()}},
-        {"camera", view->cameraSettings()}};
+        {"camera", view->cameraSettings()}, {"antialiasing", view->antialiasing()}};
 }
 
 void ModelPanel::restore(const QJsonObject &settings, bool reload)
@@ -714,7 +822,7 @@ void ModelPanel::restore(const QJsonObject &settings, bool reload)
     {
         for (int i = 0; i < int(rows.size()); ++i)
         {
-            rows[i].field->setEditText(bindings[i].field);
+            rows[i].field->setEditText(bindings[i].field.isEmpty() ? unboundLabel : bindings[i].field);
             rows[i].gain->setValue(bindings[i].gain);
             rows[i].offset->setValue(bindings[i].offset);
         }
@@ -725,6 +833,8 @@ void ModelPanel::restore(const QJsonObject &settings, bool reload)
     mode->setCurrentIndex(mode->findData(config.mode));
     order->setCurrentText(config.order);
     convention->setCurrentIndex(config.intrinsic ? 0 : 1);
+    rotationConvention->setText(QString("姿态约定：%1 %2；字段名来自所选数据流。")
+        .arg(config.order, config.intrinsic ? "内禀" : "外禀"));
     units->setCurrentIndex(config.radians ? 1 : 0);
     rotationPages->setCurrentIndex(mode->currentIndex());
     feed->setCurrentIndex(settings["feed"] == "script" ? 1 : 0);
@@ -759,9 +869,22 @@ void ModelPanel::restore(const QJsonObject &settings, bool reload)
     stream->setEditText(streamKey);
     stream->setEnabled(feed->currentData() == "wave");
     view->restoreCamera(settings["camera"].toObject());
+    antialiasing->setCurrentIndex(antialiasing->findData(settings["antialiasing"].toInt(4)));
     if (reload && !modelPath.isEmpty()) { loadFile(modelPath); }
     restoring = false;
     saveTimer.stop();
+}
+
+void ModelPanel::syncCameraFields()
+{
+    const auto camera = view->cameraSettings();
+    const auto target = camera["target"].toArray();
+    for (int i = 0; i < 6; ++i)
+    {
+        const QSignalBlocker blocker(cameraFields[i]);
+        cameraFields[i]->setValue(i < 3 ? camera[QStringList {"yaw", "elevation", "distance"}[i]].toDouble()
+            : target[i - 3].toDouble());
+    }
 }
 
 void ModelPanel::dragEnterEvent(QDragEnterEvent *event)

@@ -631,6 +631,9 @@ public:
 
 Pane::Pane(Window *owner, const QString &instrumentKind) : QWidget(owner), window(owner)
 {
+    catchupTimer.setSingleShot(true);
+    catchupTimer.setInterval(8);
+    connect(&catchupTimer, &QTimer::timeout, this, [this] { tick(); });
     setObjectName("workspace");
     setAttribute(Qt::WA_StyledBackground);
     auto body = new QVBoxLayout(this);
@@ -738,6 +741,7 @@ Pane::Pane(Window *owner, const QString &instrumentKind) : QWidget(owner), windo
     pause->setCheckable(true);
     connect(pause, &QAbstractButton::toggled, this, [this](bool paused)
     {
+        if (paused) { catchupTimer.stop(); }
         pause->setToolTip(paused ? "继续显示，后台仍在接收" : "暂停显示，后台继续接收");
         pause->setAccessibleName(pause->toolTip());
     });
@@ -1248,12 +1252,13 @@ void Pane::tick(bool includeHidden)
         repeat->setChecked(false);
     }
     peer->setVisible(channel && (channel->config.kind == "tcp-server" || channel->config.kind == "udp"));
-    if (!channel || (!isVisible() && !includeHidden))
+    if (!channel)
     {
+        catchupTimer.stop();
         if (!channel && isVisible()) { refreshScriptResults(); }
         return;
     }
-    refreshScriptResults();
+    if (isVisible() || includeHidden) { refreshScriptResults(); }
     if (channel->config.kind == "tcp-server")
     {
         QStringList current;
@@ -1274,7 +1279,9 @@ void Pane::tick(bool includeHidden)
     }
     if (!pause->isChecked())
     {
-        const auto batch = window->engine->journal.read(cursor, 500, channel->id);
+        // Keep hidden receive pages current too. A bounded batch avoids a large
+        // catch-up layout blocking input when returning from a model/plot tab.
+        const auto batch = window->engine->journal.read(cursor, 64, channel->id);
         cursor = batch["next_cursor"].toInteger();
         if (batch["gap"].toBool())
         {
@@ -1282,19 +1289,31 @@ void Pane::tick(bool includeHidden)
             log->streams.clear();
             terminal->reset(channel && channel->config.kind == "ssh" ? "utf-8" : encoding->currentText());
         }
-        for (const auto &value : batch["events"].toArray())
+        const auto events = batch["events"].toArray();
+        if (!ssh) { log->feedBatch(events); }
+        QByteArray terminalBytes;
+        for (const auto &value : events)
         {
             const auto event = value.toObject();
-            if (!ssh) { log->feed(event); }
             if (event["stream_reset"].toBool())
             {
+                if (!terminalBytes.isEmpty()) { terminal->feed(terminalBytes); }
+                terminalBytes.clear();
                 terminal->reset(channel && channel->config.kind == "ssh" ? "utf-8" : encoding->currentText());
             }
             if (event["direction"] == "rx" && event["message"] != "file-transfer")
             {
-                terminal->feed(QByteArray::fromHex(event["hex"].toString().toLatin1()));
+                terminalBytes += QByteArray::fromHex(event["hex"].toString().toLatin1());
             }
         }
+        if (!terminalBytes.isEmpty()) { terminal->feed(terminalBytes); }
+        if (batch["has_more"].toBool())
+        {
+            // Resume between input/paint events instead of limiting a busy
+            // connection to one batch per regular 40 ms UI tick.
+            if (!catchupTimer.isActive()) { catchupTimer.start(); }
+        }
+        else { catchupTimer.stop(); }
     }
 
 }
@@ -1364,6 +1383,7 @@ void Pane::setTerminal(bool enabled)
 void Pane::clearView()
 {
     if (instrument) { return; }
+    catchupTimer.stop();
     cursor = window->engine->journal.sequence;
     viewStart = cursor;
     log->reset();

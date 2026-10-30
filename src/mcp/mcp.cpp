@@ -482,9 +482,10 @@ void McpServer::finishCall(QTcpSocket *socket, const QJsonObject &rpc, const QSt
 
 QJsonValue McpServer::call(const QString &name, const QJsonObject &a)
 {
-    if (QStringList {"list_model_views", "open_model_view", "get_model_state", "configure_model_view", "capture_model_view"}.contains(name))
+    if (QStringList {"list_model_views", "open_model_view", "get_model_state", "configure_model_view", "capture_model_view",
+        "export_model_configuration", "import_model_configuration"}.contains(name))
     {
-        if ((name == "open_model_view" || name == "configure_model_view") && !engine->allowControl)
+        if ((name == "open_model_view" || name == "configure_model_view" || name == "import_model_configuration") && !engine->allowControl)
         {
             fail("AI 控制未开启，请在桌面设置 → AI / MCP 中允许控制");
         }
@@ -655,11 +656,16 @@ QJsonArray McpServer::tools() const
         {{"file_path", property("string")}, {"channel_id", property("string")}}, {"file_path"}, false);
     add("get_model_state", "Read the actual 3D page settings, revision, load error, triangle count, bounds, model_matrix_rows (row-major), effective color, final position, telemetry frame sequences and mapping errors. Read-only; does not consume a log cursor. Retained pose may be stale: check errors, connection_state, paused and sequence values. Read topic=model3d for binding semantics.",
         {{"view_id", property("string")}}, {"view_id"});
-    add("configure_model_view", "Update the shared GUI 3D page using expected_revision from get_model_state. Requires AI control. settings is a partial patch: mapping (position/angles/quaternion binding arrays, mode, order, intrinsic, radians, axes), feed wave/script, peer, stream, manual_position, scale, alignment, centered, color, follow_theme, paused, camera. Unknown/invalid settings reject the whole patch. Optional channel_id rebinds (empty string unbinds); optional file_path imports a replacement asynchronously; fit=true fits the camera. Read read_usage_guide(topic=model3d) first.",
+    add("configure_model_view", "Update the shared GUI 3D page using expected_revision from get_model_state. Requires AI control. settings is a partial patch: mapping (position/angles/quaternion binding arrays, mode, order, intrinsic, radians, axes), feed wave/script, peer, stream, manual_position, scale, alignment, centered, color, follow_theme, paused, camera, antialiasing (0/2/4/8). Unknown/invalid settings reject the whole patch. Optional channel_id rebinds (empty string unbinds); optional file_path imports a replacement asynchronously; fit=true fits the camera. Read read_usage_guide(topic=model3d) first.",
         {{"view_id", property("string")}, {"expected_revision", property("string")}, {"settings", property("object")},
          {"channel_id", property("string")}, {"file_path", property("string")}, {"fit", property("boolean", false)}}, {"view_id", "expected_revision"}, false);
     add("capture_model_view", "Render only the selected 3D viewport using its exact mesh, pose, camera and theme. Returns native MCP PNG image content plus matching structured state. Works in the background on a desktop OpenGL environment; reports an error if rendering is unavailable. max_size bounds the longest image dimension (256..1600, default 1024). Does not show windows or capture other applications. A vision-capable client can inspect the image; numerical analysis should use get_model_state.",
         {{"view_id", property("string")}, {"max_size", property("integer", 1024)}}, {"view_id"});
+    add("export_model_configuration", "Export a versioned model configuration and Agent handoff guide. Includes bindings, model path, camera, antialiasing, convention and sanitized connection hint. Read-only; returns JSON without writing files or consuming telemetry.",
+        {{"view_id", property("string")}}, {"view_id"});
+    add("import_model_configuration", "Import the exact GUI model configuration format. Requires AI control and latest revision. Validates settings and local mesh before applying; never opens/rebinds a connection or sends data. Model paths belong to the server. Use get_model_state to verify completion.",
+        {{"view_id", property("string")}, {"expected_revision", property("string")}, {"configuration", property("object")}},
+        {"view_id", "expected_revision", "configuration"}, false);
     return result;
 }
 }

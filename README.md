@@ -30,7 +30,7 @@ Built with **Qt 6 and C++17**. The Windows application and its native MCP bridge
 | 🔌 **Connections** | Serial, TCP client/server, UDP and SSH; independent tabs, live port discovery and serial recovery. |
 | 🖥️ **SSH terminal** | A dedicated interactive terminal with **10,000 lines of scrollback**, selection and copy, ANSI colors, IME input and remote PTY resizing. |
 | 📈 **Waveforms** | Up to 16 named curves, zoom, pan, cursor inspection and four fixed-width live readouts with selectable channels. |
-| 🧊 **3D models** | Import STL, OBJ and PLY; choose a connection and named data stream, bind Euler/quaternion telemetry, remap axes, adjust manual XYZ translation and model color. |
+| 🧊 **3D models** | Import STL, OBJ and PLY; choose a connection and named data stream, bind Euler/quaternion telemetry, remap axes, adjust manual XYZ translation and model color, with smooth parameter-tab transitions. |
 | 🧩 **JSON / XML** | Separate pages sharing a connection, incremental extraction, structured inspection and a JSON assistant. |
 | 🕘 **Version history** | Review the latest three stable releases in Settings, download verified installers, and see the running version in the status bar. |
 | 🎛️ **Serial controls** | Sliders, numeric inputs, switches, buttons and choices; groups, draggable/resizable cards that follow window width, presets and per-control automatic sending. |
@@ -61,7 +61,7 @@ Screenshots are captured from the application using generated example data and l
 
 **[Download the latest release →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.36 adds a native CLI, automatic background MCP startup and shared GUI handover, plus multi-page SSH drag selection. [Release notes](docs/releases/0.15.36.md).
+v0.15.37 adds telemetry-driven 3D models, shared MCP model configuration and export, smoother live interaction, expanded Agent integrations and coordinated Windows upgrades. [Release notes](docs/releases/0.15.37.md).
 
 | Package | Use it when… |
 | --- | --- |
@@ -70,7 +70,7 @@ v0.15.36 adds a native CLI, automatic background MCP startup and shared GUI hand
 | `SerialWorkbench-<version>-windows-x64.exe` | You want a single-file launcher that extracts and reuses a local runtime cache. |
 | `SHA256SUMS.txt` | You want to verify downloaded files with `Get-FileHash -Algorithm SHA256`. |
 
-The installer includes the runtime libraries and MCP bridge. SSH uses the Windows OpenSSH client (`ssh.exe`). The development installer detects GUI/background runtimes and MCP bridges and offers to save settings, close them and continue; silent mode requires explicit `/CLOSEAPPLICATIONS` consent. Reconnect your Agent after upgrading. Installer settings are kept in `%LOCALAPPDATA%/SerialWorkbench/settings.json`; portable settings live beside the executable. See [installation and upgrades](docs/windows-installer.md).
+The installer includes the runtime libraries and MCP bridge. SSH uses the Windows OpenSSH client (`ssh.exe`). The installer detects GUI/background runtimes and MCP bridges and offers to save settings, close them and continue; silent mode requires explicit `/CLOSEAPPLICATIONS` consent. Reconnect your Agent after upgrading. Installer settings are kept in `%LOCALAPPDATA%/SerialWorkbench/settings.json`; portable settings live beside the executable. See [installation and upgrades](docs/windows-installer.md).
 
 ## Quick start
 
@@ -126,7 +126,7 @@ printf("@wave temperature=%.2f,voltage=%.3f,rpm=%d\r\n",
 
 Use named fields and terminate each line with CR, LF or CRLF. Up to 16 channels can share a frame. Plain numbers, ordinary logs, JSON and script output are handled separately. See the [wave/1 protocol](docs/wave-protocol.md).
 
-The current development build also accepts named streams: `@wave[imu] roll=10,pitch=20,yaw=30` and `@wave[motor] rpm=1200`. Connections, peers and stream names remain separate; curves and live values show the stream name. Select `imu` in the 3D model page or pass `stream="imu"` to `read_waveform`. An empty stream name selects legacy `@wave ...` frames. Model translation and orientation update independently; manual world-space XYZ translation works without telemetry, and model colors can follow the theme or use a picker / hex input.
+Named streams are also supported: `@wave[imu] roll=10,pitch=20,yaw=30` and `@wave[motor] rpm=1200`. Connections, peers and stream names remain separate; curves and live values show the stream name. Select `imu` in the 3D model page or pass `stream="imu"` to `read_waveform`. An empty stream name selects legacy `@wave ...` frames. Model translation and orientation update independently; manual world-space XYZ translation works without telemetry, and model colors can follow the theme or use a picker / hex input.
 
 ## CLI and background runtime
 
@@ -215,7 +215,7 @@ Without `--url`, the bridge starts or reuses the background runtime. An explicit
 
 </details>
 
-The current development build provides **26 client adapters** and **17 skill installation targets**, including Cursor, VS Code / Copilot, Cline, Kilo, Kiro, Qoder, Zed, Antigravity and Qwen Code. Use the searchable Settings panel or `SerialWorkbenchCLI agents`. Each adapter offers configuration export; clients with unverified or version-dependent storage paths use manual import. `export-agent generic` covers other compatible MCP clients. See the [format and path reference](docs/agent-integration.md).
+The application provides **26 client adapters** and **17 skill installation targets**, including Cursor, VS Code / Copilot, Cline, Kilo, Kiro, Qoder, Zed, Antigravity and Qwen Code. Use the searchable Settings panel or `SerialWorkbenchCLI agents`. Each adapter offers configuration export; clients with unverified or version-dependent storage paths use manual import. `export-agent generic` covers other compatible MCP clients. See the [format and path reference](docs/agent-integration.md).
 
 ### What the agent can do
 
@@ -229,6 +229,7 @@ The current development build provides **26 client adapters** and **17 skill ins
 | Apply a serial parser | `set_frame_script` — requires AI control permission and the latest revision; protects unsaved GUI edits |
 | Import / configure a shared 3D page | `open_model_view`, `configure_model_view` — local STL / OBJ / PLY, telemetry mappings, color, position and camera; requires AI control |
 | Inspect / capture a 3D model | `list_model_views`, `get_model_state`, `capture_model_view` — transforms, bounds, adopted frame sequences and native MCP PNG images |
+| Transfer model settings between Agent sessions | `export_model_configuration`, `import_model_configuration` — versioned JSON shared with GUI import/export, with bindings, a field guide and example frame; importing requires AI control and the latest revision and never opens hardware |
 | Learn the workflow / parser syntax | `read_usage_guide` |
 | Send data or manage connections | `send_data`, `open_connection`, `close_connection` — requires AI control permission |
 
@@ -289,7 +290,7 @@ The build script compiles the application, runs native tests and deploys Qt libr
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r tests/integration/requirements.txt
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.36
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.37
 ```
 
 To create the installer, single-file launcher and portable ZIP, install NSIS and provide the matching Qt source tree for license notices:

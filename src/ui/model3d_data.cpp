@@ -484,9 +484,10 @@ QJsonValue fieldValue(const QJsonObject &values, const QString &path)
     return current;
 }
 
-double boundValue(const ModelBinding &binding, const QJsonObject &values, double fallback)
+double boundValue(const ModelBinding &binding, const QJsonObject &values, double /*fallback*/)
 {
-    double value = fallback;
+    // An unbound channel is exactly the offset constant, including quaternion W.
+    double value = 0;
     if (!binding.field.isEmpty())
     {
         const auto input = fieldValue(values, binding.field);

@@ -42,6 +42,7 @@ public:
     QMap<QString, std::shared_ptr<Stream>> streams;
     void setWrapping(bool enabled);
     void feed(const QJsonObject &event);
+    void feedBatch(const QJsonArray &events);
     void reset();
     void paintEvent(QPaintEvent *event) override;
     void scrollContentsBy(int dx, int dy) override;
@@ -50,6 +51,7 @@ signals:
     void zoomRequested(int steps);
 private:
     SearchFilter matcher;
+    void appendEvent(const QJsonObject &event);
 };
 
 class TerminalView : public QWidget

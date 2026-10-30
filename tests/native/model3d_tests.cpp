@@ -51,6 +51,98 @@ class Model3dTests : public QObject
     }
 
 private slots:
+    void parameterTabsRetargetWithoutMovingPages()
+    {
+        sw::ModelTabs tabs;
+        for (const auto &name : QStringList {"位置", "姿态", "坐标轴", "模型", "视角"})
+        {
+            tabs.addTab(new QWidget, name);
+        }
+        tabs.resize(400, 300);
+        tabs.show();
+        QTest::qWait(50);
+        auto bar = tabs.findChild<sw::ModelTabBar *>();
+        QVERIFY(bar);
+        const auto geometry = tabs.currentWidget()->geometry();
+        tabs.setCurrentIndex(2);
+        QVERIFY(bar->animating());
+        QTest::qWait(60);
+        QVERIFY(bar->selectionRect() != QRectF(bar->tabRect(2)));
+        tabs.setCurrentIndex(4);
+        tabs.setCurrentIndex(1);
+        QTRY_VERIFY(!bar->animating());
+        QCOMPARE(bar->selectionRect(), QRectF(bar->tabRect(1)));
+        QCOMPARE(tabs.currentWidget()->geometry(), geometry);
+        QTRY_VERIFY(!tabs.currentWidget()->graphicsEffect());
+        bar->setFocus();
+        QTest::keyClick(bar, Qt::Key_Right);
+        QCOMPARE(tabs.currentIndex(), 2);
+        tabs.hide();
+        QVERIFY(!bar->animating());
+    }
+
+    void constantQuaternionAndConfiguration()
+    {
+        sw::ModelMapping mapping;
+        mapping.mode = "quaternion";
+        mapping.quaternion = {};
+        for (double degrees : {0., 60., 90., 180.})
+        {
+            const double half = qDegreesToRadians(degrees / 2);
+            mapping.quaternion[0].offset = std::cos(half);
+            mapping.quaternion[3].offset = std::sin(half);
+            const auto pose = sw::evaluateModelPose(mapping, {});
+            QVERIFY(pose.valid());
+            QVERIFY(near(pose.matrix.mapVector({1, 0, 0}),
+                {float(std::cos(qDegreesToRadians(degrees))), float(std::sin(qDegreesToRadians(degrees))), 0}));
+        }
+        sw::ModelPanel panel;
+        panel.view->restoreCamera({{"yaw", 75}, {"elevation", 12}, {"distance", 9},
+            {"target", QJsonArray {1, 2, 3}}});
+        QCOMPARE(panel.findChild<QDoubleSpinBox *>("modelCamera0")->value(), 75.);
+        QCOMPARE(panel.findChild<QDoubleSpinBox *>("modelCamera5")->value(), 3.);
+        panel.findChild<QDoubleSpinBox *>("modelCamera1")->setValue(25);
+        QCOMPARE(panel.view->cameraSettings()["elevation"].toDouble(), 25.);
+        const auto config = panel.exportConfiguration();
+        sw::ModelPanel restored;
+        restored.importConfiguration(config);
+        QCOMPARE(restored.settings(), panel.settings());
+        const auto before = restored.settings();
+        auto invalid = config;
+        invalid["version"] = 99;
+        QVERIFY_EXCEPTION_THROWN(restored.importConfiguration(invalid), std::exception);
+        QCOMPARE(restored.settings(), before);
+        QVERIFY(panel.findChild<QComboBox *>("model3dEulerOrder")->isHidden());
+        QCOMPARE(panel.mapping().position[0].field, QString());
+        QVERIFY(panel.findChild<QComboBox *>("modelPosition0Field")->currentText().contains("未绑定"));
+    }
+
+    void fitTracksTransformedCenterAndViewportAspect()
+    {
+        sw::ModelView view;
+        view.resize(240, 700);
+        view.setModelTransform(5, false, {30, 0, 45});
+        sw::ModelMapping mapping;
+        mapping.position[0].offset = 13;
+        mapping.position[1].offset = -7;
+        mapping.position[2].offset = 2;
+        view.setPose(sw::evaluateModelPose(mapping, {{"roll", 20}, {"pitch", 30}, {"yaw", 40}}));
+        view.fit();
+        const auto bounds = view.modelState();
+        const auto low = bounds["world_bounds_min"].toArray();
+        const auto high = bounds["world_bounds_max"].toArray();
+        const auto camera = view.cameraSettings();
+        const auto target = camera["target"].toArray();
+        for (int axis = 0; axis < 3; ++axis)
+        {
+            QVERIFY(qAbs(target[axis].toDouble() - (low[axis].toDouble() + high[axis].toDouble()) / 2) < 1e-4);
+        }
+        const auto narrowDistance = camera["distance"].toDouble();
+        view.resize(900, 240);
+        view.fit();
+        QVERIFY(narrowDistance > view.cameraSettings()["distance"].toDouble());
+    }
+
     void initTestCase()
     {
         QVERIFY(directory.isValid());
@@ -479,7 +571,7 @@ private slots:
             qPrintable(QString("numeric text %1 needs %2 px, has %3 px").arg(editor->text())
                 .arg(editor->fontMetrics().horizontalAdvance(editor->text())).arg(editor->contentsRect().width())));
         auto order = panel->findChild<QComboBox *>("model3dEulerOrder");
-        QVERIFY(order->width() > order->fontMetrics().horizontalAdvance("ZYX") + 50);
+        QVERIFY(order->isHidden());
         QTest::qWait(100);
         capture(&window, "model3d-numeric-width");
         gain->setValue(1);
@@ -532,6 +624,27 @@ private slots:
         QTest::mouseMove(panel->view, QPoint(220, 170), 40);
         QTest::mouseRelease(panel->view, Qt::LeftButton, {}, QPoint(220, 170));
         QVERIFY(panel->view->cameraSettings() != camera);
+        QVERIFY(qAbs(panel->findChild<QDoubleSpinBox *>("modelCamera0")->value()
+            - panel->view->cameraSettings()["yaw"].toDouble()) < 1e-5);
+        auto cameraTab = panel->findChild<QTabWidget *>("model3dMappingTabs");
+        cameraTab->setCurrentIndex(4);
+        for (int samples : {0, 2, 4, 8})
+        {
+            panel->configure({{"antialiasing", samples}});
+            cameraTab->setCurrentIndex(4);
+            QTest::qWait(40);
+            const auto frame = panel->view->grabFramebuffer();
+            QVERIFY(!frame.isNull());
+            QCOMPARE(panel->view->modelState()["antialiasing_requested"].toInt(), samples);
+            const int actual = panel->view->modelState()["antialiasing_effective"].toInt();
+            QVERIFY(actual >= 0);
+            if (samples == 0) { QCOMPARE(actual, 0); }
+            qInfo() << "MSAA requested/actual" << samples << actual;
+            capture(&window, QString("model3d-camera-aa%1").arg(samples));
+        }
+        panel->view->fit();
+        QVERIFY(qAbs(panel->findChild<QDoubleSpinBox *>("modelCamera2")->value()
+            - panel->view->cameraSettings()["distance"].toDouble()) < 1e-5);
         window.applyTheme(true);
         QCOMPARE(panel->view->modelColor(), QColor("#33aaff"));
         QTest::qWait(250);

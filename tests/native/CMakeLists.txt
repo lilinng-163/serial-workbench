@@ -4,6 +4,11 @@ add_executable(wave_benchmark wave_benchmark.cpp)
 workbench_configure_target(wave_benchmark)
 target_link_libraries(wave_benchmark PRIVATE workbench_ui Qt6::Test)
 
+# Manual before/after profiling; uses loopback and an isolated settings file.
+add_executable(stream_ui_benchmark stream_ui_benchmark.cpp)
+workbench_configure_target(stream_ui_benchmark)
+target_link_libraries(stream_ui_benchmark PRIVATE workbench_ui Qt6::Test)
+
 qt_add_executable(native_tests tests.cpp)
 add_executable(fake_ssh fake_ssh.cpp)
 if(MINGW)
@@ -24,6 +29,17 @@ add_test(NAME native_tests COMMAND "${CMAKE_COMMAND}" -E env
     -o "${PROJECT_BINARY_DIR}/native-tests.txt,txt"
 )
 set_tests_properties(native_tests PROPERTIES TIMEOUT 60)
+
+qt_add_executable(stream_ui_tests stream_ui_tests.cpp)
+workbench_configure_target(stream_ui_tests)
+target_link_libraries(stream_ui_tests PRIVATE workbench_ui Qt6::Test)
+add_test(NAME stream_ui_tests COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=${workbench_test_path}"
+    $<TARGET_FILE:stream_ui_tests>
+    -platform offscreen
+    -o "${PROJECT_BINARY_DIR}/stream-ui-tests.txt,txt"
+)
+set_tests_properties(stream_ui_tests PROPERTIES TIMEOUT 30)
 
 qt_add_executable(frame_script_tests script_tests.cpp)
 workbench_configure_target(frame_script_tests)

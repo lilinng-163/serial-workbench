@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 #include "model3d_view.h"
+#include "model3d_tabs.h"
 #include <QFutureWatcher>
 
 namespace sw
@@ -25,6 +26,8 @@ public:
     void restore(const QJsonObject &settings, bool reload = true);
     QJsonObject state() const;
     void configure(const QJsonObject &patch);
+    QJsonObject exportConfiguration() const;
+    void importConfiguration(const QJsonObject &document);
     bool loading() const { return importPending; }
     ModelView *view;
     QLabel *status;
@@ -50,6 +53,7 @@ private:
     void applyMapping(const QStringList &incomingErrors = {});
     void refreshFieldNames(const QJsonObject &values);
     void applyModelTransform();
+    void syncCameraFields();
     QString modelPath;
     QString pendingPath;
     QString peerKey = "default";
@@ -73,6 +77,7 @@ private:
     bool importPending = false;
     QJsonObject pendingCamera;
     QTimer saveTimer;
+    QTimer cameraFieldsTimer;
     QFutureWatcher<ModelLoadResult> loader;
     QPushButton *import;
     QLabel *fileLabel;
@@ -95,5 +100,9 @@ private:
     QCheckBox *centered;
     QCheckBox *followTheme;
     QLineEdit *colorHex;
+    ModelTabs *mappingTabs;
+    Combo *antialiasing;
+    QLabel *rotationConvention;
+    std::array<QDoubleSpinBox *, 6> cameraFields;
 };
 }

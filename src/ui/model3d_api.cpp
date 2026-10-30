@@ -112,7 +112,15 @@ QJsonObject ModelPanel::state() const
 void ModelPanel::configure(const QJsonObject &patch)
 {
     keys(patch, {"mapping", "feed", "peer", "stream", "paused", "scale", "centered",
-        "manual_position", "follow_theme", "color", "alignment", "camera"});
+        "manual_position", "follow_theme", "color", "alignment", "camera", "antialiasing"});
+    if (patch.contains("antialiasing"))
+    {
+        const auto value = patch["antialiasing"];
+        if (!value.isDouble() || !QList<int> {0, 2, 4, 8}.contains(value.toInt()) || value.toDouble() != value.toInt())
+        {
+            fail("antialiasing 可选 0 / 2 / 4 / 8");
+        }
+    }
     booleanFields(patch, {"paused", "centered", "follow_theme"});
     choice(patch, "feed", {"wave", "script"});
     for (const auto &name : {"peer", "stream"})
@@ -163,5 +171,67 @@ void ModelPanel::configure(const QJsonObject &patch)
     if (patch.contains("mapping")) { lastSample = -1; }
     tick(channel);
     emit changed();
+}
+
+QJsonObject ModelPanel::exportConfiguration() const
+{
+    const auto config = settings();
+    const auto binding = mapping();
+    QJsonArray fields;
+    QStringList examples;
+    const auto append = [&](const QString &role, const auto &bindings)
+    {
+        for (int i = 0; i < int(bindings.size()); ++i)
+        {
+            auto value = bindings[i].settings();
+            value["role"] = role + QString::number(i);
+            fields.append(value);
+            if (!bindings[i].field.isEmpty())
+            {
+                const auto example = bindings[i].field + "=" + QString::number(role == "quaternion." && i == 0 ? 1 : 0);
+                if (!examples.contains(example)) { examples.append(example); }
+            }
+        }
+    };
+    append("position.", binding.position);
+    if (binding.mode == "quaternion") { append("quaternion.", binding.quaternion); }
+    else { append("angles.", binding.angles); }
+    const auto prefix = streamKey.isEmpty() ? QString("@wave ") : "@wave[" + streamKey + "] ";
+    return {{"format", "serial-workbench.model3d"}, {"version", 1}, {"settings", config},
+        {"connection_hint", channel ? QJsonObject {{"name", channel->config.name},
+            {"protocol", channel->config.kind}, {"baudrate", channel->config.baudrate}} : QJsonObject()},
+        {"guide", QJsonObject {{"fields", fields}, {"angle_unit", binding.radians ? "radians" : "degrees"},
+            {"rotation_order", binding.order}, {"intrinsic", binding.intrinsic},
+            {"example_wave", feed->currentData() == "wave" ? QJsonValue(prefix + examples.join(",") + "\r\n") : QJsonValue()},
+            {"notes", "Position bindings are XYZ; Euler bindings are roll(X), pitch(Y), yaw(Z); quaternion bindings are WXYZ. Empty fields use offset constants. Camera motion does not change the model pose. Paths reference local files, not embedded meshes. Import never opens a connection. After import use list_connections, configure_model_view, read_waveform/read_script_results and get_model_state to verify fresh frame sequences."}}}};
+}
+
+void ModelPanel::importConfiguration(const QJsonObject &document)
+{
+    if (loading()) { fail("模型仍在导入，请稍后重试"); }
+    keys(document, {"format", "version", "settings", "connection_hint", "guide"});
+    if (document["format"] != "serial-workbench.model3d" || document["version"] != 1
+        || !document["settings"].isObject()) { fail("不支持的模型配置格式或版本"); }
+    auto patch = document["settings"].toObject();
+    if (!patch["file"].isString()) { fail("模型配置需要 file 字符串；空字符串保留当前网格"); }
+    const auto path = patch.take("file").toString();
+    if (!path.isEmpty())
+    {
+        const QFileInfo file(path);
+        if (!file.isAbsolute() || !file.isFile() || !file.isReadable()
+            || file.size() > 64 * 1024 * 1024
+            || !QStringList {"stl", "obj", "ply"}.contains(file.suffix().toLower()))
+        {
+            fail("模型路径不存在、不可读或不支持；请修正配置中的 file 后重试");
+        }
+        // Validate the mesh before applying any settings, preserving the old state on failure.
+        loadModelMesh(path);
+    }
+    configure(patch);
+    if (!path.isEmpty() && path != modelPath)
+    {
+        pendingCamera = patch["camera"].toObject();
+        loadFile(path);
+    }
 }
 }
