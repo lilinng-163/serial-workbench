@@ -10,8 +10,8 @@
 | 本机源码 | `E:/demo/serial`；其他机器以实际克隆目录为准 |
 | 正式主线 | `main` |
 | DeepSeek 开发分支 | `deepseek-dev` |
-| 交接基线 | 以 `v0.15.37` 标签及最新开发交接记录为准 |
-| 已发布版本 | [v0.15.37](https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.37)，2026-10-30 |
+| 交接基线 | 以 `v0.15.38` 标签及最新开发交接记录为准 |
+| 已发布版本 | [v0.15.38](https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.38)，2026-10-31 |
 | 技术栈 | C++17、Qt Widgets / Network / SerialPort / Core5Compat / Svg、CMake、Ninja |
 | 主要分发平台 | Windows x64；Docker 用于 Linux 开发构建 |
 | 用户文档 | [English](README.md) / [简体中文](README.zh-CN.md) |
@@ -27,6 +27,8 @@ v0.15.35 在 0.15.34 双色主题基础上修复极端撞色的文字、图标�
 v0.15.36 新增原生 CLI 与后台 MCP 自动启动，GUI/Agent 使用同一配置共享运行实例；保持写权限、协议访问和独立读取。安装包、便携包与单文件均完成验证，网站经 MCP 手动上传并核对公网安装包摘要；包含 SSH 跨屏拖拽修复。当前发布证据及接续注意事项见开发日志顶部。
 
 v0.15.37 发布串口驱动 3D 模型、命名数据流、共享模型 MCP 与配置导入导出，优化实时拖动和收发页追赶，扩展 Agent 接入并完善安装升级。正式版本全量 CTest 22/22、最终发行包与实机证据见开发日志；GitHub 四个资产及网站公网完整安装包的大小与 SHA-256 已核验。
+
+v0.15.38 修复特定字号和显示缩放下，终端选区与 ANSI 背景中的一像素横缝。共享物理像素边界，保留文字、复制和滚动行为；24 组像素回归、61 项终端测试和发行构建 CTest 22/22 通过。按用户要求没有重复安装升级及硬件测试，发布详情见开发交接记录。
 
 ## 2. 项目解决什么问题
 
@@ -134,7 +136,7 @@ ctest --test-dir build/native-release --output-on-failure
 ctest --test-dir build/native-release -R terminal_keyboard_tests --output-on-failure
 
 # 打包目录的集成测试；Python 仅供测试，不是产品运行依赖
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.37
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.38
 ```
 
 Qt 最低 6.9；本机为 Qt 6.11.1 / MinGW 13.1。首次准备 Python 测试环境：
