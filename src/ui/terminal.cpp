@@ -779,12 +779,31 @@ void TerminalView::paintEvent(QPaintEvent *)
     const auto colors = theme.palette();
     const QColor selectionBackground = colors.color(QPalette::Highlight);
     const QColor selectionForeground = colors.color(QPalette::HighlightedText);
+    const auto toDevice = p.deviceTransform();
+    const auto fromDevice = toDevice.inverted();
+    QVector<qreal> columnEdges(columns + 1);
+    QVector<qreal> rowEdges(rows + 1);
+    // Adjacent cells must share physical pixel edges. Independently rasterizing
+    // fractional widths/heights can leave a one-pixel seam at some fonts and DPIs.
+    for (int col = 0; col <= columns; ++col)
+    {
+        auto edge = toDevice.map(QPointF(16 + col * width, 12));
+        edge.setX(qRound(edge.x()));
+        columnEdges[col] = fromDevice.map(edge).x();
+    }
+    for (int row = 0; row <= rows; ++row)
+    {
+        auto edge = toDevice.map(QPointF(16, 12 + row * height));
+        edge.setY(qRound(edge.y()));
+        rowEdges[row] = fromDevice.map(edge).y();
+    }
     for (int row = 0; row < rows; ++row)
     {
         for (int col = 0; col < columns; ++col)
         {
             const auto &cell = documentCell(top + row, col);
-            const QRectF box(16 + col * width, 12 + row * height, width, height);
+            const QRectF box(QPointF(columnEdges[col], rowEdges[row]),
+                QPointF(columnEdges[col + 1], rowEdges[row + 1]));
             const int position = (top + row) * columns + col;
             const bool selected = highlightSelection && selectionStart <= position && position < selectionEnd;
             if (cell.background.isValid())

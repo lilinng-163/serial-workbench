@@ -61,7 +61,7 @@
 
 **[下载最新版本 →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.37 新增串口驱动 3D 模型、MCP 模型配置与导出，改善实时拖动和收发页切换，扩展 Agent 接入并完善 Windows 升级。[查看更新说明](docs/releases/0.15.37.md)。
+v0.15.38 修复特定字号与缩放下终端选区、ANSI 背景中的一像素横缝，保留 v0.15.37 的 3D 遥测、共享 MCP 和 Windows 升级功能。[查看更新说明](docs/releases/0.15.38.md)。
 
 | 文件 | 适合的使用方式 |
 | --- | --- |

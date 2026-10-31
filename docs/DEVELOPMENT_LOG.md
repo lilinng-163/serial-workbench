@@ -1,5 +1,17 @@
 # 开发交接记录
 
+## 2026-10-31 — v0.15.38 发行构建与发布准备
+
+- 用户授权将终端横缝修复打包并发布 GitHub / 网站，随后要求不再重复验证。版本提升至 0.15.38，中英 README 和发行说明同步；离线回溯更新为 0.15.37 / 36 / 35。原已启动的正式 Release 构建及完整 CTest **22/22** 结束后直接打包，没有重复执行安装升级、便携/单文件启动或硬件测试。
+- 网站经 Serial Workbench CLI 的 MCP 客户端重新握手同一后台实例；AI 控制与 SSH 权限已开启，已连接 `t_ecs`。注册工具调用报错后使用原生 CLI / MCP 客户端，未更改 Agent 权限。上传前核对当前 0.15.37、七个页面、共享媒体和两个约 1.7 GB 原片；发布继续使用本机手动上传，服务器不从 GitHub 下载。实际发布结果在完成后另行记录。
+
+## 2026-10-31 — 修复收发终端选区中的一像素横缝
+
+- 从干净的 `102bba2` 新建 `codex/terminal-selection-seam`；核对 `origin/main..origin/deepseek-dev` 无待集成提交。用户截图中的横线出现在 SSH 字符选区内部：原先每格独立绘制小数宽高，特定字体与缩放下相邻行会漏出一像素。Windows 原实现的 150% / 11pt 选区和 ANSI 背景均复现。
+- `TerminalView::paintEvent` 将相邻字符背景的公共边界对齐到实际绘图设备像素，覆盖选区与 ANSI 底色；保留文字基线、选择范围、滚动和键盘行为。图索引提示元数据变化及部分解析缺口，已按当前源码核对相关实现。
+- Release 构建通过；新增 24 组像素回归（100% / 125% / 150% / 200%，11 / 12 / 13pt，选区 / ANSI 背景），Windows 实际环境和 offscreen 均通过。Windows offscreen 测试显式加载系统等宽字体，避免缺字体的占位字符干扰像素判断。完整 `terminal_keyboard_tests` **61/61** 通过；实际独立窗口在 150% 缩放下鼠标大面积拖选，未再出现横缝。
+- 证据：`build/terminal-seam/`、`build/terminal-seam-{windows-before,windows-after,after}.txt`、`build/native-release/terminal-keyboard-tests.txt`。修复测试包：`dist/SerialWorkbenchTerminalFixPreview/Start-Preview.cmd`，使用独立配置；主程序 SHA-256 `15d775860fd043d9d8cd97e28baa20629ce2072f21897d5ab89c16a47d61ac91`。未覆盖已安装软件，未连接真实设备，未推送、发布 Release 或部署网站；正式版本仍为 0.15.37。
+
 ## 2026-10-30 — v0.15.37 已发布至 GitHub 与网站
 
 - GitHub PR #1 已按保留历史的 merge 方式集成，合并提交 `7999967`；其源码树与最终构建提交 `80f1ba0` 一致。`v0.15.37` 指向该合并提交，正式 Release 为非草稿、非预发行且已设为 latest。`deepseek-dev` 已由旧基线正常前进到已验证主线，保留原分支及全部历史。直接推送主线的首次命令被自动审批拒绝且未执行，随后通过 PR 审查合并流程完成。

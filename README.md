@@ -61,7 +61,7 @@ Screenshots are captured from the application using generated example data and l
 
 **[Download the latest release →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.37 adds telemetry-driven 3D models, shared MCP model configuration and export, smoother live interaction, expanded Agent integrations and coordinated Windows upgrades. [Release notes](docs/releases/0.15.37.md).
+v0.15.38 fixes one-pixel seams in terminal selections and ANSI backgrounds at fractional display scales. It retains the 3D telemetry, shared MCP and Windows upgrade features from v0.15.37. [Release notes](docs/releases/0.15.38.md).
 
 | Package | Use it when… |
 | --- | --- |

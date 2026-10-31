@@ -1,5 +1,23 @@
 [
   {
+    "assets": [
+      {
+        "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.37/SerialWorkbench-0.15.37-windows-x64-setup.exe",
+        "digest": "sha256:65305acd1cffc52dbb705f551e848ba14b35037b6b190b4244672a1c8f6d30f3",
+        "name": "SerialWorkbench-0.15.37-windows-x64-setup.exe",
+        "size": 16977873,
+        "state": "uploaded"
+      }
+    ],
+    "body": "# Serial Workbench 0.15.37\r\n\r\n将串口姿态数据直接显示为 3D 模型，并改善持续接收时的拖动与页面切换。\r\n\r\n- **3D 模型**：导入 STL、OBJ、PLY；分别绑定位置 XYZ、欧拉角或四元数，支持命名数据流、轴交换与反向、模型初始对齐、手动平移、比例与颜色。支持适配视图、相机参数和可调抗锯齿，具体采样数取决于显卡。\r\n- **清晰的设置**：未绑定字段明确标注为偏移常量；常用界面简化旋转顺序，已有配置保持兼容。修复取景、常量四元数和长数字显示；相机拖动后参数同步。模型参数标签衔接与过渡动画统一，任务栏图标只显示透明背景的 Logo。\r\n- **MCP 与配置交接**：提供模型导入、状态读取、参数修改、视口截图及版本化 JSON 配置导入导出，共 24 个 MCP 工具。GUI 和 AI 共用模型、配置及校验；写权限、协议权限和 revision 冲突保护继续生效。导出配置不包含认证信息，模型文件需单独传递。\r\n- **持续接收更顺畅**：按游标定位共享历史，日志分批插入，隐藏收发页持续跟进；积压补绘主动让出事件循环。合并模型重绘请求，并限制拖动时参数面板的刷新频率，减少拖动和切回收发页时的阻塞。\r\n- **Agent 接入**：26 个客户端适配入口、17 个 skill 安装目标，增加搜索、配置导出和品牌图标；内置指南与安装 skill 同步更新。部分客户端依版本使用手动导入，未声明全部第三方客户端均已实连。\r\n- **Windows 升级**：安装器识别同目录的 GUI、后台实例和 MCP 桥，经确认保存退出后更新；维护期间阻止重新启动。静默安装仅在显式指定 `/CLOSEAPPLICATIONS` 时关闭相关进程；无法解除的文件锁仍会明确报错。\r\n\r\n推荐 `SerialWorkbench-0.15.37-windows-x64-setup.exe`。另提供便携 ZIP、单文件 EXE 和 `SHA256SUMS.txt`，不需要另装 Qt 或 Python。升级后在“设置 → AI / MCP”更新 skill 与 Agent 配置，再重载 MCP。\r\n\r\n发行验证：完整原生 CTest 22/22，实际打包目录的 MCP/CLI/3D 集成、隔离安装升级卸载，以及便携/单文件启动与缓存修复全部通过。\r\n\r\n实机验证使用 ESP32-S3、115200 波特率和约 20 Hz 的三个轴轮流姿态演示：约 65 秒采集 1317 个连续帧，没有帧号缺口或解析拒绝；鼠标拖动及切回收发页未发现持续积压。这是该设备和显卡上的验证，不是所有硬件的帧率保证。当前网格导入不含纹理、材质或骨骼动画，截图需要可用的桌面 OpenGL 环境。\r\n\r\n## English\r\n\r\n- Import STL, OBJ and PLY meshes, and bind translation, Euler angles or quaternions to named telemetry streams. Configure axis mapping, initial alignment, manual transforms, color, camera and hardware-supported multisampling.\r\n- Clarify unbound constants, simplify the common rotation controls while preserving saved conventions, and fix framing, constant quaternions and clipped numbers. Synchronize camera fields, refine model tab transitions and use a transparent taskbar logo.\r\n- Expose model import, state, configuration, viewport capture and versioned JSON import/export through MCP, bringing the tool count to 24. Preserve GUI synchronization, permissions and revision checks. Configuration exports exclude credentials; mesh files are transferred separately.\r\n- Seek shared history by cursor, batch log inserts, keep hidden receive views current and yield during backlog processing. Coalesce model redraws and throttle camera field refreshes during dragging.\r\n- Provide 26 client adapters and 17 optional skill destinations, with searchable Agent settings, configuration exports and updated icons. Version-dependent clients may require manual import; individual third-party client connectivity is not universally verified.\r\n- Coordinate Windows upgrades with same-directory GUI, background runtime and MCP bridge processes. Save and close after confirmation; silent shutdown requires `/CLOSEAPPLICATIONS`. Unresolved locks remain explicit failures.\r\n\r\nThe setup installer is recommended; portable and single-file builds include their runtimes. Update skills and Agent configuration, then reload MCP after upgrading. An ESP32-S3 test captured 1317 consecutive frames at approximately 20 Hz over 65 seconds, including real dragging and receive-tab switching, without persistent display backlog. Rendering performance remains hardware-dependent; textured or animated meshes are not supported.\r\n",
+    "draft": false,
+    "html_url": "https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.37",
+    "name": "Serial Workbench 0.15.37",
+    "prerelease": false,
+    "published_at": "2026-10-30T02:58:37Z",
+    "tag_name": "v0.15.37"
+  },
+  {
     "tag_name": "v0.15.36",
     "name": "Serial Workbench 0.15.36",
     "body": "# Serial Workbench 0.15.36\n\n无需先打开工作台，命令行和 Agent 现在可以自动启动后台 MCP，并与 GUI 共享连接和数据。\n\n- **原生命令行**：新增 `SerialWorkbenchCLI.exe`，支持 `start`、`status`、`show`、`stop`、`tools`、`call`、`mcp`，以 JSON 输出结果；可直接调用原生搜索、脚本试解析和其他 MCP 工具。\n- **后台自动接入**：STDIO 桥默认启动或复用同一配置的后台实例，发现实际 MCP 端口；Agent 退出后后台继续运行。`show` 打开同一个实例，保留连接、搜索和脚本状态。\n- **权限保持明确**：新配置默认只读；建立连接、发送数据和应用脚本仍需开启 AI 控制。首次启动可显式使用 `start --allow-control`；不会自动提高已运行实例的权限，也不会自动连接设备。需要交互认证的 SSH 可打开 GUI 后重连。\n- **Agent 与 skill 同步**：设置中可选择后台自动启动，命令行支持 `install-skill` 和 `configure-agent`。内置、安装器与 GUI 分发的 skill 均增加 CLI、配置路径和后台生命周期说明；MCP 可读取 `read_usage_guide(topic=\"cli\")`。\n- **SSH 跨屏复制**：按住鼠标向终端上下边缘拖动可连续滚动并选择多行历史，滚轮也可扩展选区；新输出不再打断拖拽。\n\n推荐 Windows x64 安装包。发行包包含 CLI、MCP 桥和运行库，无需另装 Python 或 Qt。\n\n升级前关闭 GUI 和 Agent 的 MCP 桥；如后台仍在运行，执行旧安装目录中的 `SerialWorkbenchCLI.exe stop`。升级保留个人配置。升级后在“设置 → AI / MCP”更新 skill、配置 Agent 并重载该 Agent 的 MCP。\n\n```powershell\n.\\SerialWorkbenchCLI.exe start\n.\\SerialWorkbenchCLI.exe call get_status\n.\\SerialWorkbenchCLI.exe show\n```\n\n验证：原生 CTest 18/18；最终包的 CLI 自动启动/权限/共享读写/搜索/脚本/GUI 接续，隔离安装升级卸载，便携 ZIP 和单文件启动均通过。九类 Agent 配置验证使用隔离样本，未逐一实连第三方 Agent；设备链路使用回环与模拟 SSH，未声称真实硬件测试。\n\n## English\n\n- Add a native JSON CLI for runtime lifecycle and direct MCP tool calls, including native log search and frame-script validation.\n- Auto-start or reuse the selected settings profile through the STDIO bridge, discover its actual port, and keep the shared runtime alive when an Agent exits. Open the same instance with `show` without losing connections or GUI state.\n- Keep new profiles read-only by default. Connection control, writes and script application still require explicit AI permission. `start --allow-control` applies only to a new instance; devices are not connected automatically. Interactive SSH authentication requires the GUI.\n- Add automatic startup to Agent settings, CLI skill installation/configuration, and bundled CLI documentation available through `read_usage_guide`.\n- Fix SSH selection across scrollback boundaries with edge dragging and wheel scrolling.\n\nClose the GUI and MCP bridges before upgrading. Stop a running background instance with the old installation's CLI. Settings are retained; update skills and reload Agent MCP connections afterward. The setup, portable ZIP and single-file EXE include native runtimes and require no Python or Qt SDK.\n",
@@ -31,24 +49,6 @@
         "digest": "sha256:deef435aa71f1f12ca787dd170dd5b4ea15685e73f9dee0aa4420ac94e3b3ac6",
         "name": "SerialWorkbench-0.15.35-windows-x64-setup.exe",
         "size": 15477900,
-        "state": "uploaded"
-      }
-    ]
-  },
-  {
-    "tag_name": "v0.15.34",
-    "name": "Serial Workbench 0.15.34",
-    "body": "# Serial Workbench 0.15.34\n\n主色与撞色分工、预选背景统一和输入框细节更新。\n\n- **双色主题**：设置 → 外观 → 主题色现在分为“主色（背景/面板）”和“撞色（按钮/链接/选中）”。主色只改变背景、面板和文字的色相；撞色接管默认主题中橙色强调色所在的组件，包括主按钮、工具栏动作图标、链接、选中、焦点、勾选、滑块、进度、发送、TX、关于页链接、rail 激活图标和波形第一条线。\n- **独立设置**：两行都支持选色盘、`#RRGGBB` / `#RGB` 输入、应用和恢复默认；设置分别保存，重启及分离窗口同步。未单独设置撞色时使用默认暖橙色，不再自动生成互补色。\n- **预选统一**：菜单、列表、页签、下拉项和树形项的悬停/预选背景统一使用撞色浅色；选中页签底色、页签文字、勾选按钮文字和描边按钮悬停/焦点恢复默认角色，不再把撞色铺到错误位置。\n- **细节**：上移颜色输入框右侧的清除按钮，改善窄设置窗口中的对齐。\n- **保持不变**：GUI 与 AI 继续共享连接并各自读取历史；MCP 的 17 个工具、协议权限、脚本读写/离线试解析和原生搜索保持 0.15.31 / 0.15.32 / 0.15.33 的行为。\n\n推荐下载 `SerialWorkbench-0.15.34-windows-x64-setup.exe`。另提供单文件 EXE、便携 ZIP 和 `SHA256SUMS.txt`，运行无需安装 Qt 或 Python。升级前关闭工作台与 MCP 桥；安装器沿用原目录并保留配置。使用 Agent 的用户升级后重载 MCP 连接，并在设置中检查 skill 与地址。\n\n## English\n\n- **Two-color theme**: Settings → Appearance → Theme color now separates the main color (backgrounds and text) from a contrast color for buttons, links, selection and focus. The main color only tints surfaces; the contrast color takes over every role previously using the default orange accent, including primary buttons, toolbar actions, links, focus, checkboxes, sliders, progress, send, TX, About links, the active rail icon and the first waveform series.\n- **Independent controls**: both colors support the picker, `#RRGGBB` / `#RGB` input, Apply and Reset, persist independently and synchronize across light/dark themes, detached windows and monitors. If no contrast color is set, the warm default accent is used; no automatic complementary hue is generated.\n- **Consistent preselection**: menu, list, tab, combo and tree hover/preselection backgrounds use the contrast tint; selected-tab backgrounds, tab text, checked-button text and outline-button hover/focus keep their default roles.\n- **Detail**: the clear button in color inputs is raised for better vertical alignment in narrow Settings layouts.\n- **Preserved behavior**: GUI/AI shared connections with independent reads, all 17 MCP tools, protocol permissions, parser read/write/offline validation and native GUI search remain unchanged.\n\nThe Windows x64 setup installer is recommended. Single-file and portable builds plus SHA-256 checksums are also available; no Qt or Python SDK is required. Close the application and MCP bridge before upgrading. Existing installation paths and settings are retained. Reload the Agent MCP connection and check its skill and endpoint in Settings after upgrading.\n",
-    "published_at": "2026-10-19T07:41:35Z",
-    "html_url": "https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.34",
-    "draft": false,
-    "prerelease": false,
-    "assets": [
-      {
-        "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.34/SerialWorkbench-0.15.34-windows-x64-setup.exe",
-        "digest": "sha256:871b35fc9c4413fb98d7ce2fc10ced9f390bb2da5d79b28070f8d3379e3dd224",
-        "name": "SerialWorkbench-0.15.34-windows-x64-setup.exe",
-        "size": 15481362,
         "state": "uploaded"
       }
     ]

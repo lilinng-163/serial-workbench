@@ -54,6 +54,103 @@ private slots:
         QApplication::setFont(sw::Theme::interfaceFont());
     }
 
+    void cellBackgroundsHaveNoGaps_data()
+    {
+        QTest::addColumn<qreal>("scale");
+        QTest::addColumn<int>("pointSize");
+        QTest::addColumn<bool>("selection");
+        for (const qreal scale : {1.0, 1.25, 1.5, 2.0})
+        {
+            for (const int pointSize : {11, 12, 13})
+            {
+                for (const bool selection : {false, true})
+                {
+                    const auto name = QString("%1x-%2pt-%3")
+                        .arg(scale).arg(pointSize).arg(selection ? "selection" : "ansi");
+                    QTest::newRow(qPrintable(name)) << scale << pointSize << selection;
+                }
+            }
+        }
+    }
+
+    void cellBackgroundsHaveNoGaps()
+    {
+        QFETCH(qreal, scale);
+        QFETCH(int, pointSize);
+        QFETCH(bool, selection);
+#ifdef Q_OS_WIN
+        // The offscreen plugin does not discover Windows system fonts itself.
+        if (QGuiApplication::platformName() == "offscreen")
+        {
+            const auto fonts = QStandardPaths::standardLocations(QStandardPaths::FontsLocation);
+            for (const auto &directory : fonts)
+            {
+                if (QFontDatabase::addApplicationFont(directory + "/consola.ttf") >= 0) { break; }
+            }
+        }
+#endif
+        sw::TerminalView terminal;
+        prepare(terminal, {});
+        QFont font = terminal.font();
+        font.setPointSize(pointSize);
+        terminal.setFont(font);
+        terminal.resize(1120, 800);
+        terminal.cursorVisible = false;
+        terminal.transparentBackground = selection;
+        QApplication::processEvents();
+
+        const QColor background = selection
+            ? terminal.theme.palette().color(QPalette::Highlight) : QColor("#438b59");
+        if (selection)
+        {
+            terminal.selectionAnchor = QPoint(0, 0);
+            terminal.selectionCursor = QPoint(terminal.columns - 1, terminal.rows - 1);
+            terminal.selectionActive = true;
+        }
+        else
+        {
+            for (auto &row : terminal.grid)
+            {
+                for (auto &cell : row)
+                {
+                    cell.background = background;
+                }
+            }
+        }
+
+        QImage capture(QSize(qCeil(terminal.width() * scale), qCeil(terminal.height() * scale)),
+            QImage::Format_ARGB32_Premultiplied);
+        capture.setDevicePixelRatio(scale);
+        capture.fill(Qt::magenta);
+        terminal.render(&capture);
+        const auto captureDirectory = qEnvironmentVariable("SW_TERMINAL_CAPTURE_DIR");
+        if (!captureDirectory.isEmpty())
+        {
+            QDir().mkpath(captureDirectory);
+            QVERIFY(capture.save(captureDirectory + "/background-"
+                + QTest::currentDataTag() + ".png"));
+        }
+
+        const QFontMetricsF metrics(terminal.font());
+        // Check every interior pixel, including fractional cell boundaries. Exclude
+        // the selection's partial last row and the outer edge of the cell grid.
+        const int left = qCeil(17 * scale);
+        const int top = qCeil(13 * scale);
+        const int right = qFloor((16 + terminal.columns * metrics.horizontalAdvance('M') - 1) * scale);
+        const int bottom = qFloor((12 + (terminal.rows - 1) * metrics.height() * 1.15 - 1) * scale);
+        for (int y = top; y < bottom; ++y)
+        {
+            for (int x = left; x < right; ++x)
+            {
+                if (capture.pixelColor(x, y) != background)
+                {
+                    QFAIL(qPrintable(QString("Background gap at physical pixel (%1, %2): %3 instead of %4")
+                        .arg(x).arg(y).arg(capture.pixelColor(x, y).name()).arg(background.name())));
+                }
+            }
+        }
+    }
+
     void wordSelectionAndSmartInterrupt()
     {
         sw::TerminalView terminal;
