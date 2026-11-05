@@ -61,7 +61,7 @@
 
 **[下载最新版本 →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.38 修复特定字号与缩放下终端选区、ANSI 背景中的一像素横缝，保留 v0.15.37 的 3D 遥测、共享 MCP 和 Windows 升级功能。[查看更新说明](docs/releases/0.15.38.md)。
+v0.15.39 修正设置中八个 Agent 图标的品牌配色，浅色和深色主题均保留原色。[查看更新说明](docs/releases/0.15.39.md)。
 
 | 文件 | 适合的使用方式 |
 | --- | --- |

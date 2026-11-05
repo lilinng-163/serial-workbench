@@ -2,6 +2,24 @@
   {
     "assets": [
       {
+        "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.38/SerialWorkbench-0.15.38-windows-x64-setup.exe",
+        "digest": "sha256:43312063521bc2de299f171f076758141176a04763f28efa776f5f673be526a8",
+        "name": "SerialWorkbench-0.15.38-windows-x64-setup.exe",
+        "size": 16989819,
+        "state": "uploaded"
+      }
+    ],
+    "body": "# Serial Workbench 0.15.38\n\n修复收发终端大面积选中文字时出现的一像素横缝。\n\n- 终端相邻字符的背景共用对齐后的物理像素边界，避免特定字号或显示缩放下出现空隙；选区和 ANSI 彩色背景均已修复。\n- 保持文字位置、复制范围、历史滚动和键盘操作。已有连接、主题、3D 模型及 MCP 配置沿用原设置。\n- 在 100%、125%、150%、200% 缩放及 11、12、13pt 字号下完成 24 组像素回归；终端测试 61 项通过，Windows 实际窗口已检查大面积拖选。\n\n推荐安装包 `SerialWorkbench-0.15.38-windows-x64-setup.exe`。另提供便携 ZIP、单文件 EXE 和 `SHA256SUMS.txt`，无需另装 Qt 或 Python。安装器处理同目录工作台与 MCP 桥的占用；升级后重新连接 Agent 的 MCP。\n\n发行构建的完整原生 CTest 22/22 通过。本次复用既有打包流程，没有重复进行安装升级和硬件测试。\n\n## English\n\n- Fix one-pixel gaps between terminal cell backgrounds at certain font sizes and display scales. Both text selections and ANSI backgrounds now share physical pixel boundaries.\n- Preserve text placement, selection/copy ranges, scrollback and keyboard behavior, along with existing connection, theme, 3D and MCP settings.\n- Verify 24 pixel regression cases across 100%, 125%, 150% and 200% scales and 11, 12 and 13pt fonts. All 61 terminal tests pass, with large selections also checked in a real Windows window.\n\nThe Windows x64 setup installer is recommended. Portable ZIP, single-file EXE and checksums are also available; Qt and Python do not need to be installed. Reconnect Agent MCP sessions after upgrading.\n\nAll 22 native CTest suites passed for the release build. This update reuses the existing packaging process; installer-upgrade and hardware tests were not repeated.\n",
+    "draft": false,
+    "html_url": "https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.38",
+    "name": "Serial Workbench 0.15.38",
+    "prerelease": false,
+    "published_at": "2026-10-31T11:45:04Z",
+    "tag_name": "v0.15.38"
+  },
+  {
+    "assets": [
+      {
         "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.37/SerialWorkbench-0.15.37-windows-x64-setup.exe",
         "digest": "sha256:65305acd1cffc52dbb705f551e848ba14b35037b6b190b4244672a1c8f6d30f3",
         "name": "SerialWorkbench-0.15.37-windows-x64-setup.exe",
@@ -31,24 +49,6 @@
         "digest": "sha256:25d652923248ab6ce69f2b6a2e340a0c266b298d878cd4af4bc897374c2cadf9",
         "name": "SerialWorkbench-0.15.36-windows-x64-setup.exe",
         "size": 15555295,
-        "state": "uploaded"
-      }
-    ]
-  },
-  {
-    "tag_name": "v0.15.35",
-    "name": "Serial Workbench 0.15.35",
-    "body": "# Serial Workbench 0.15.35\r\n\r\n主题配色与浅深模式一致性更新。\r\n\r\n- **清晰的主题色**：保留所选按钮填充原色，链接、图标、TX 日志、波形、焦点边框和选区自动调整明暗，修复白色撞色在浅主题、黑色撞色在深主题中难以辨认的问题。\r\n- **统一窗口配色**：工作台、设置、分离窗口、收发小窗、工具提示和禁用文字共用主题调色板；深色数字箭头、黑白勾选标记与主题同步。\r\n- **独立选择撞色**：无需先修改主色，即可设置按钮、链接与选中效果的撞色；选色盘和 `#RRGGBB` / `#RGB` 输入继续支持保存恢复。\r\n- **一致的协议选择框**：“串口 / TCP / UDP / SSH”下拉框与其他输入框使用相同底色和边框，取消单独的高亮底色。\r\n- **JSON 助手链接**：说明链接跟随当前主题，不再固定使用绿色、橙色或系统蓝色。\r\n\r\n推荐下载 `SerialWorkbench-0.15.35-windows-x64-setup.exe`。另提供单文件 EXE、便携 ZIP 和 `SHA256SUMS.txt`，运行无需安装 Qt 或 Python。升级前关闭工作台与 MCP 桥，安装器沿用原目录并保留配置。Agent 用户升级后重载 MCP，并在设置中检查 skill 与接入地址。\r\n\r\n## English\r\n\r\n- Preserve the chosen button fill while adjusting accent text, icons, TX logs, waveforms, focus borders and selections for readable light/dark themes, including black and white accents.\r\n- Share theme palettes across the workspace, Settings, detached windows, receive monitors, tooltips and disabled text. Adapt dark spin arrows and black/white checkmarks.\r\n- Choose a contrast color independently of the main color, through the picker or `#RRGGBB` / `#RGB` input, with persistent settings.\r\n- Match the protocol selector background and border to the other inputs.\r\n- Follow the active theme for JSON assistant reference links.\r\n\r\nThe Windows x64 setup installer is recommended. Single-file and portable builds plus checksums are also available. Close the application and MCP bridge before upgrading; existing paths and settings are retained. Reload Agent MCP connections after upgrading.\r\n",
-    "published_at": "2026-10-19T09:02:20Z",
-    "html_url": "https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.35",
-    "draft": false,
-    "prerelease": false,
-    "assets": [
-      {
-        "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.35/SerialWorkbench-0.15.35-windows-x64-setup.exe",
-        "digest": "sha256:deef435aa71f1f12ca787dd170dd5b4ea15685e73f9dee0aa4420ac94e3b3ac6",
-        "name": "SerialWorkbench-0.15.35-windows-x64-setup.exe",
-        "size": 15477900,
         "state": "uploaded"
       }
     ]

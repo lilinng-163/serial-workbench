@@ -309,7 +309,7 @@ QList<AgentClient> AgentConfig::discover(const AgentEnvironment &environment)
     agents.append({
         {"cursor", "Cursor", "cursor.svg", editorExecutable(environment, "cursor", "cursor", "Cursor"), home + "/.cursor/mcp.json", "json", {"mcpServers"}},
         {"vscode", "VS Code · Local", "vscode.svg", vscode, environment.appData + "/Code/User/mcp.json", "json", {"servers"}},
-        {"vscode-insiders", "VS Code Insiders · Local", "vscode.svg", editorExecutable(environment, "code-insiders", "Microsoft VS Code Insiders", "Code - Insiders"), environment.appData + "/Code - Insiders/User/mcp.json", "json", {"servers"}},
+        {"vscode-insiders", "VS Code Insiders · Local", "vscode-insiders.png", editorExecutable(environment, "code-insiders", "Microsoft VS Code Insiders", "Code - Insiders"), environment.appData + "/Code - Insiders/User/mcp.json", "json", {"servers"}},
         {"copilot", "GitHub Copilot · CLI / VS Code", "githubcopilot.svg", copilot, environment.variable("COPILOT_HOME", home + "/.copilot") + "/mcp-config.json", "json", {"mcpServers"}},
         {"windsurf", "Windsurf · 旧版", "windsurf.svg", editorExecutable(environment, "windsurf", "Windsurf", "Windsurf"), "", "json", {"mcpServers"}, false, true},
         {"devin", "Devin · CLI / Desktop", "devin-color.svg", editorExecutable(environment, "devin", "Devin", "Devin"), environment.appData + "/devin/mcp_config.json", "json", {"mcpServers"}},
@@ -319,10 +319,10 @@ QList<AgentClient> AgentConfig::discover(const AgentEnvironment &environment)
         {"kiro", "Kiro · IDE / CLI", "kiro-color.svg", editorExecutable(environment, "kiro-cli", "Kiro", "Kiro"), home + "/.kiro/settings/mcp.json", "json", {"mcpServers"}},
         {"qoder", "Qoder · CLI / Desktop", "qoder.svg", editorExecutable(environment, "qoder", "Qoder", "Qoder"), home + "/.qoder/settings.json", "json", {"mcpServers"}},
         {"zed", "Zed", "zed.svg", editorExecutable(environment, "zed", "Zed", "Zed"), environment.appData + "/Zed/settings.json", "json", {"context_servers"}},
-        {"trae", "TRAE", "trae.svg", editorExecutable(environment, "trae", "Trae", "Trae"), "", "json", {"mcpServers"}, false, true},
-        {"antigravity", "Google Antigravity", "antigravity.svg", editorExecutable(environment, "agy", "Antigravity", "Antigravity"), home + "/.gemini/config/mcp_config.json", "json", {"mcpServers"}},
+        {"trae", "TRAE", "trae.png", editorExecutable(environment, "trae", "Trae", "Trae"), "", "json", {"mcpServers"}, false, true},
+        {"antigravity", "Google Antigravity", "antigravity.png", editorExecutable(environment, "agy", "Antigravity", "Antigravity"), home + "/.gemini/config/mcp_config.json", "json", {"mcpServers"}},
         {"qwen", "Qwen Code", "qwen-color.svg", environment.executable("qwen"), home + "/.qwen/settings.json", "json", {"mcpServers"}},
-        {"kimi", "Kimi Code", "kimi.svg", environment.executable("kimi"), environment.variable("KIMI_CODE_HOME", home + "/.kimi-code") + "/mcp.json", "json", {"mcpServers"}},
+        {"kimi", "Kimi Code", "kimi.png", environment.executable("kimi"), environment.variable("KIMI_CODE_HOME", home + "/.kimi-code") + "/mcp.json", "json", {"mcpServers"}},
         {"continue", "Continue", "continue.svg", extensionExecutable(environment, "Continue.continue"), "", "json", {"mcpServers"}, false, true}
     });
     // Legacy Cline is offered for existing installations, never write a second

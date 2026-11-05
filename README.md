@@ -61,7 +61,7 @@ Screenshots are captured from the application using generated example data and l
 
 **[Download the latest release →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.38 fixes one-pixel seams in terminal selections and ANSI backgrounds at fractional display scales. It retains the 3D telemetry, shared MCP and Windows upgrade features from v0.15.37. [Release notes](docs/releases/0.15.38.md).
+v0.15.39 restores brand colors for eight Agent icons in Settings, including in dark mode. [Release notes](docs/releases/0.15.39.md).
 
 | Package | Use it when… |
 | --- | --- |

@@ -20,19 +20,31 @@ preserved. The UI adds no background tile or border. Sources checked 2026-10-15.
 Lobe Icons' MIT license is included in `lobe-icons-LICENSE`. Existing CC0 notices
 are retained for previously distributed assets. No endorsement is implied.
 
-## Additional Agent marks (2026-10-28)
+## Additional Agent marks
 
-All marks are bundled offline with transparent backgrounds. Cursor, GitHub
-Copilot, Windsurf, Cline, Kilo Code, Qoder, TRAE, Antigravity and Kimi use the
-monochrome SVG variants from [Lobe Icons](https://github.com/lobehub/lobe-icons/tree/master/packages/static-svg/icons),
-alongside the color variants for Devin, Kiro and Qwen (`lobe-icons-LICENSE`).
-Antigravity uses the upstream monochrome variant because the color variant uses
-SVG filters that are not portable across Qt renderers. Only SVG dimensions and
-currentColor defaults were normalized; shapes were retained. Monochrome marks
-adapt to light and dark themes. Qwen uses its upstream monochrome mark in white on dark surfaces for legibility.
+Brand colors checked on 2026-11-05. The card preserves the original asset colors
+in both themes. Product icon backgrounds are part of the supplied artwork.
+
+| File | Source and preparation |
+| --- | --- |
+| antigravity.png | [Google Antigravity Press Assets](https://antigravity.google/press), original Full Color PNG. The PNG preserves the gradient without depending on SVG filter support. |
+| cursor.svg | [Cursor brand kit](https://cursor.com/brand), original `General Logos/Cube/SVG/CUBE_25D.svg` with its individual neutral facets. |
+| kilocode.svg | [Kilo documentation favicon](https://github.com/Kilo-Org/kilocode/blob/main/packages/kilo-docs/public/favicon/favicon.svg), original yellow and black artwork. |
+| kimi.png | [Kimi Code app logo](https://github.com/MoonshotAI/kimi-cli/blob/main/web/public/logo.png), original dark tile, white K, and blue dot. |
+| qwen-color.svg | [Lobe Icons](https://github.com/lobehub/lobe-icons/tree/master/packages/static-svg/icons) vector. Its blue `#082DFF` matches the [Qwen Code documentation icon](https://qwenlm.github.io/qwen-code-docs/favicon.png?v=2) and is displayed in both themes. |
+| trae.png | [TRAE site icon](https://lf-static.traecdn.us/obj/trae-ai-tx/trae_website/favicon.png), original green artwork on its dark tile. |
+| vscode-insiders.png | [VS Code Insiders download page](https://code.visualstudio.com/insiders), original green `assets/branding/insiders-logo.png`. |
+| zed.svg | [Simple Icons](https://github.com/simple-icons/simple-icons/blob/develop/icons/zedindustries.svg) vector, CC0 (`CC0.txt`), with the [official Zed blue](https://zed.dev/brand), `#1348DC`. |
+
+The Devin and Kiro color assets and the Copilot, Windsurf, Cline, and Qoder neutral
+vectors are from [Lobe Icons](https://github.com/lobehub/lobe-icons/tree/master/packages/static-svg/icons)
+(`lobe-icons-LICENSE`). Neutral marks use light or dark ink for contrast.
+Reference artwork includes the [Windsurf brand guidelines](https://windsurf.com/brand),
+[GitHub Copilot extension](https://marketplace.visualstudio.com/items?itemName=GitHub.copilot),
+[Cline's extension icon](https://github.com/cline/cline/blob/main/apps/vscode/assets/icons/icon.png),
+and [Qoder's site icon](https://qoder.com/favIcon.svg).
 
 - VS Code: [Microsoft Codicons vscode.svg](https://github.com/microsoft/vscode-codicons/blob/main/src/icons/vscode.svg), CC BY 4.0 (`codicons-LICENSE`); colored blue for the card.
-- Zed: [Simple Icons zedindustries.svg](https://github.com/simple-icons/simple-icons/blob/develop/icons/zedindustries.svg), CC0 (`CC0.txt`).
 - Continue: [ContinueSignet.tsx](https://github.com/continuedev/continue/blob/main/gui/src/components/svg/ContinueSignet.tsx), Continue authors, Apache-2.0; extracted the original path, removed JSX attributes and cropped the empty viewBox margin.
 
 Product names and marks belong to their respective owners. Their inclusion
