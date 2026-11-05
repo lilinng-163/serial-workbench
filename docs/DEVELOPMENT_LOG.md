@@ -1,5 +1,11 @@
 # 开发交接记录
 
+## 2026-11-05 — v0.15.39 已发布至 GitHub 与网站
+
+- PR #5 保留历史合入主线，发行标签 `v0.15.39` 指向 `bb5da58`。GitHub 发布为 latest，安装包、便携 ZIP、单文件 EXE 和 SHA256SUMS 已上传，四个文件的远端大小及摘要与本地一致。
+- 复用图标修复的 Windows 原生 Agent 测试、浅深主题检查和便携测试包启动验证。正式版完成 Release 编译和三种 Windows x64 打包。安装包大小为 17,074,211 字节，SHA-256 为 `983e383f154e66b5e6b9bbbc323c9856544b5bc90e5775519c30e0ae36b7f16b`。
+- 网站使用 Serial Workbench MCP SSH 手动上传本机安装包。公网完整下载与本地摘要一致，更新清单及下载页均已生效，页面切换至 `20261105-agent-01539`。本地发行包位于 `dist/local/0.15.39/`，验证记录位于 `build/release-0.15.39-verification/` 和 `dist/website-sync/0.15.39/`。
+
 ## 2026-11-05 — 恢复设置页 Agent 品牌配色
 
 - 对照产品官方品牌素材、文档或扩展图标核对配色。Antigravity 使用官方渐变 PNG，TRAE 使用绿标，Kilo Code 使用黄黑标识，Kimi Code 使用带蓝点的产品图标，Cursor 使用官方灰阶立体标，Zed 使用品牌蓝，VS Code Insiders 使用微软的绿标。Qwen Code 在深色主题继续使用官方蓝。原生设置页只对单色标识应用黑白主题适配。资产及来源见 `resources/agents/README.md`。
