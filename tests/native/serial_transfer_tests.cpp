@@ -45,7 +45,7 @@ struct Wire : QObject
         receiver.receiverLingerMs = 150;
         sender.write = [this](QByteArray bytes)
         {
-            if (bytes.size() == 133)
+            if (bytes.size() == 133 || bytes.size() == 1029)
             {
                 ++packets;
                 if (corruptOnce) { bytes[20] ^= 0x40; corruptOnce = false; }
@@ -119,10 +119,18 @@ private slots:
         QCOMPARE(wire.receiver.completed(), qint64(length));
     }
 
+    void corruptionAndLostAcknowledgements_data()
+    {
+        QTest::addColumn<bool>("oneKilobyte");
+        QTest::newRow("128-byte") << false;
+        QTest::newRow("mixed-1k-and-128-byte") << true;
+    }
+
     void corruptionAndLostAcknowledgements()
     {
+        QFETCH(bool, oneKilobyte);
         QTemporaryDir directory;
-        const auto data = fixture(513);
+        const auto data = fixture(oneKilobyte ? 1073 : 513);
         QVERIFY(store(directory.filePath("input"), data));
         Wire wire;
         wire.corruptOnce = true;
@@ -130,7 +138,8 @@ private slots:
         wire.dropFinalAckOnce = true;
         QSignalSpy sent(&wire.sender, &SerialTransfer::finished);
         QSignalSpy received(&wire.receiver, &SerialTransfer::finished);
-        QVERIFY(wire.sender.startSend(directory.filePath("input"), SerialTransfer::Protocol::XmodemCrc));
+        const auto mode = oneKilobyte ? SerialTransfer::Protocol::Xmodem1k : SerialTransfer::Protocol::XmodemCrc;
+        QVERIFY(wire.sender.startSend(directory.filePath("input"), mode));
         QVERIFY(wire.receiver.startReceive(directory.filePath("output"), SerialTransfer::Protocol::XmodemCrc, data.size()));
         QTRY_COMPARE_WITH_TIMEOUT(sent.size(), 1, 3000);
         QTRY_COMPARE_WITH_TIMEOUT(received.size(), 1, 3000);
@@ -139,6 +148,104 @@ private slots:
         QVERIFY(wire.sender.retries() >= 3);
         QVERIFY(wire.receiver.retries() >= 1);
         QCOMPARE(contents(directory.filePath("output")), data);
+    }
+
+    void oneKilobyteFrameAndShortTail()
+    {
+        QTemporaryDir directory;
+        const auto data = fixture(1073);
+        const auto path = directory.filePath("firmware.bin");
+        QVERIFY(store(path, data));
+        SerialTransfer sender;
+        QList<QByteArray> writes;
+        sender.write = [&](const QByteArray &bytes) { writes.append(bytes); return true; };
+        QVERIFY(sender.startSend(path, SerialTransfer::Protocol::Xmodem1k));
+        sender.feed("C");
+        QCOMPARE(writes.size(), 1);
+        QCOMPARE(writes[0].size(), 1029);
+        QCOMPARE(writes[0].left(3), QByteArray::fromHex("0201fe"));
+        QCOMPARE(writes[0].mid(3, 1024), data.left(1024));
+        sender.feed(QByteArray(1, 0x15));
+        QCOMPARE(writes.size(), 2);
+        QCOMPARE(writes[1], writes[0]);
+        QCOMPARE(sender.completed(), 0);
+        sender.feed(QByteArray(1, 0x06));
+        QTRY_COMPARE(writes.size(), 3);
+        QCOMPARE(writes[2].size(), 133);
+        QCOMPARE(writes[2].left(3), QByteArray::fromHex("0102fd"));
+        QCOMPARE(writes[2].mid(3, 128), data.mid(1024).leftJustified(128, char(0x1a)));
+        QCOMPARE(sender.completed(), 1024);
+    }
+
+    void rawPacingUsesChunkSizeAndGap()
+    {
+        QTemporaryDir directory;
+        const auto path = directory.filePath("data.bin");
+        QVERIFY(store(path, "abcde"));
+        SerialTransfer sender;
+        sender.responseTimeoutMs = 35;
+        sw::SerialSendOptions options;
+        options.rawChunkBytes = 2;
+        options.rawGapMs = 60;
+        options.baudRate = 1000;
+        QList<QByteArray> writes;
+        QList<qint64> timestamps;
+        QElapsedTimer elapsed;
+        elapsed.start();
+        sender.write = [&](const QByteArray &bytes)
+        {
+            writes.append(bytes);
+            timestamps.append(elapsed.elapsed());
+            sender.drained();
+            return true;
+        };
+        QSignalSpy finished(&sender, &SerialTransfer::finished);
+        QVERIFY(sender.startSend(path, SerialTransfer::Protocol::Raw, options));
+        QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 1, 1500);
+        QVERIFY(finished[0][0].toBool());
+        QCOMPARE(writes, QList<QByteArray>({"ab", "cd", "e"}));
+        QVERIFY(timestamps[1] - timestamps[0] >= 79);
+        QVERIFY(timestamps[2] - timestamps[1] >= 79);
+    }
+
+    void slowSerialWriteGetsTimeToDrain()
+    {
+        QTemporaryDir directory;
+        const auto path = directory.filePath("data.bin");
+        QVERIFY(store(path, fixture(4096)));
+        SerialTransfer sender;
+        sender.responseTimeoutMs = 40;
+        sw::SerialSendOptions options;
+        options.baudRate = 1200;
+        QList<QByteArray> writes;
+        sender.write = [&](const QByteArray &bytes) { writes.append(bytes); return true; };
+        QSignalSpy finished(&sender, &SerialTransfer::finished);
+        QVERIFY(sender.startSend(path, SerialTransfer::Protocol::Raw, options));
+        QTRY_COMPARE(writes.size(), 1);
+        QTest::qWait(100);
+        QVERIFY(sender.active());
+        QCOMPARE(sender.completed(), 0);
+        sender.drained();
+        QTRY_COMPARE(finished.size(), 1);
+        QVERIFY(finished[0][0].toBool());
+    }
+
+    void cancelledRawSendCannotStartTheNextTransfer()
+    {
+        QTemporaryDir directory;
+        const auto path = directory.filePath("data.bin");
+        QVERIFY(store(path, "abc"));
+        SerialTransfer sender;
+        QList<QByteArray> writes;
+        sender.write = [&](const QByteArray &bytes) { writes.append(bytes); return true; };
+        QVERIFY(sender.startSend(path, SerialTransfer::Protocol::Raw));
+        sender.cancel();
+        QVERIFY(sender.startSend(path, SerialTransfer::Protocol::XmodemCrc));
+        QTest::qWait(50);
+        QVERIFY(writes.isEmpty());
+        sender.feed("C");
+        QCOMPARE(writes.size(), 1);
+        QCOMPARE(writes[0].size(), 133);
     }
 
     void progressRequiresAck()
@@ -193,6 +300,7 @@ private slots:
     {
         QTemporaryDir directory;
         SerialTransfer receiver;
+        receiver.responseTimeoutMs = 120;
         receiver.receiverLingerMs = 30;
         QList<QByteArray> replies;
         receiver.write = [&](const QByteArray &bytes) { replies.append(bytes); return true; };
@@ -202,7 +310,11 @@ private slots:
         const auto checksum = SerialTransfer::crc(data);
         frame += char(checksum >> 8);
         frame += char(checksum & 255);
-        receiver.feed(frame.left(500));
+        receiver.feed(frame.left(300));
+        QTest::qWait(70);
+        receiver.feed(frame.mid(300, 200));
+        QTest::qWait(80);
+        QCOMPARE(replies.size(), 1);
         QCOMPARE(receiver.completed(), qint64(0));
         receiver.feed(frame.mid(500));
         QCOMPARE(receiver.completed(), qint64(1024));

@@ -25,6 +25,7 @@ public:
     QPushButton *start;
     QPushButton *save;
     QPushButton *stop;
+    SerialTransfer::Protocol selectedProtocol() const;
     bool begin();
     void refresh();
     void reject() override;
@@ -36,8 +37,12 @@ signals:
 private:
     QPointer<Channel> channel;
     QElapsedTimer elapsed;
+    qint64 finishedElapsedMs = 0;
     bool succeeded = false;
     QPushButton *browse;
+    QWidget *rawPacing;
+    QSpinBox *chunkBytes;
+    QSpinBox *gapMs;
     QLabel *hint;
     QFormLayout *form;
     void releaseChannel();

@@ -23,6 +23,7 @@ int main(int argc, char **argv)
     options.addHelpOption();
     options.addOption({"auto", "Start automatically."});
     options.addOption({"raw", "Use raw bytes."});
+    options.addOption({"1k", "Use XMODEM-1K with CRC."});
     options.addOption({"receive", "Test receiving."});
     options.addOption({"screenshot", "Save completed screenshot.", "path"});
     options.addOption({"report", "Write integrity JSON.", "path"});
@@ -42,7 +43,7 @@ int main(int argc, char **argv)
     SerialTransfer peer;
     sw::FileTransferDialog dialog(&local);
     dialog.setWindowTitle("串口文件传输 Demo · 虚拟串口");
-    dialog.resize(720, 565);
+    dialog.resize(720, 580);
     auto layout = qobject_cast<QVBoxLayout *>(dialog.layout());
     auto description = new QLabel("独立测试程序 · 模拟串口两端 · 不连接真实设备");
     layout->insertWidget(1, description);
@@ -53,7 +54,9 @@ int main(int argc, char **argv)
     integrity->setWordWrap(true);
     integrity->setTextInteractionFlags(Qt::TextSelectableByMouse);
     layout->insertWidget(layout->count() - 2, integrity);
-    dialog.protocol->setCurrentIndex(options.isSet("raw") ? 0 : 1);
+    const auto initialMode = options.isSet("raw") ? SerialTransfer::Protocol::Raw
+        : options.isSet("1k") ? SerialTransfer::Protocol::Xmodem1k : SerialTransfer::Protocol::XmodemCrc;
+    dialog.protocol->setCurrentIndex(dialog.protocol->findData(int(initialMode)));
     dialog.direction->setCurrentIndex(options.isSet("receive") ? 1 : 0);
     const auto updatePath = [&]
     {
@@ -69,8 +72,8 @@ int main(int argc, char **argv)
     QString result;
     const auto deliver = [&](SerialTransfer *from, SerialTransfer *to, QByteArray bytes)
     {
-        if (corrupt && bytes.size() == 133) { bytes[40] ^= char(0x20); corrupt = false; }
-        QTimer::singleShot(dialog.protocol->currentIndex() == 0 ? 55 : 8, &dialog, [from, to, bytes]
+        if (corrupt && (bytes.size() == 133 || bytes.size() == 1029)) { bytes[40] ^= char(0x20); corrupt = false; }
+        QTimer::singleShot(dialog.selectedProtocol() == SerialTransfer::Protocol::Raw ? 55 : 8, &dialog, [from, to, bytes]
         {
             for (int i = 0; i < bytes.size(); i += 23) { to->feed(bytes.mid(i, 23)); }
             from->drained();
@@ -81,11 +84,11 @@ int main(int argc, char **argv)
     peer.write = [&](const QByteArray &bytes) { return deliver(&peer, &local, bytes); };
     QObject::connect(&dialog, &sw::FileTransferDialog::starting, &dialog, [&]
     {
-        corrupt = inject->isChecked() && dialog.protocol->currentIndex() == 1;
+        const auto mode = dialog.selectedProtocol();
+        corrupt = inject->isChecked() && mode != SerialTransfer::Protocol::Raw;
         checking = true;
         verified = false;
         integrity->setText("正在通过虚拟串口传输真实文件…");
-        const auto mode = dialog.protocol->currentIndex() == 0 ? SerialTransfer::Protocol::Raw : SerialTransfer::Protocol::XmodemCrc;
         if (dialog.direction->currentIndex() == 0)
         {
             reference = dialog.path->text();
@@ -108,6 +111,8 @@ int main(int argc, char **argv)
     QObject::connect(&refresh, &QTimer::timeout, &dialog, [&]
     {
         if (local.active()) { dialog.refresh(); }
+        const auto mode = dialog.selectedProtocol();
+        inject->setVisible(mode != SerialTransfer::Protocol::Raw);
         inject->setEnabled(!local.active() && !peer.active());
         if (!checking || local.active() || peer.active()) { return; }
         checking = false;
@@ -121,7 +126,8 @@ int main(int argc, char **argv)
         {
             const QJsonObject report {{"verified", verified}, {"bytes", received.size()}, {"sha256", QString::fromLatin1(hash)},
                 {"source_sha256", QString::fromLatin1(QCryptographicHash::hash(original, QCryptographicHash::Sha256).toHex())},
-                {"protocol", dialog.protocol->currentIndex() == 0 ? "raw" : "xmodem-crc"},
+                {"protocol", mode == SerialTransfer::Protocol::Raw ? "raw"
+                    : mode == SerialTransfer::Protocol::Xmodem1k ? "xmodem-1k" : "xmodem-crc"},
                 {"direction", dialog.direction->currentIndex() == 0 ? "send" : "receive"},
                 {"local_retries", local.retries()}, {"peer_retries", peer.retries()}};
             QFile reportFile(options.value("report"));
