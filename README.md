@@ -34,7 +34,7 @@ Built with **Qt 6 and C++17**. The Windows application and its native MCP bridge
 | 🧩 **JSON / XML** | Separate pages sharing a connection, incremental extraction, structured inspection and a JSON assistant. |
 | 🕘 **Version history** | Review the latest three stable releases in Settings, download verified installers, and see the running version in the status bar. |
 | 🎛️ **Serial controls** | Sliders, numeric inputs, switches, buttons and choices; groups, draggable/resizable cards that follow window width, presets and per-control automatic sending. |
-| 📦 **Files & protocols** | Raw-byte and XMODEM-CRC file transfer; C-style frame scripts with persistent state and checksum helpers. |
+| 📦 **Files & protocols** | Paced raw file sending, XMODEM-CRC and XMODEM-1K file transfer, and C-style frame scripts with persistent state and checksum helpers. |
 | 🤖 **AI collaboration** | Streamable HTTP and STDIO MCP, protocol-level access switches, read-only defaults and an explicit AI control permission. |
 | 🎨 **Workspace** | Detachable tabs, light/dark themes, a color picker and hex theme colors, custom backgrounds, data fonts and per-page clear actions. |
 
@@ -61,7 +61,7 @@ Screenshots are captured from the application using generated example data and l
 
 **[Download the latest release →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.39 restores brand colors for eight Agent icons in Settings, including in dark mode. [Release notes](docs/releases/0.15.39.md).
+v0.15.40 adds paced raw file sending and XMODEM-1K CRC, and fixes premature timeouts at low baud rates. [Release notes](docs/releases/0.15.40.md).
 
 | Package | Use it when… |
 | --- | --- |
@@ -266,7 +266,7 @@ Detailed guides are currently in Chinese.
 | [Serial controls](docs/serial-controls.md) | Control groups, presets, templates and automatic sending |
 | [Frame scripts](docs/frame-scripts.md) | C-style parser API, validation and examples |
 | [JSON assistant](docs/json-assistant.md) | Structured JSON tools |
-| [Serial file transfer](docs/serial-file-transfer.md) | Raw bytes and XMODEM-CRC |
+| [Serial file transfer](docs/serial-file-transfer.md) | Raw pacing, XMODEM-CRC and XMODEM-1K |
 | [Live serial ports](docs/live-ports.md) | Port discovery and USB device details |
 | [Windows installation](docs/windows-installer.md) | Install, upgrade, uninstall and package verification |
 | [Project structure](docs/project-structure.md) | Source organization |

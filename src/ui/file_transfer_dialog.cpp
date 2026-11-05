@@ -38,7 +38,9 @@ FileTransferDialog::FileTransferDialog(SerialTransfer *engine, QWidget *parent)
     direction->addItems({"发送到设备", "接收并保存"});
     direction->setObjectName("transferDirection");
     protocol = new Combo();
-    protocol->addItems({"原始字节", "XMODEM-CRC"});
+    protocol->addItem("原始字节", int(SerialTransfer::Protocol::Raw));
+    protocol->addItem("XMODEM-CRC · 128 B", int(SerialTransfer::Protocol::XmodemCrc));
+    protocol->addItem("XMODEM-1K · CRC", int(SerialTransfer::Protocol::Xmodem1k));
     protocol->setCurrentIndex(1);
     protocol->setObjectName("transferProtocol");
     form->addRow("方向", direction);
@@ -51,6 +53,22 @@ FileTransferDialog::FileTransferDialog(SerialTransfer *engine, QWidget *parent)
     fileRow->addWidget(path, 1);
     fileRow->addWidget(browse);
     form->addRow("文件", fileRow);
+    chunkBytes = new QSpinBox();
+    chunkBytes->setObjectName("transferChunkBytes");
+    chunkBytes->setRange(1, SerialSendOptions::MaxChunkBytes);
+    chunkBytes->setValue(SerialSendOptions::MaxChunkBytes);
+    chunkBytes->setSuffix(" B");
+    gapMs = new QSpinBox();
+    gapMs->setObjectName("transferGapMs");
+    gapMs->setRange(0, SerialSendOptions::MaxGapMs);
+    gapMs->setSuffix(" ms");
+    rawPacing = new QWidget();
+    auto pacingLayout = new QHBoxLayout(rawPacing);
+    pacingLayout->setContentsMargins(0, 0, 0, 0);
+    pacingLayout->addWidget(chunkBytes, 1);
+    pacingLayout->addWidget(new QLabel("块间隔"));
+    pacingLayout->addWidget(gapMs, 1);
+    form->addRow("块大小", rawPacing);
     expectedSize = new QLineEdit();
     expectedSize->setPlaceholderText("字节数，可留空");
     expectedSize->setValidator(new QRegularExpressionValidator(QRegularExpression("[0-9]{0,18}"), expectedSize));
@@ -109,6 +127,7 @@ FileTransferDialog::FileTransferDialog(SerialTransfer *engine, QWidget *parent)
     connect(transfer, &SerialTransfer::finished, this, [this](bool ok)
     {
         succeeded = ok;
+        finishedElapsedMs = elapsed.isValid() ? elapsed.elapsed() : 0;
         releaseChannel();
         refresh();
     });
@@ -153,6 +172,11 @@ FileTransferDialog::FileTransferDialog(Channel *uart, QWidget *parent)
     connect(uart, &QObject::destroyed, this, [this] { transfer->cancel("串口会话已关闭"); });
 }
 
+SerialTransfer::Protocol FileTransferDialog::selectedProtocol() const
+{
+    return static_cast<SerialTransfer::Protocol>(protocol->currentData().toInt());
+}
+
 bool FileTransferDialog::begin()
 {
     if (transfer->active()) { return false; }
@@ -173,10 +197,27 @@ bool FileTransferDialog::begin()
     }
     emit starting();
     elapsed.start();
+    finishedElapsedMs = 0;
     succeeded = false;
-    const auto mode = protocol->currentIndex() == 0 ? SerialTransfer::Protocol::Raw : SerialTransfer::Protocol::XmodemCrc;
+    const auto mode = selectedProtocol();
     bool ok = false;
-    if (direction->currentIndex() == 0) { ok = transfer->startSend(path->text(), mode); }
+    if (direction->currentIndex() == 0)
+    {
+        SerialSendOptions options;
+        options.rawChunkBytes = chunkBytes->value();
+        options.rawGapMs = gapMs->value();
+        if (channel && channel->serial)
+        {
+            const auto port = channel->serial;
+            options.baudRate = port->baudRate(QSerialPort::Output);
+            const int parity = port->parity() == QSerialPort::NoParity ? 0 : 2;
+            int stop = 2;
+            if (port->stopBits() == QSerialPort::OneAndHalfStop) { stop = 3; }
+            else if (port->stopBits() == QSerialPort::TwoStop) { stop = 4; }
+            options.halfBitsPerByte = 2 + int(port->dataBits()) * 2 + parity + stop;
+        }
+        ok = transfer->startSend(path->text(), mode, options);
+    }
     else
     {
         bool valid = true;
@@ -207,25 +248,39 @@ void FileTransferDialog::releaseChannel()
 void FileTransferDialog::refresh()
 {
     const bool active = transfer->active();
+    const bool sending = direction->currentIndex() == 0;
+    const auto mode = selectedProtocol();
+    const bool rawSend = sending && mode == SerialTransfer::Protocol::Raw;
     direction->setEnabled(!active);
     protocol->setEnabled(!active);
     path->setEnabled(!active);
     browse->setEnabled(!active);
-    expectedSize->setEnabled(!active && direction->currentIndex() == 1);
-    form->setRowVisible(expectedSize, direction->currentIndex() == 1);
+    rawPacing->setEnabled(!active);
+    form->setRowVisible(rawPacing, rawSend);
+    expectedSize->setEnabled(!active && !sending);
+    form->setRowVisible(expectedSize, !sending);
     path->setToolTip(path->text());
     start->setEnabled(!active);
+    start->setText(sending ? "开始发送" : "开始接收");
     stop->setText(active ? "取消传输" : "关闭");
     save->setVisible(active && transfer->receiving() && transfer->protocol() == SerialTransfer::Protocol::Raw && transfer->total() < 0);
-    if (direction->currentIndex() == 0)
+    if (sending)
     {
-        hint->setText(protocol->currentIndex() == 0
-            ? "文件内容按原始字节发送，不添加帧头或校验。进度表示驱动发送量，设备端不提供接收确认。"
-            : "请先启动设备端的 XMODEM-CRC 接收程序。每块 128 字节，CRC 校验并支持重传；进度按设备端确认更新。");
+        if (rawSend)
+        {
+            hint->setText("直接发送文件字节。接收端处理较慢时，可减小块大小或增加块间隔。进度表示驱动写入量。");
+        }
+        else
+        {
+            const auto blockHint = mode == SerialTransfer::Protocol::Xmodem1k
+                ? "设备端需支持 1024 B 和 128 B 数据块。"
+                : "使用 128 B 数据块。";
+            hint->setText(QString("请先启动设备端的 XMODEM-CRC 接收程序。") + blockHint + "进度按设备端确认更新。");
+        }
     }
     else
     {
-        hint->setText(protocol->currentIndex() == 0
+        hint->setText(mode == SerialTransfer::Protocol::Raw
             ? "原始字节不添加文件名、帧头或校验。接收大小留空时，请在数据发送完毕后点击“停止并保存”。"
             : "请先启动设备端的 XMODEM-CRC 发送程序。协议不携带文件名或长度；接收大小留空时会保留末块 0x1A 填充字节。");
     }
@@ -239,7 +294,8 @@ void FileTransferDialog::refresh()
         progress->setValue(value);
         progress->setFormat(QString::number(value / 10.0, 'f', 1) + "%");
     }
-    const double seconds = elapsed.isValid() ? qMax(0.001, elapsed.elapsed() / 1000.0) : 0;
+    const double seconds = elapsed.isValid()
+        ? qMax(0.001, (active ? elapsed.elapsed() : finishedElapsedMs) / 1000.0) : 0;
     const double speed = seconds > 0 ? done / seconds : 0;
     QString text = amount(done) + " / " + amount(total);
     if (seconds > 0)

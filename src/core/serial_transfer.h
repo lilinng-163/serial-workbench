@@ -6,18 +6,28 @@
 
 namespace sw
 {
+struct SerialSendOptions
+{
+    static constexpr int MaxChunkBytes = 4096;
+    static constexpr int MaxGapMs = 60000;
+    int rawChunkBytes = MaxChunkBytes;
+    int rawGapMs = 0;
+    int baudRate = 0;
+    int halfBitsPerByte = 20; // Start, data, parity and stop bits, in half-bit units.
+};
+
 // Protocol engine: transport owns the UART, this class owns the file and framing.
 class SerialTransfer : public QObject
 {
     Q_OBJECT
 public:
-    enum class Protocol { Raw, XmodemCrc };
+    enum class Protocol { Raw, XmodemCrc, Xmodem1k };
     explicit SerialTransfer(QObject *parent = nullptr);
     ~SerialTransfer() override;
 
     std::function<bool(const QByteArray &)> write;
     std::function<void()> discardPendingWrites;
-    bool startSend(const QString &path, Protocol protocol);
+    bool startSend(const QString &path, Protocol protocol, const SerialSendOptions &options = {});
     bool startReceive(const QString &path, Protocol protocol, qint64 expectedSize = -1);
     void feed(const QByteArray &bytes);
     void drained();
@@ -41,7 +51,7 @@ signals:
     void finished(bool success, const QString &message);
 
 private:
-    enum class State { Idle, RawSend, RawReceive, WaitStart, WaitAck, WaitEot, Receive, Linger };
+    enum class State { Idle, SendNext, RawSend, RawReceive, WaitStart, WaitAck, WaitEot, Receive, Linger };
     State state = State::Idle;
     Protocol mode = Protocol::Raw;
     bool running = false;
@@ -54,14 +64,18 @@ private:
     qint64 done = 0;
     qint64 size = -1;
     qint64 chunkSize = 0;
+    qint64 wireTimeMs = 0;
+    SerialSendOptions sendOptions;
     QFile input;
     std::unique_ptr<QSaveFile> output;
     QByteArray pending;
     QByteArray packet;
     QTimer timer;
+    QTimer sendTimer;
     QElapsedTimer deadline;
     bool begin(Protocol protocol, bool receive);
     bool transmit(const QByteArray &bytes);
+    void queueNext(int delayMs = 0);
     void sendNext();
     void resend();
     void timeout();

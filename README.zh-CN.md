@@ -34,7 +34,7 @@
 | 🧩 **JSON / XML** | 独立页面共享连接，增量提取与结构化查看，并提供 JSON 助手。 |
 | 🕘 **版本回溯** | 在设置中查看最近三个正式版本的特性并下载安装包，窗口底部显示当前运行版本。 |
 | 🎛️ **串口控制** | 滑块、数字输入、开关、按钮和下拉框；控件组、自由拖动缩放并跟随窗口宽度、预设与各控件独立自动发送。 |
-| 📦 **文件与协议** | 原始字节、XMODEM-CRC 文件传输；带持久状态和校验函数的 C 风格帧脚本。 |
+| 📦 **文件与协议** | 可调分块和间隔的原始发送、XMODEM-CRC 和 XMODEM-1K 文件传输，以及带持久状态和校验函数的 C 风格帧脚本。 |
 | 🤖 **AI 协作** | Streamable HTTP / STDIO MCP、按协议开放、默认只读，以及独立的 AI 控制权限。 |
 | 🎨 **工作空间** | 可分离标签、浅色/深色主题、选色盘与十六进制主题色、自定义背景、数据字体与各页面一键清空。 |
 
@@ -61,7 +61,7 @@
 
 **[下载最新版本 →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.39 修正设置中八个 Agent 图标的品牌配色，浅色和深色主题均保留原色。[查看更新说明](docs/releases/0.15.39.md)。
+v0.15.40 新增可调分块和间隔的原始文件发送、XMODEM-1K CRC，并修复低波特率下的提前超时。[查看更新说明](docs/releases/0.15.40.md)。
 
 | 文件 | 适合的使用方式 |
 | --- | --- |
@@ -264,7 +264,7 @@ V1 `opencode.json` / `opencode.jsonc` 可合并以下条目：
 | [串口控制](docs/serial-controls.md) | 控件组、预设、模板和自动发送 |
 | [帧脚本](docs/frame-scripts.md) | C 风格解析 API、校验与示例 |
 | [JSON 助手](docs/json-assistant.md) | JSON 结构化工具 |
-| [串口文件传输](docs/serial-file-transfer.md) | 原始字节与 XMODEM-CRC |
+| [串口文件传输](docs/serial-file-transfer.md) | 原始发送节奏、XMODEM-CRC 和 XMODEM-1K |
 | [实时端口发现](docs/live-ports.md) | 端口检测与 USB 设备信息 |
 | [Windows 安装](docs/windows-installer.md) | 安装、升级、卸载与分发验证 |
 | [项目结构](docs/project-structure.md) | 源码组织 |

@@ -18,6 +18,9 @@ SerialTransfer::SerialTransfer(QObject *parent) : QObject(parent)
 {
     timer.setInterval(25);
     connect(&timer, &QTimer::timeout, this, &SerialTransfer::timeout);
+    sendTimer.setSingleShot(true);
+    sendTimer.setTimerType(Qt::PreciseTimer);
+    connect(&sendTimer, &QTimer::timeout, this, &SerialTransfer::sendNext);
 }
 
 SerialTransfer::~SerialTransfer()
@@ -46,6 +49,7 @@ bool SerialTransfer::begin(Protocol protocol, bool receive)
     mode = protocol;
     receiveMode = receive;
     done = 0;
+    size = -1;
     block = 1;
     retryCount = 0;
     consecutiveRetries = 0;
@@ -54,15 +58,31 @@ bool SerialTransfer::begin(Protocol protocol, bool receive)
     pending.clear();
     packet.clear();
     chunkSize = 0;
+    wireTimeMs = 0;
     message.clear();
     input.close();
     output.reset();
     return true;
 }
 
-bool SerialTransfer::startSend(const QString &path, Protocol protocol)
+bool SerialTransfer::startSend(const QString &path, Protocol protocol, const SerialSendOptions &options)
 {
     if (!begin(protocol, false)) { return false; }
+    sendOptions = options;
+    if (options.rawChunkBytes < 1 || options.rawChunkBytes > SerialSendOptions::MaxChunkBytes
+        || options.rawGapMs < 0 || options.rawGapMs > SerialSendOptions::MaxGapMs
+        || options.baudRate < 0 || options.halfBitsPerByte < 14 || options.halfBitsPerByte > 24)
+    {
+        message = "文件发送参数无效";
+        emit changed();
+        return false;
+    }
+    if (!QFileInfo(path).isFile())
+    {
+        message = "请选择可读取的普通文件";
+        emit changed();
+        return false;
+    }
     input.setFileName(path);
     if (!input.open(QIODevice::ReadOnly))
     {
@@ -74,10 +94,10 @@ bool SerialTransfer::startSend(const QString &path, Protocol protocol)
     running = true;
     deadline.start();
     timer.start();
-    state = mode == Protocol::Raw ? State::RawSend : State::WaitStart;
+    state = State::WaitStart;
     message = mode == Protocol::Raw ? "正在发送原始字节" : "等待接收端发送 C（CRC 模式）";
+    if (mode == Protocol::Raw) { queueNext(); }
     emit changed();
-    if (mode == Protocol::Raw) { QTimer::singleShot(0, this, &SerialTransfer::sendNext); }
     return true;
 }
 
@@ -100,7 +120,7 @@ bool SerialTransfer::startReceive(const QString &path, Protocol protocol, qint64
     state = mode == Protocol::Raw ? State::RawReceive : State::Receive;
     message = mode == Protocol::Raw ? "正在接收原始字节" : "等待 XMODEM-CRC 发送端";
     emit changed();
-    if (mode == Protocol::XmodemCrc) { transmit(QByteArray(1, CrcRequest)); }
+    if (mode != Protocol::Raw) { transmit(QByteArray(1, CrcRequest)); }
     else if (size == 0 && commit()) { complete(true, "接收完成"); }
     return true;
 }
@@ -108,6 +128,12 @@ bool SerialTransfer::startReceive(const QString &path, Protocol protocol, qint64
 bool SerialTransfer::transmit(const QByteArray &bytes)
 {
     if (!running) { return false; }
+    if (!receiveMode && sendOptions.baudRate > 0)
+    {
+        const qint64 rate = 2LL * sendOptions.baudRate;
+        const qint64 duration = qint64(bytes.size()) * sendOptions.halfBitsPerByte * 1000;
+        wireTimeMs = (duration + rate - 1) / rate;
+    }
     deadline.restart();
     if (!write || !write(bytes))
     {
@@ -117,9 +143,15 @@ bool SerialTransfer::transmit(const QByteArray &bytes)
     return true;
 }
 
+void SerialTransfer::queueNext(int delayMs)
+{
+    state = State::SendNext;
+    sendTimer.start(delayMs);
+}
+
 void SerialTransfer::sendNext()
 {
-    if (!running || receiveMode) { return; }
+    if (!running || receiveMode || (state != State::SendNext && state != State::WaitStart)) { return; }
     if (done == size)
     {
         if (mode == Protocol::Raw) { complete(true, "发送完成（驱动已发送，设备端无确认）"); }
@@ -131,7 +163,10 @@ void SerialTransfer::sendNext()
         }
         return;
     }
-    const qint64 length = qMin<qint64>(mode == Protocol::Raw ? 4096 : 128, size - done);
+    const qint64 remaining = size - done;
+    const int payloadSize = mode == Protocol::Raw ? sendOptions.rawChunkBytes
+        : mode == Protocol::Xmodem1k && remaining > 128 ? 1024 : 128;
+    const qint64 length = qMin<qint64>(payloadSize, remaining);
     QByteArray bytes = input.read(length);
     if (bytes.size() != length)
     {
@@ -142,12 +177,13 @@ void SerialTransfer::sendNext()
     if (mode == Protocol::Raw)
     {
         state = State::RawSend;
+        message = "正在发送原始字节";
         transmit(bytes);
     }
     else
     {
-        bytes.append(QByteArray(128 - bytes.size(), char(0x1a)));
-        packet = QByteArray(1, Soh);
+        bytes.append(QByteArray(payloadSize - bytes.size(), char(0x1a)));
+        packet = QByteArray(1, payloadSize == 1024 ? Stx : Soh);
         packet += char(block & 255);
         packet += char(255 - (block & 255));
         packet += bytes;
@@ -164,9 +200,15 @@ void SerialTransfer::drained()
     if (!running || state != State::RawSend || chunkSize == 0) { return; }
     done += chunkSize;
     chunkSize = 0;
-    deadline.restart();
+    // Qt can drain its queue before the UART finishes clocking out the bytes.
+    int delayMs = 0;
+    if (done < size && sendOptions.rawGapMs > 0)
+    {
+        delayMs = int(qMax<qint64>(0, wireTimeMs - deadline.elapsed())) + sendOptions.rawGapMs;
+        message = "等待下一块发送";
+    }
+    queueNext(delayMs);
     emit changed();
-    QTimer::singleShot(0, this, &SerialTransfer::sendNext);
 }
 
 void SerialTransfer::resend()
@@ -243,7 +285,7 @@ void SerialTransfer::feed(const QByteArray &bytes)
         if (size >= 0 && done == size && commit()) { complete(true, "接收完成"); }
         return;
     }
-    if (mode != Protocol::XmodemCrc) { return; }
+    if (mode == Protocol::Raw) { return; }
     if (pending.size() + bytes.size() > 4096)
     {
         cancel("收到过多非 XMODEM 数据，请停止设备日志后重试");
@@ -256,7 +298,11 @@ void SerialTransfer::feed(const QByteArray &bytes)
         if (receiveMode && state == State::Receive && (command == Soh || command == Stx))
         {
             const int length = command == Soh ? 128 : 1024;
-            if (pending.size() < length + 5) { break; }
+            if (pending.size() < length + 5)
+            {
+                deadline.restart(); // Timeout on an idle line, even for slowly arriving blocks.
+                break;
+            }
             const auto frame = pending.left(length + 5);
             pending.remove(0, length + 5);
             sawCancel = false;
@@ -302,9 +348,8 @@ void SerialTransfer::feed(const QByteArray &bytes)
                 ++block;
                 consecutiveRetries = 0;
                 // Consume one ACK per packet; schedule next send to avoid recursion.
-                state = State::Idle;
+                queueNext();
                 emit changed();
-                QTimer::singleShot(0, this, &SerialTransfer::sendNext);
             }
             else if (state == State::WaitEot && command == Ack) { complete(true, "发送完成，对端已确认"); }
             else if (state == State::WaitEot && command == Nak && !firstEot)
@@ -325,7 +370,7 @@ void SerialTransfer::timeout()
         if (deadline.elapsed() >= receiverLingerMs) { complete(true, "接收完成，文件已保存"); }
         return;
     }
-    if (state == State::RawReceive) { return; } // No framing: user chooses when the stream ends.
+    if (state == State::SendNext || state == State::RawReceive) { return; }
     if (state == State::WaitStart)
     {
         if (deadline.elapsed() >= handshakeTimeoutMs) { cancel("等待接收端 C 超时，请先启动设备端接收程序"); }
@@ -333,7 +378,8 @@ void SerialTransfer::timeout()
     }
     const int wait = state == State::WaitEot ? qMin(1000, responseTimeoutMs)
         : state == State::Receive && block == 1 && pending.isEmpty() ? 1000 : responseTimeoutMs;
-    if (deadline.elapsed() < wait) { return; }
+    const qint64 transmitTime = receiveMode ? 0 : wireTimeMs;
+    if (deadline.elapsed() < transmitTime + wait) { return; }
     if (state == State::RawSend) { cancel("串口发送超时"); return; }
     if (state == State::WaitAck || state == State::WaitEot) { resend(); return; }
     if (state == State::Receive)
@@ -350,7 +396,7 @@ void SerialTransfer::cancel(const QString &reason)
 {
     if (!running) { return; }
     if (discardPendingWrites) { discardPendingWrites(); }
-    if (mode == Protocol::XmodemCrc && write) { write(QByteArray(2, Can)); }
+    if (mode != Protocol::Raw && write) { write(QByteArray(2, Can)); }
     complete(false, reason);
 }
 
@@ -365,6 +411,7 @@ void SerialTransfer::complete(bool success, const QString &text)
     running = false;
     state = State::Idle;
     timer.stop();
+    sendTimer.stop();
     input.close();
     if (output) { output->cancelWriting(); output.reset(); }
     message = text;
