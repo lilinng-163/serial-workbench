@@ -338,6 +338,9 @@ private slots:
             QVERIFY2(!client.logo.isEmpty(), qPrintable(client.id));
             QVERIFY2(QFileInfo::exists(":/agents/" + client.logo), qPrintable(client.logo));
         }
+        const QStringList colorMarks {
+            "antigravity", "kilo", "kimi", "qwen", "trae", "vscode-insiders", "zed"
+        };
         for (bool dark : {false, true, false})
         {
             const auto theme = sw::Theme::make(dark);
@@ -347,24 +350,35 @@ private slots:
             QCOMPARE(logos.size(), 26);
             for (auto logo : logos)
             {
+                const auto id = logo->parent()->property("agentId").toString();
                 const auto image = logo->pixmap().toImage().convertToFormat(QImage::Format_ARGB32);
                 QVERIFY(!image.isNull());
                 bool ink = false;
                 QCOMPARE(logo->pixmap().devicePixelRatio(), logo->devicePixelRatioF());
                 bool transparent = false;
+                bool colored = false;
+                QSet<QRgb> solidColors;
                 for (int y = 0; y < image.height(); ++y)
                 {
                     for (int x = 0; x < image.width(); ++x)
                     {
-                        transparent |= image.pixelColor(x, y).alpha() == 0;
-                        ink |= image.pixelColor(x, y).alpha() > 200;
+                        const auto pixel = image.pixelColor(x, y);
+                        transparent |= pixel.alpha() == 0;
+                        if (pixel.alpha() > 200)
+                        {
+                            ink = true;
+                            colored |= pixel.saturation() > 100 && pixel.value() > 100;
+                            solidColors.insert(pixel.rgb());
+                        }
                     }
                 }
-                QVERIFY2(transparent, qPrintable(logo->parent()->property("agentId").toString()));
-                QVERIFY2(ink, qPrintable(logo->parent()->property("agentId").toString()));
+                QVERIFY2(transparent || id == "trae" || id == "kilo", qPrintable(id));
+                QVERIFY2(ink, qPrintable(id));
+                if (colorMarks.contains(id)) { QVERIFY2(colored, qPrintable(id)); }
+                if (id == "cursor") { QVERIFY(solidColors.size() > 1); }
                 const auto rendered = logo->grab().toImage();
                 QCOMPARE(rendered.pixelColor(0, 0).alpha(), 0);
-                if (logo->parent()->property("agentId") == "codex")
+                if (id == "codex")
                 {
                     bool visible = false;
                     for (int y = 0; y < image.height(); ++y)

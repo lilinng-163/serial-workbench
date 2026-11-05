@@ -1,5 +1,11 @@
 # 开发交接记录
 
+## 2026-11-05 — 恢复设置页 Agent 品牌配色
+
+- 对照产品官方品牌素材、文档或扩展图标核对配色。Antigravity 使用官方渐变 PNG，TRAE 使用绿标，Kilo Code 使用黄黑标识，Kimi Code 使用带蓝点的产品图标，Cursor 使用官方灰阶立体标，Zed 使用品牌蓝，VS Code Insiders 使用微软的绿标。Qwen Code 在深色主题继续使用官方蓝。原生设置页只对单色标识应用黑白主题适配。资产及来源见 `resources/agents/README.md`。
+- 重新构建 Windows 应用和 `agent_tests`。原生 Agent 测试 22 项通过，补齐 Insiders 图标后通过最终的浅色与深色图标用例。查看了 Windows 实际组件截图。证据位于 `build/agent-brand-audit/captures/` 和 `build/agent-brand-audit/logos-final.txt`。
+- 便携测试包为 `dist/local/SerialWorkbench-0.15.38-agent-logo-preview-windows-x64.zip`。解压后运行 `Start-Preview.cmd`，使用独立配置进入 Agent 接入页。已从解压目录验证仅用包内运行库启动，证据为 `build/agent-brand-audit/package-ready.json`。
+
 ## 2026-10-31 — v0.15.38 已发布至 GitHub 与网站
 
 - PR #3 按保留历史的 merge 方式集成至主线，提交 `fb6ac40`；`v0.15.38` 指向该提交，正式 Release 于 2026-10-31 发布为 latest，包含安装包、便携 ZIP、单文件 EXE 和 SHA256SUMS。发行构建 CTest 22/22 已通过，按用户要求未重复安装升级或硬件验证。
