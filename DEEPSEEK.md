@@ -10,8 +10,8 @@
 | 本机源码 | `E:/demo/serial`；其他机器以实际克隆目录为准 |
 | 正式主线 | `main` |
 | DeepSeek 开发分支 | `deepseek-dev` |
-| 交接基线 | 以 `v0.15.40` 标签及最新开发交接记录为准 |
-| 已发布版本 | [v0.15.40](https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.40)，2026-11-05 |
+| 交接基线 | 以 `v0.15.41` 标签及最新开发交接记录为准 |
+| 已发布版本 | [v0.15.41](https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.41)，2026-11-07 |
 | 技术栈 | C++17、Qt Widgets / Network / SerialPort / Core5Compat / Svg、CMake、Ninja |
 | 主要分发平台 | Windows x64；Docker 用于 Linux 开发构建 |
 | 用户文档 | [English](README.md) / [简体中文](README.zh-CN.md) |
@@ -33,6 +33,8 @@ v0.15.38 修复特定字号和显示缩放下，终端选区与 ANSI 背景中�
 v0.15.39 修正八个 Agent 图标的品牌配色。浅色和深色主题的图标显示已在 Windows 实窗检查，正式发行包见最新交接记录。
 
 v0.15.40 完善串口文件发送，支持原始发送的分块和间隔设置以及 XMODEM-1K CRC。34 项传输测试通过，已通过虚拟串口校验完整文件与 CRC 错误重传。正式发行包见最新交接记录。
+
+v0.15.41 新增 OpenOCD 多板烧录标签页、配置库搜索、JSON 配置导入导出和 GUI / CLI / MCP 共享任务；保持独立权限及探针隔离。正式包、网站与清理结果见开发日志。OpenOCD 和探针驱动需单独安装，尚未完成实体多板烧录验证。
 
 ## 2. 项目解决什么问题
 
@@ -141,7 +143,7 @@ ctest --test-dir build/native-release --output-on-failure
 ctest --test-dir build/native-release -R terminal_keyboard_tests --output-on-failure
 
 # 打包目录的集成测试；Python 仅供测试，不是产品运行依赖
-.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.40
+.\.venv\Scripts\python.exe tests/integration/smoke_native.py --expected-version 0.15.41
 ```
 
 Qt 最低 6.9；本机为 Qt 6.11.1 / MinGW 13.1。首次准备 Python 测试环境：

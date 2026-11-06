@@ -1,5 +1,14 @@
 # 开发交接记录
 
+## 2026-11-07 — v0.15.41 已发布至 GitHub 与网站，清理本地测试包
+
+- PR #9 保留历史合入主线，发行提交为 `811bb8bd614a286a162a47ee50e9a44647f34d72`。GitHub `v0.15.41` 已发布为 latest；安装包、便携 ZIP、单文件 EXE 和 SHA256SUMS 的远端大小、SHA-256 均与本地一致。
+- 正式 Release 构建及 Qt 运行库部署完成。复用本轮 OpenOCD 27 项 Windows 检查、14 项 MCP 协议测试和包内 OpenOCD HTTP/STDIO 结果；正式 ZIP / 单文件发行检查通过，覆盖独立运行库、完整清单、35 个工具、写权限、中文路径、启动缓存和缺失缓存修复。本轮未重复安装升级、全量回归或实体烧录测试。
+- 安装包为 17,175,999 字节，SHA-256 `40f502c16a2c269290c48cf311539badeaadd014935bc8786c113334a484d1cf`。正式发行文件位于 `dist/releases/0.15.41/`；本机运行库目录为 `dist/SerialWorkbench-0.15.41/`。
+- 网站通过 Serial Workbench MCP SSH 控制及本机文件上传更新，服务器未从 GitHub 下载。公网完整安装包的大小与摘要一致；首页、项目页、下载页的 HTML 摘要与构建一致，版本和备案信息正确。页面激活为 `20261107-openocd-01541`，既有资源和校庆视频媒体保持不变。
+- 按用户要求清空 `dist/local`：删除 1,063 个文件，共 2,250,421,792 字节（约 2.10 GiB）。先核对绝对路径、无链接及运行进程，并将 5 份个人测试设置按原目录结构备份至 `build/local-cleanup-backup-0.15.41/`；没有删除已安装工作台或正式 0.15.41 包。此前开发日志中的 local 测试包路径现已失效。
+- 发布、公共摘要、网页检查和清理记录位于 `build/release-0.15.41-verification/`，镜像记录位于 `dist/website-sync/0.15.41/`。专用部署脚本、配置备份和测试证据仍在忽略目录，未提交 GitHub。发布交接完成后以普通快进同步并保留 deepseek-dev。
+
 ## 2026-11-06 — v0.15.41 发行准备
 
 - 用户授权 push、Release 和网站同步，并要求清空 dist/local。沿用 codex/openocd-flashing；重新 fetch 后 main 与 deepseek-dev 没有新增差异，不重写共享历史。
