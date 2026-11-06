@@ -4,6 +4,7 @@ add_library(workbench_mcp STATIC
     mcp.cpp
     mcp.h
     script_tools.cpp
+    openocd_tools.cpp
     usage_guide.cpp
     usage_guide.h
 )
@@ -17,5 +18,6 @@ qt_add_resources(workbench_mcp workbench_guides
     BASE "${guide_root}"
     FILES "${guide_root}/SKILL.md" "${guide_root}/references/frame-script.md" "${guide_root}/references/cli.md"
         "${guide_root}/references/model3d.md" "${guide_root}/references/agents.md"
+        "${guide_root}/references/openocd.md"
 )
 install(DIRECTORY "${guide_root}" DESTINATION skills)

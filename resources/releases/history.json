@@ -2,6 +2,24 @@
   {
     "assets": [
       {
+        "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.40/SerialWorkbench-0.15.40-windows-x64-setup.exe",
+        "digest": "sha256:01c4654837324a3962a317b4713e5fd583087b037ca8b02065b19aa3b519e73d",
+        "name": "SerialWorkbench-0.15.40-windows-x64-setup.exe",
+        "size": 17077313,
+        "state": "uploaded"
+      }
+    ],
+    "body": "# Serial Workbench 0.15.40\n\n- 原始文件发送可设置每块字节数和块间隔，方便适配处理速度较慢的设备。发送超时计入线路时间，修复低波特率下的提前超时。\n- 新增 XMODEM-1K CRC 发送，设备支持时可用 1024 字节块减少确认次数，短尾块使用 128 字节。原有 128 字节 CRC 模式继续可选。\n- 修复取消后立即重开时残留回调干扰新传输的问题。接收半包按数据间的空闲时间判断超时。\n\nWindows x64 提供安装包、便携 ZIP、单文件 EXE 和 SHA-256 校验文件。34 项串口传输测试通过。虚拟串口 Demo 的原始发送和 XMODEM-1K 均通过完整文件校验，后者也通过 CRC 错误重传验证。\n\n## English\n\n- Configure raw file chunk size and delay to accommodate slower receivers. Include estimated wire time in the timeout budget for low baud rates.\n- Send with XMODEM-1K CRC when the receiver supports 1024-byte blocks, with 128-byte blocks for short tails. The original 128-byte CRC mode is still available.\n- Cancel queued sends when a transfer ends and time out partial receive frames based on line inactivity.\n\nWindows x64 installer, portable ZIP, single-file EXE, and SHA-256 checksums are available. All 34 serial transfer cases passed. Virtual serial transfers preserved file integrity in both raw and XMODEM-1K modes, including recovery from a CRC error.\r\n",
+    "draft": false,
+    "html_url": "https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.40",
+    "name": "Serial Workbench 0.15.40",
+    "prerelease": false,
+    "published_at": "2026-11-05T03:39:29Z",
+    "tag_name": "v0.15.40"
+  },
+  {
+    "assets": [
+      {
         "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.39/SerialWorkbench-0.15.39-windows-x64-setup.exe",
         "digest": "sha256:983e383f154e66b5e6b9bbbc323c9856544b5bc90e5775519c30e0ae36b7f16b",
         "name": "SerialWorkbench-0.15.39-windows-x64-setup.exe",
@@ -34,23 +52,5 @@
     "prerelease": false,
     "published_at": "2026-10-31T11:45:04Z",
     "tag_name": "v0.15.38"
-  },
-  {
-    "assets": [
-      {
-        "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.37/SerialWorkbench-0.15.37-windows-x64-setup.exe",
-        "digest": "sha256:65305acd1cffc52dbb705f551e848ba14b35037b6b190b4244672a1c8f6d30f3",
-        "name": "SerialWorkbench-0.15.37-windows-x64-setup.exe",
-        "size": 16977873,
-        "state": "uploaded"
-      }
-    ],
-    "body": "# Serial Workbench 0.15.37\r\n\r\n将串口姿态数据直接显示为 3D 模型，并改善持续接收时的拖动与页面切换。\r\n\r\n- **3D 模型**：导入 STL、OBJ、PLY；分别绑定位置 XYZ、欧拉角或四元数，支持命名数据流、轴交换与反向、模型初始对齐、手动平移、比例与颜色。支持适配视图、相机参数和可调抗锯齿，具体采样数取决于显卡。\r\n- **清晰的设置**：未绑定字段明确标注为偏移常量；常用界面简化旋转顺序，已有配置保持兼容。修复取景、常量四元数和长数字显示；相机拖动后参数同步。模型参数标签衔接与过渡动画统一，任务栏图标只显示透明背景的 Logo。\r\n- **MCP 与配置交接**：提供模型导入、状态读取、参数修改、视口截图及版本化 JSON 配置导入导出，共 24 个 MCP 工具。GUI 和 AI 共用模型、配置及校验；写权限、协议权限和 revision 冲突保护继续生效。导出配置不包含认证信息，模型文件需单独传递。\r\n- **持续接收更顺畅**：按游标定位共享历史，日志分批插入，隐藏收发页持续跟进；积压补绘主动让出事件循环。合并模型重绘请求，并限制拖动时参数面板的刷新频率，减少拖动和切回收发页时的阻塞。\r\n- **Agent 接入**：26 个客户端适配入口、17 个 skill 安装目标，增加搜索、配置导出和品牌图标；内置指南与安装 skill 同步更新。部分客户端依版本使用手动导入，未声明全部第三方客户端均已实连。\r\n- **Windows 升级**：安装器识别同目录的 GUI、后台实例和 MCP 桥，经确认保存退出后更新；维护期间阻止重新启动。静默安装仅在显式指定 `/CLOSEAPPLICATIONS` 时关闭相关进程；无法解除的文件锁仍会明确报错。\r\n\r\n推荐 `SerialWorkbench-0.15.37-windows-x64-setup.exe`。另提供便携 ZIP、单文件 EXE 和 `SHA256SUMS.txt`，不需要另装 Qt 或 Python。升级后在“设置 → AI / MCP”更新 skill 与 Agent 配置，再重载 MCP。\r\n\r\n发行验证：完整原生 CTest 22/22，实际打包目录的 MCP/CLI/3D 集成、隔离安装升级卸载，以及便携/单文件启动与缓存修复全部通过。\r\n\r\n实机验证使用 ESP32-S3、115200 波特率和约 20 Hz 的三个轴轮流姿态演示：约 65 秒采集 1317 个连续帧，没有帧号缺口或解析拒绝；鼠标拖动及切回收发页未发现持续积压。这是该设备和显卡上的验证，不是所有硬件的帧率保证。当前网格导入不含纹理、材质或骨骼动画，截图需要可用的桌面 OpenGL 环境。\r\n\r\n## English\r\n\r\n- Import STL, OBJ and PLY meshes, and bind translation, Euler angles or quaternions to named telemetry streams. Configure axis mapping, initial alignment, manual transforms, color, camera and hardware-supported multisampling.\r\n- Clarify unbound constants, simplify the common rotation controls while preserving saved conventions, and fix framing, constant quaternions and clipped numbers. Synchronize camera fields, refine model tab transitions and use a transparent taskbar logo.\r\n- Expose model import, state, configuration, viewport capture and versioned JSON import/export through MCP, bringing the tool count to 24. Preserve GUI synchronization, permissions and revision checks. Configuration exports exclude credentials; mesh files are transferred separately.\r\n- Seek shared history by cursor, batch log inserts, keep hidden receive views current and yield during backlog processing. Coalesce model redraws and throttle camera field refreshes during dragging.\r\n- Provide 26 client adapters and 17 optional skill destinations, with searchable Agent settings, configuration exports and updated icons. Version-dependent clients may require manual import; individual third-party client connectivity is not universally verified.\r\n- Coordinate Windows upgrades with same-directory GUI, background runtime and MCP bridge processes. Save and close after confirmation; silent shutdown requires `/CLOSEAPPLICATIONS`. Unresolved locks remain explicit failures.\r\n\r\nThe setup installer is recommended; portable and single-file builds include their runtimes. Update skills and Agent configuration, then reload MCP after upgrading. An ESP32-S3 test captured 1317 consecutive frames at approximately 20 Hz over 65 seconds, including real dragging and receive-tab switching, without persistent display backlog. Rendering performance remains hardware-dependent; textured or animated meshes are not supported.\r\n",
-    "draft": false,
-    "html_url": "https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.37",
-    "name": "Serial Workbench 0.15.37",
-    "prerelease": false,
-    "published_at": "2026-10-30T02:58:37Z",
-    "tag_name": "v0.15.37"
   }
 ]

@@ -156,11 +156,21 @@ private:
     void watchSocket(QTcpSocket *socket, const QString &peer);
 };
 
+class OpenOcdService;
+
 class Engine : public QObject
 {
     Q_OBJECT
 public:
     explicit Engine(QObject *parent = nullptr);
+    OpenOcdService *openocd = nullptr;
+    QMap<QString, OpenOcdService *> openocdViews;
+    OpenOcdService *createOpenOcdView(const QString &title = {}, const QJsonObject &configuration = {});
+    OpenOcdService *openOcdView(const QString &id = {}) const;
+    void removeOpenOcdView(const QString &id);
+    void restoreOpenOcdViews(const QJsonArray &views);
+    QJsonArray openOcdSettings() const;
+    void checkOpenOcdProbe(const OpenOcdService *view) const;
     Journal journal;
     QMap<QString, Channel *> channels;
     bool allowControl = false;
@@ -178,6 +188,7 @@ public:
     static QByteArray encode(const QString &payload, bool hex, const QString &encoding, const QString &newline);
 
 signals:
+    void openOcdViewsChanged();
     void channelsChanged();
     void eventAdded();
     void sshPromptRequested(sw::SshAuthPrompt *prompt);

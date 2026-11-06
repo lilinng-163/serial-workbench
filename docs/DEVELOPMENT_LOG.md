@@ -1,5 +1,61 @@
 # 开发交接记录
 
+## 2026-11-06 — v0.15.41 发行准备
+
+- 用户授权 push、Release 和网站同步，并要求清空 dist/local。沿用 codex/openocd-flashing；重新 fetch 后 main 与 deepseek-dev 没有新增差异，不重写共享历史。
+- 版本提升至 0.15.41，新增中英发行说明，README 同步；离线版本回溯更新为已发布的 0.15.40 / 39 / 38。Windows Release 应用、CLI、MCP 桥及维护程序完成编译和 Qt 运行库部署。
+- 复用此前 Windows OpenOCD 27 通过 / 1 可选跳过、MCP 协议 14 通过、权限与工具数检查及包内 HTTP/STDIO 结果，不重复硬件或全量回归。正式 ZIP 和单文件发行检查已通过，包含完整包内清单、独立运行库、35 工具 HTTP/STDIO、权限、中文路径和运行缓存修复；未重复安装升级测试。
+- 安装包为 17,175,999 字节，SHA-256 为 40f502c16a2c269290c48cf311539badeaadd014935bc8786c113334a484d1cf。实际发布、网站与清理结果完成后补记。
+- 正式文件改放 dist/releases/0.15.41，运行库目录为 dist/SerialWorkbench-0.15.41，均位于待清理的 dist/local 之外。网站使用本地安装包上传及 MCP 远端操作；私有维护脚本继续留在忽略目录。
+
+## 2026-11-06 — OpenOCD 界面清理与配置导入导出
+
+- 按用户连续反馈删除常驻分隔条提示和“专注日志 / 返回配置”按钮，保留分隔条拖动及宽屏/紧凑布局。OpenOCD 内部标签关闭原生底部基线，单独校正内容区顶部圆角和标签间距，清理截图中的残留边角；配置和输出标签顶部对齐。左侧参数栏继续沿用原来的展开/收起状态。
+- 删除“快速方案”下拉和内置预设，改为“导入配置 / 导出配置”按钮，保留配置库重新扫描和开发板、调试器、芯片搜索。使用系统文件选择框，导出经 QSaveFile 写入；导入限制 1 MiB JSON，并在选择文件前记录 revision，避免覆盖等待文件选择期间发生的修改。
+- 导出格式为 `format=serial-workbench.openocd, version=1`，包含页面名称及完整 configuration；文件仅引用本地程序、配置库和固件路径，不嵌入二进制。导入原子替换当前页，省略项采用默认值；不继承其他板子的探针/固件，不启动连接或烧录。格式/类型/字段/名称错误、过期 revision 或运行中均拒绝并保持原配置。
+- GUI 与 MCP 共用服务层导入/导出逻辑。新增 `export_openocd_configuration`（只读返回 JSON）和 `import_openocd_configuration`（明确 view_id、当前 revision、AI 控制及 OpenOCD 权限），总工具数为 35。导入后的页名和控件即时同步，其他页面不受影响。内置指南、skill 和中英 README 同步更新。
+- 应用编译成功。实际 Windows OpenOCD 测试 27 通过 / 1 可选真实 OpenOCD 检查跳过，覆盖 JSON 往返、Unicode 文件名、无效/过大/缺失文件、保存失败、完整替换、过期 revision、运行中保护、GUI/MCP 格式一致和多页隔离。MCP 协议测试 14 通过，工具数量及控制权限检查 3/3；包内 HTTP/STDIO 的导入导出、无效版本拒绝、独立日志和关闭/重建通过。本轮使用模拟任务，未操作真实硬件。
+- 已查看浅色、深色及紧凑布局截图，证据在 `build/openocd-config-preview/`。测试包为 `dist/local/SerialWorkbench-0.15.40-openocd-config-preview-windows-x64.zip`，21,538,630 字节，SHA-256 `37cd566c72eee1dbdcad83ea72e8cb586d48d0e6735a74fed1f53a008f450cf5`；构建、目录和 ZIP 内主程序摘要一致：`f55cfeb53bb5a238e6c7b414a95f2badaf36c4dab0e82fb0ad95c6e537de958b`。解压运行 `Start-Preview.cmd`，可保留旧预览的 preview-settings.json；包内不含个人设置、测试进程或固件。继续 `codex/openocd-flashing`，未推送、发布正式 Release 或部署网站。
+
+## 2026-11-06 — 切换 OpenOCD 时保持左侧参数栏
+
+- 按用户反馈取消 OpenOCD 页自动隐藏侧栏的特殊处理。收发页与烧录页沿用同一展开/收起状态，保留侧栏宽度与标签栏位置；用户仍可手动收起侧栏。此前“隐藏串口参数栏”的设计由本条替代。
+- 应用重新编译成功。实际 Windows 相关检查 5/5，包含切页前后侧栏几何和标签位置一致、手动收起后切页不自动展开、日志分栏与紧凑布局。已查看修复后的窗口截图，证据位于 `build/openocd-sidebar-preview/`；本轮没有重复整套回归或硬件测试。
+- 新测试包：`dist/local/SerialWorkbench-0.15.40-openocd-sidebar-preview-windows-x64.zip`，21,536,675 字节，SHA-256 `cf5175e9b3f31d10b6f3f216b2bd69ed96ec9e331ff88ba7d4ea5f777d0db7cf`。ZIP 内主程序与实际验证的构建摘要一致：`6974094d63bf27c1be1a67c463f4245c1e0d0beaf1fbaf6971e51b0d888f4601`。解压运行 `Start-Preview.cmd`，可保留原预览目录的 `preview-settings.json`；包内未包含个人设置。仍在 `codex/openocd-flashing`，未推送、发布正式 Release 或部署网站。
+
+## 2026-11-06 — OpenOCD 多板烧录标签页与自适应布局
+
+- 在 `codex/openocd-flashing` 保留前两轮开发预览的全部改动，继续实现用户要求的多板标签页。本轮未推送、发布正式 Release 或修改网站，正式版本仍为 0.15.40。
+- 顶部 ＋ 菜单改为“新建 OpenOCD 烧录页”，每页独立保存板子名称、探针、目标、固件、任务和有界日志，共用 GUI / MCP 状态。支持主工作台标签切换、重命名和既有分离流程；隐藏串口参数栏。配置按稳定 `view_id` 保存，重启恢复但不启动任务，迁移旧单页配置。关闭全部页面后允许空列表并可重建；缺失配置引用会跳过，预览启动复用已有页而不追加空白页。
+- `Engine` 维护最多 32 个服务，每页独立进程、临时 Tcl 目录、超时和取消。并行连接/烧录前要求所有活动硬件任务填写不同的 `adapter_serial`，拦截未指定或重复探针；版本检查不占用探针。取消、关闭空闲页不影响其他页；活动任务必须先完成或取消才能关页。不自动关闭或重开串口。
+- MCP 新增 `list_openocd_views`、`create_openocd_view`、`close_openocd_view`，总工具数为 33。所有修改/启动/取消/关闭要求明确 `view_id`；只读工具仅在单页时允许省略。保留独立 OpenOCD 访问开关、AI 控制权限、revision 和 job_id 检查，内置指南、skill 与中英 README 同步更新。
+- 宽窗口左右显示配置与日志，分隔条可拖动并支持专注日志；窄窗口或高度不足时使用“配置 / 运行输出”完整页面，避免配置表单被压成细条。保留三页配置、搜索和固件表格。初轮实窗发现从紧凑标签转回分栏时 Qt 保留页面隐藏状态，已在转移后显式显示；日志宽度恢复、往返切换和 Esc 不隐藏内嵌页面均通过。
+- Release 应用编译成功；本轮原生回归 97 通过 / 3 跳过、MCP 协议 14 通过；最终 OpenOCD CTest 24 通过 / 2 可选跳过。实际 Windows OpenOCD 首轮 25 通过、1 个布局项失败，保留首次日志；修复后布局与截图 4/4，最终生命周期 3/3。覆盖双探针模拟进程同时运行、重复/空序列号拦截、独立日志和取消、标签重排后精确关闭、配置原子恢复及空列表/缺失引用。真实 OpenOCD 仅检查版本和无硬件 Tcl，未执行实体多板烧录。
+- 干净测试包的 HTTP / STDIO MCP 检查通过，覆盖两页配置隔离、异步模拟任务、独立读取及关闭/重建；包内程序实窗恢复两页且没有新增空白页，已检查浅深色、宽屏与紧凑截图。证据在 `build/openocd-tabs-preview/`，最终 CTest 输出另在 `build/native-release/openocd-tests.txt`。
+- 新测试包为 `dist/local/SerialWorkbench-0.15.40-openocd-tabs-preview-windows-x64.zip`，21,536,830 字节，SHA-256 `59939f948ecbce6a92ecde17b788a4d49a35911eb51034dadffc55aacc76883e`。构建、干净目录和 ZIP 内主程序摘要一致：`7e6e7881babdfd49041c159899b8150ec249fa01e7a824b797acc63cf287d51c`。解压后运行 `Start-Preview.cmd`；可用原预览目录的 `preview-settings.json` 保留配置。包内不含个人配置、测试进程、固件、OpenOCD 或 USB 驱动；原测试包及已安装应用保留。
+
+## 2026-11-06 — OpenOCD 日志布局与配置快速搜索
+
+- 继续 `codex/openocd-flashing` 上上一轮未提交的开发预览，保留此前全部改动。本轮集中优化界面，没有改动烧录命令、权限或连接逻辑，没有推送、Release 或网站部署。
+- 常用目标与固件并排显示，初始化/高级连接参数和 OpenOCD 路径分为独立标签页。收紧标题留白，固件表格按文件数量调整高度；常用校验/复位勾选项在默认窗口直接可见。日志默认分配更大空间，分隔条更容易拖动，新增“专注日志 / 返回配置”，恢复原有比例而不清空日志或改动配置。
+- 开发板、调试器、芯片和常用方案采用独立搜索弹窗，支持忽略大小写、空格/连字符等分隔、Ctrl+空格、方向键、Enter 和 Esc。搜索不修改当前参数；确认后映射到原始项，保留预设数据和当前项高亮。自定义 cfg 路径仍可直接编辑；搜索 `ST Link` 不会混入仅分别包含 `st` 和 `link` 的无关配置。常用方案名称按实际配置匹配显示。
+- Release 应用编译成功。相关离屏检查 5/5；实际 Windows 最终检查 6/6，覆盖搜索过程不写配置、无匹配和取消、预设映射、当前项高亮、日志放大/恢复、常用控件可见性、小窗口与 GUI/MCP 同步。初轮实窗发现日志高度未达目标，已调整并保留首次失败记录。已查看浅深主题、搜索弹窗、专注模式及紧凑布局；真实 OpenOCD 只运行版本读取，没有操作芯片。
+- 包内 HTTP/STDIO 的共享配置、枚举、预览、模拟任务及独立日志检查通过；最终包自身使用独立配置启动并截图成功。MCP 工具仍为 30 个，内置 OpenOCD 指南和中英 README 已同步更新。证据位于 `build/openocd-layout-preview/`，包含原生测试、截图、包内检查和摘要。
+- 新包为 `dist/local/SerialWorkbench-0.15.40-openocd-layout-preview-windows-x64.zip`，21,508,503 字节，SHA-256 `339b2516c54d0ec8b00d11afe5e10caa4703ae3bf90b573e14c4cf49ff747575`。目录、ZIP 内及构建的 EXE 摘要一致：`74c54c205ad4786bbbe5ee436296f170d665f4cb5130bc26b588e47606367e47`。解压运行 `Start-Preview.cmd`；包内不含个人 `preview-settings.json`，覆盖旧测试目录时可保留该配置。干净暂存目录为 `dist/local/openocd-layout-preview/SerialWorkbench-OpenOCD-preview/`，原测试包和已安装应用保留。
+
+## 2026-11-06 — OpenOCD 烧录开发预览
+
+- Codex 从干净的 `0555482` 建立 `codex/openocd-flashing`。Fetch 后 `origin/main..origin/deepseek-dev` 无新增提交，保留两条共享分支及已安装工作台；本轮没有推送、正式 Release 或网站部署。
+- 新增原生 OpenOCD 工具窗，入口为顶部 ＋ 菜单。读取所选外部 OpenOCD 的开发板、调试器和芯片 `.cfg`，支持开发板或接口＋目标组合、常用快速选择、传输方式、时钟、探针序列号和 SRST 选项。可调整窗口和配置/日志区比例，浅深主题同步，高级连接选项按需展开。
+- 通用 `program` 推荐流程不重复 `init/reset init`；可显式选择 `init → reset init`、`init → reset halt`、`init → halt`，使用直接擦写和校验。ELF/HEX/S19 使用内嵌地址，BIN 必须填写地址。Espressif 使用厂商 `program_esp`，支持最多 16 个 BIN 分段、校验与最终复位运行；缺失命令或选择 SWD 会拒绝。配置文件存在不代表该芯片/调试器组合已实测。
+- `Engine` 持有 GUI/MCP 共用服务，使用参数列表和转义后的临时 Tcl 启动子进程，无 shell 拼接。支持异步有界日志、退出/完成标记检查、超时、取消和 revision 冲突检测。日志保持独立读取，修复换任务后空记录可能导致游标空转。保持原有串口、SSH、文件传输及权限语义，不自动连接或释放设备。
+- MCP 新增配置枚举、状态、配置修改、执行预览、启动和取消 6 个工具，总数 30。独立 OpenOCD 访问默认关闭，写操作另需 AI 控制权限；原生 CLI 的通用 `call` 可直接使用。设置持久化、内置 `read_usage_guide(topic="openocd")`、随包 skill 和中英 README 同步更新；skill 格式校验通过。
+- 本机 xPack OpenOCD 0.12.0 dev 的真实 Tcl 检查发现中文文件名不能直接打开。Windows 中文固件在启动时复制为临时英文文件名，结束后清理；配置库尝试系统短路径，无短路径时明确报错，避免破坏相对引用。真实 OpenOCD 已通过版本、英文/中文/特殊字符路径测试，测试使用替代 `program` 的无硬件 Tcl 函数，没有连接或烧录芯片。
+- Release 构建成功。基础 `native_tests` 为 97 通过、3 跳过，`mcp_protocol_tests` 14 通过。OpenOCD 配置、复位顺序、失败退出、取消/重开、超时和日志上限用例通过；最初两处断言（权限项数量、序列号末尾换行）已修正并保留首次记录。Windows 首轮暴露中文路径问题，修复后相关最终用例 7/7；最后外观检查 3/3，已查看浅色、深色和紧凑实窗截图。包内 HTTP/STDIO 的 OpenOCD 模拟任务、独立日志和原有 30 工具集成均通过；后台测试通过 CLI 按独立配置退出，不影响用户实例。
+- 最后补充重复取消的回归：Agent 重试取消不再重置强制结束计时，Windows 针对性 3/3 通过。替换最终包内程序后，OpenOCD HTTP/STDIO 模拟任务再次通过。
+- 独立预览为 `dist/SerialWorkbench-OpenOCD-preview/Start-Preview.cmd`，使用专属配置且不包含 OpenOCD 或测试进程 fixture。ZIP 为 `dist/local/SerialWorkbench-0.15.40-openocd-preview-windows-x64.zip`，21,491,708 字节，SHA-256 `eb937ea34f842d1ef5e05e96a04a8964ec35df186f6ca76dbf692115890f68b1`。ZIP 中及目录中的 EXE 与构建产物摘要一致：`1fbcf0a768fbcd869dc081d0c1a0791b7005ce59cfa0447020b79d27cfa69af4`。日志、截图和摘要位于 `build/openocd-preview/`，均为本地忽略文件。
+- 未完成验证边界：尚无真实调试器/目标芯片联调，未验证芯片擦写、USB 驱动和 Espressif 多分段真机；Linux 本轮未构建。当前为基于 0.15.40 的未发布开发预览，下一步应按用户指定硬件测试后再准备正式发行。
+
 ## 2026-11-05 — v0.15.40 已发布至 GitHub 与网站
 
 - PR #7 保留历史合入主线，发行标签 `v0.15.40` 指向 `c8736e0`。GitHub 发布为 latest，安装包、便携 ZIP、单文件 EXE 和 SHA256SUMS 的远端大小及摘要与本地一致。

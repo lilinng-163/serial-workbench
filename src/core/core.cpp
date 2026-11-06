@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "core.h"
+#include "openocd.h"
 
 #include <QTextCodec>
 #include <cmath>
@@ -195,6 +196,7 @@ QJsonObject Journal::read(qint64 after, int limit, const QString &id,
 
 Engine::Engine(QObject *parent) : QObject(parent)
 {
+    createOpenOcdView();
 }
 
 Channel *Engine::get(const QString &id) const

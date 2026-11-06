@@ -11,6 +11,7 @@
 #include "agent_config.h"
 #include "agent_panel.h"
 #include "file_transfer_dialog.h"
+#include "openocd_dialog.h"
 #include "update_dialog.h"
 #include "release_history_panel.h"
 #include "ssh_dialogs.h"
@@ -35,6 +36,7 @@ static QString instrumentIconName(const QString &kind)
     }
     if (kind == "control") { return "control"; }
     if (kind == "model3d") { return "cube"; }
+    if (kind == "openocd") { return "chip"; }
     if (kind == "json" || kind == "xml")
     {
         return kind;
@@ -292,12 +294,22 @@ public:
     }
 };
 
-Instrument::Instrument(const QString &type, QWidget *parent) : QWidget(parent), kind(type == "values" ? "waveform" : type == "structured" ? "json" : type)
+Instrument::Instrument(const QString &type, QWidget *parent, OpenOcdService *flasherService) : QWidget(parent), flasherService(flasherService), kind(type == "values" ? "waveform" : type == "structured" ? "json" : type)
 {
     setObjectName("page");
     setAttribute(Qt::WA_StyledBackground);
     auto body = new QVBoxLayout(this);
     body->setContentsMargins(16, 12, 16, 8);
+    if (kind == "openocd")
+    {
+        body->setContentsMargins(0, 0, 0, 0);
+        source = new Combo(this);
+        source->hide();
+        flasher = new OpenOcdDialog(flasherService, this, true);
+        body->addWidget(flasher, 1);
+        info = flasher->findChild<QLabel *>("openocdStatus");
+        return;
+    }
     auto sourceRow = horizontal();
     sourceRow->addWidget(label(kind == "control" ? "控制目标" : "数据来源", "muted"));
     source = new Combo();
@@ -523,6 +535,7 @@ void Instrument::hideEvent(QHideEvent *event)
 
 QJsonObject Instrument::settings() const
 {
+    if (flasher) { return {{"kind", kind}, {"openocd_view_id", flasherService->viewId}}; }
     if (model) { return {{"kind", kind}, {"model3d", model->settings()}}; }
     if (controls) { return {{"kind", kind}, {"serial_controls", controls->settings()}}; }
     QJsonObject result {{"kind", kind}, {"frozen", freeze->isChecked()}};
@@ -545,6 +558,7 @@ QJsonObject Instrument::settings() const
 
 void Instrument::tick(Channel *channel)
 {
+    if (flasher) { return; }
     if (model) { waveChannel = channel; model->tick(channel); return; }
     if (controls) { controls->setChannel(channel); return; }
     waveChannel = channel;
@@ -629,7 +643,7 @@ public:
     }
 };
 
-Pane::Pane(Window *owner, const QString &instrumentKind) : QWidget(owner), window(owner)
+Pane::Pane(Window *owner, const QString &instrumentKind, OpenOcdService *flasherService) : QWidget(owner), window(owner)
 {
     catchupTimer.setSingleShot(true);
     catchupTimer.setInterval(8);
@@ -641,7 +655,7 @@ Pane::Pane(Window *owner, const QString &instrumentKind) : QWidget(owner), windo
     body->setSpacing(0);
     if (!instrumentKind.isEmpty())
     {
-        instrument = new Instrument(instrumentKind, this);
+        instrument = new Instrument(instrumentKind, this, flasherService);
         instrument->helpWindow = window->rootWindow();
         if (instrument->model)
         {
@@ -1058,7 +1072,7 @@ void Pane::enableParser()
 
 void Pane::refreshSource()
 {
-    if (!instrument)
+    if (!instrument || instrument->flasher)
     {
         return;
     }
@@ -1593,7 +1607,7 @@ void Pane::restore(const QJsonObject &settings)
             }
             instrument->valuesToggle->setChecked(settings["show_values"].toBool());
         }
-        sourceKey = settings["source_key"].toString();
+        sourceKey = instrument->flasher ? QString() : settings["source_key"].toString();
         if (instrument->controls && !sourceKey.startsWith("serial:")) { sourceKey.clear(); }
         if (instrument->isStructured() && sourceKey.startsWith("demo:")
             && sourceKey != Config::structuredDemo().key())
@@ -1744,6 +1758,19 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
         {
             mcp->setProtocolEnabled(kind, protocols.value(kind).toBool(true));
         }
+        mcp->setProtocolEnabled("openocd", protocols.value("openocd").toBool(false));
+        try
+        {
+            if (saved["openocd_views"].isArray()) { engine->restoreOpenOcdViews(saved["openocd_views"].toArray()); }
+            else
+            {
+                const auto legacy = saved["openocd"].toObject();
+                engine->openocd->restore(legacy);
+                engine->openocd->hasPage = !legacy["target"].toString().isEmpty() || !legacy["board"].toString().isEmpty()
+                    || !legacy["images"].toArray().isEmpty();
+            }
+        }
+        catch (const std::exception &exception) { qWarning("OpenOCD settings: %s", exception.what()); }
     }
     else
     {
@@ -2242,8 +2269,18 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
         for (const auto &value : migrateInstrumentPages(saved["widget_pages"].toArray()))
         {
             const auto settings = value.toObject();
-            auto page = newInstrument(settings["kind"].toString(), nullptr, false, settings["source_key"].toString());
+            if (settings["kind"] == "openocd" && !engine->openocdViews.contains(settings["openocd_view_id"].toString()))
+            {
+                qWarning("Ignoring OpenOCD tab whose saved profile is missing");
+                continue;
+            }
+            auto page = newInstrument(settings["kind"].toString(), nullptr, false, settings["source_key"].toString(), settings["openocd_view_id"].toString());
             if (page) { page->restore(settings); }
+        }
+        const auto profiles = engine->openocdViews.values();
+        for (auto view : profiles)
+        {
+            if (view->hasPage) { newInstrument("openocd", nullptr, false, {}, view->viewId); }
         }
     }
     tabs->setCurrentIndex(paneIndex(tabs, initialPane));
@@ -2318,7 +2355,24 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     connect(&portTimer, &QTimer::timeout, this, &Window::refreshPorts);
     portTimer.start();
     port->setFocus();
-    if (!primary) { installMcpUi(); }
+    if (!primary)
+    {
+        installMcpUi();
+        connect(engine, &Engine::openOcdViewsChanged, this, [this]
+        {
+            for (auto host : hosts)
+            {
+                if (!host) { continue; }
+                for (auto pane : host->panes)
+                {
+                    if (!pane->instrument || !pane->instrument->flasher) { continue; }
+                    pane->pageTitle = pane->instrument->flasherService->title;
+                    host->tabs->setTabText(paneIndex(host->tabs, pane), pane->pageTitle);
+                }
+            }
+            saveSettings();
+        });
+    }
     if (updater && QGuiApplication::platformName() != "offscreen"
         && !QCoreApplication::arguments().contains("--screenshot"))
     {
@@ -2549,12 +2603,46 @@ Pane *Window::newConnection()
     return pane;
 }
 
-Pane *Window::newInstrument(const QString &kind, Channel *source, bool activatePage, const QString &pendingKey)
+Pane *Window::newInstrument(const QString &kind, Channel *source, bool activatePage, const QString &pendingKey, const QString &openOcdId)
 {
     const QString canonical = kind == "values" ? "waveform" : kind == "structured" ? "json" : kind;
-    if (!QStringList {"waveform", "json", "xml", "control", "model3d"}.contains(canonical))
+    if (!QStringList {"waveform", "json", "xml", "control", "model3d", "openocd"}.contains(canonical))
     {
         return nullptr;
+    }
+    OpenOcdService *flasherService = nullptr;
+    if (canonical == "openocd")
+    {
+        source = nullptr;
+        if (!openOcdId.isEmpty()) { flasherService = engine->openOcdView(openOcdId); }
+        for (auto host : rootWindow()->hosts)
+        {
+            if (!host) { continue; }
+            for (auto existing : host->panes)
+            {
+                if (flasherService && existing->instrument && existing->instrument->flasherService == flasherService)
+                {
+                    if (activatePage) { host->showPane(existing); }
+                    return existing;
+                }
+            }
+        }
+        if (!flasherService)
+        {
+            for (auto view : engine->openocdViews)
+            {
+                if (!view->hasPage) { flasherService = view; break; }
+            }
+        }
+        if (!flasherService)
+        {
+            try { flasherService = engine->createOpenOcdView(); }
+            catch (const std::exception &exception)
+            {
+                error(QString::fromUtf8(exception.what()));
+                return nullptr;
+            }
+        }
     }
     if (canonical == "control" && source && source->config.kind != "serial") { source = nullptr; }
     if (source && source->config.kind == "demo")
@@ -2571,9 +2659,9 @@ Pane *Window::newInstrument(const QString &kind, Channel *source, bool activateP
         }
     }
     auto previous = active;
-    auto page = new Pane(this, kind);
+    auto page = new Pane(this, kind, flasherService);
     const QString baseTitle = canonical == "waveform" ? "数值波形" : canonical == "control" ? "串口控制"
-        : canonical == "model3d" ? "3D 模型" : canonical.toUpper();
+        : canonical == "model3d" ? "3D 模型" : flasherService ? flasherService->title : canonical.toUpper();
     QStringList titles;
     for (auto host : rootWindow()->hosts)
     {
@@ -2589,7 +2677,12 @@ Pane *Window::newInstrument(const QString &kind, Channel *source, bool activateP
     {
         page->pageTitle = baseTitle + " " + QString::number(number++);
     }
-    page->sourceKey = source ? source->config.key() : (canonical != "control" || pendingKey.startsWith("serial:") ? pendingKey : QString());
+    if (flasherService)
+    {
+        flasherService->title = page->pageTitle;
+        flasherService->hasPage = true;
+    }
+    page->sourceKey = flasherService ? QString() : source ? source->config.key() : (canonical != "control" || pendingKey.startsWith("serial:") ? pendingKey : QString());
     attachPane(page);
     if (!activatePage && previous && panes.contains(previous))
     {
@@ -2619,7 +2712,24 @@ QMenu *Window::newPageMenu()
         });
         action->setObjectName("new_" + kind);
     }
+    menu->addSeparator();
+    auto flash = menu->addAction(icon("chip", theme.text), "新建 OpenOCD 烧录页", this, &Window::openOpenOcd);
+    flash->setObjectName("openOpenOcd");
     return menu;
+}
+
+void Window::openOpenOcd()
+{
+    auto page = newInstrument("openocd");
+    if (!page) { return; }
+    rootWindow()->openOcdDialog = page->instrument->flasher;
+    if (!qApp->property("swBackground").toBool())
+    {
+        showNormal();
+        raise();
+        activateWindow();
+    }
+    saveSettings();
 }
 
 void Window::restoreInstruments(const QJsonObject &settings, const QString &sourceKey)
@@ -2736,6 +2846,7 @@ void Window::activate(int index)
     parameters->setVisible(parameterToggle->isChecked());
     parameterGrip->setVisible(parameterToggle->isChecked());
     parameterToggle->setEnabled(true);
+    arrangeParameters();
     updateStatus();
     if (primary)
     {
@@ -3192,6 +3303,13 @@ void Window::closeTab(int index)
     {
         return;
     }
+    const auto flasher = pane->instrument ? pane->instrument->flasherService : nullptr;
+    if (flasher && flasher->busy())
+    {
+        error("该烧录页正在执行任务，请先完成或取消后再关闭；其他页面继续运行。");
+        return;
+    }
+    const auto flasherId = flasher ? flasher->viewId : QString();
     if (!pane->isInstrument() && pane->channel)
     {
         rootWindow()->viewSettings[pane->channel->config.key()] = pane->settings();
@@ -3215,6 +3333,11 @@ void Window::closeTab(int index)
         activate(tabs->currentIndex());
     }
     adjustTabs();
+    if (!flasherId.isEmpty())
+    {
+        engine->removeOpenOcdView(flasherId);
+        saveSettings();
+    }
 }
 
 void Window::updateStatus()
@@ -3301,6 +3424,13 @@ void Window::updateStatus()
             ? (active->sourceKey.isEmpty() ? "控件页面    请选择数据来源" : "控件页面    等待数据来源连接")
             : protocol->currentIndex() == 4 ? "尚未连接    选择 SSH 主机后建立连接"
             : "尚未连接    选择端口开始接收");
+    }
+    if (active->instrument && active->instrument->flasherService)
+    {
+        int running = 0;
+        for (auto view : engine->openocdViews) { if (view->busy()) { ++running; } }
+        status->setText(QString("OpenOCD · %1 个烧录页 · %2 个任务运行中").arg(engine->openocdViews.size()).arg(running));
+        status->setToolTip("每页独立配置与日志；多个探针并行时需填写各自的序列号。");
     }
     const auto selectedPort = port->currentText();
     auto metadata = port->itemData(port->findText(selectedPort, Qt::MatchFixedString), Qt::UserRole + 2).toJsonObject();
@@ -3587,6 +3717,7 @@ void Window::saveSettings()
         {
             if (pane->isInstrument())
             {
+                if (pane->instrument->flasherService) { pane->instrument->flasherService->title = pane->pageTitle; }
                 widgetPages.append(pane->settings());
                 continue;
             }
@@ -3639,7 +3770,7 @@ void Window::saveSettings()
     {
         file.write(QJsonDocument(QJsonObject {{"connection", connection}, {"appearance", appearance}, {"views", viewSettings},
             {"widget_pages", widgetPages}, {"templates", templates}, {"allow_ai_control", engine->allowControl},
-            {"mcp_protocols", mcp->protocolAccess()},
+            {"mcp_protocols", mcp->protocolAccess()}, {"openocd", engine->openocd ? engine->openocd->configuration() : QJsonObject {}}, {"openocd_views", engine->openOcdSettings()},
             {"settings_geometry", saved["settings_geometry"]}, {"mcp_port", mcp->isListening() ? int(mcp->serverPort()) : saved["mcp_port"].toInt(8765)}}).toJson(QJsonDocument::Indented));
         if (!file.commit())
         {
@@ -3970,7 +4101,7 @@ void Window::openSettings()
     availablePort->setToolTip("立即切换到系统分配的空闲端口，再使用一键更新同步 Agent 地址");
     portResult->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     mcpBody->addWidget(portResult);
-    auto permission = new QCheckBox("允许 AI 发送报文、控制连接和应用脚本");
+    auto permission = new QCheckBox("允许 AI 发送报文、控制连接、应用脚本和执行烧录");
     permission->setChecked(engine->allowControl);
     connect(permission, &QCheckBox::toggled, this, [this](bool checked)
     {
@@ -3980,8 +4111,8 @@ void Window::openSettings()
     mcpBody->addWidget(permission);
     auto protocolRow = horizontal();
     protocolRow->addWidget(label("向 AI 开放"));
-    const QStringList protocolKinds {"serial", "tcp", "udp", "ssh"};
-    const QStringList protocolTitles {"串口", "TCP", "UDP", "SSH"};
+    const QStringList protocolKinds {"serial", "tcp", "udp", "ssh", "openocd"};
+    const QStringList protocolTitles {"串口", "TCP", "UDP", "SSH", "OpenOCD"};
     for (int i = 0; i < protocolKinds.size(); ++i)
     {
         const auto kind = protocolKinds[i];
@@ -3990,6 +4121,7 @@ void Window::openSettings()
         enabled->setChecked(mcp->protocolEnabled(kind));
         enabled->setToolTip(kind == "tcp"
             ? "允许 AI 读取和访问 TCP 客户端、服务端会话"
+            : kind == "openocd" ? "允许 AI 查看烧录配置和日志；执行或修改还需要上方 AI 控制权限。默认关闭。"
             : "允许 AI 读取和访问此协议的会话");
         connect(enabled, &QCheckBox::toggled, this, [this, kind](bool checked)
         {

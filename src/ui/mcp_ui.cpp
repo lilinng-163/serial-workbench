@@ -87,6 +87,7 @@ QJsonArray visibleRows(const SearchView &view)
 void Window::installMcpUi()
 {
     installModelMcp();
+    installOpenOcdMcp();
     const QPointer<Window> guard(this);
     mcp->searchHandler = [guard](Channel *channel, const QJsonObject &a)
     {

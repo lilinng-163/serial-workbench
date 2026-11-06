@@ -29,6 +29,7 @@ public:
     std::function<void(Channel *, const QString &, bool, const std::optional<QString> &)> scriptHandler;
     std::function<QString(Channel *)> scriptSampleHandler;
     std::function<QJsonObject(const QString &, const QJsonObject &)> modelHandler;
+    std::function<QJsonObject(const QString &, const QJsonObject &)> openOcdViewHandler;
     QJsonArray agentChecks;
 
 signals:
@@ -38,12 +39,14 @@ signals:
     void guiConnectionOpened(Channel *channel);
 
 private:
-    QJsonObject access {{"serial", true}, {"tcp", true}, {"udp", true}, {"ssh", true}};
+    QJsonObject access {{"serial", true}, {"tcp", true}, {"udp", true}, {"ssh", true}, {"openocd", false}};
     void requireProtocol(const QString &kind) const;
     Channel *accessibleChannel(const QString &id) const;
     QJsonArray visibleConnections() const;
     QJsonObject readEvents(const QJsonObject &arguments, int limitOverride = 0, bool allChannels = false) const;
     QJsonObject scriptTool(const QString &name, const QJsonObject &arguments);
+    QJsonObject openOcdTool(const QString &name, const QJsonObject &arguments);
+    QJsonArray openOcdTools() const;
     void acceptRequest(QTcpSocket *socket, const QByteArray &request);
     void respond(QTcpSocket *socket, int code, const QJsonObject &body = {}, const QString &session = {});
     void finishCall(QTcpSocket *socket, const QJsonObject &rpc, const QString &session);

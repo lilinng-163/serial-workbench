@@ -12,12 +12,15 @@ class Window;
 class UpdateDialog;
 class SerialControlPanel;
 class ModelPanel;
+class OpenOcdDialog;
 
 class Instrument : public QWidget
 {
     Q_OBJECT
 public:
-    Instrument(const QString &kind, QWidget *parent = nullptr);
+    Instrument(const QString &kind, QWidget *parent = nullptr, OpenOcdService *flasherService = nullptr);
+    OpenOcdDialog *flasher = nullptr;
+    OpenOcdService *flasherService = nullptr;
     QString kind;
     SerialControlPanel *controls = nullptr;
     ModelPanel *model = nullptr;
@@ -55,7 +58,7 @@ class Pane : public QWidget
     Q_OBJECT
 public:
     QString searchViewId = QUuid::createUuid().toString(QUuid::Id128);
-    explicit Pane(Window *window, const QString &instrumentKind = {});
+    explicit Pane(Window *window, const QString &instrumentKind = {}, OpenOcdService *flasherService = nullptr);
     Window *window;
     QPointer<Channel> channel;
     Config draft;
@@ -143,6 +146,7 @@ class Window : public QMainWindow
 public:
     void installMcpUi();
     void installModelMcp();
+    void installOpenOcdMcp();
     void checkAgentEndpoints();
     void showAuditDetail(const QJsonObject &entry);
     void showAiActivity(const QJsonObject &entry);
@@ -228,6 +232,7 @@ public:
     QProgressBar *updateProgress = nullptr;
     UpdateService *updater = nullptr;
     QPointer<UpdateDialog> updateDialog;
+    QPointer<QDialog> openOcdDialog;
     QTimer timer;
     QTimer portTimer;
     QTimer sshConfigTimer;
@@ -247,7 +252,7 @@ public:
     QJsonObject parameterConfig;
 
     Pane *newConnection();
-    Pane *newInstrument(const QString &kind, Channel *source = nullptr, bool activate = true, const QString &sourceKey = {});
+    Pane *newInstrument(const QString &kind, Channel *source = nullptr, bool activate = true, const QString &sourceKey = {}, const QString &openOcdId = {});
     QMenu *newPageMenu();
     void restoreInstruments(const QJsonObject &settings, const QString &sourceKey);
 
@@ -266,6 +271,7 @@ public:
     bool holdsSerialPort(const QString &name) const;
     void protocolChanged();
     void openSettings();
+    void openOpenOcd();
     void installUpdate(const QString &path);
     void configureClient(int index, QLabel *result);
     void saveSettings();

@@ -27,7 +27,7 @@ int main(int argc, char *argv[])
     parser.addOption({"export-agent", "Export an Agent MCP configuration without writing client files", "agent"});
     parser.addOption({"list-agents", "List Agent IDs, detection, configuration and skill destinations"});
     parser.addOption({"demo", "Show generated example data"});
-    parser.addOption({"view", "Preview waveform, json, xml, settings, dark, search, terminal, ssh, detached, floating-wave, narrow or protocol", "name"});
+    parser.addOption({"view", "Preview waveform, json, xml, settings, dark, search, terminal, ssh, detached, floating-wave, narrow, protocol or openocd", "name"});
     parser.addOption({"screenshot", "Save window preview", "path"});
     parser.addOption({"ready-file", "Write startup timing", "path"});
     parser.addOption({"quit-after", "Close after milliseconds", "ms"});
@@ -241,6 +241,23 @@ int main(int argc, char *argv[])
         {
             window.openSettings();
             window.settingsDialog->findChild<sw::DetachableTabs *>("settingsPages")->setCurrentIndex(1);
+        }
+        else if (view == "openocd")
+        {
+            bool existingPage = false;
+            for (int index = 0; index < window.tabs->count(); ++index)
+            {
+                auto pane = qobject_cast<sw::Pane *>(window.tabs->tabData(index).value<QObject *>());
+                if (pane && pane->instrument && pane->instrument->flasherService)
+                {
+                    window.tabs->setCurrentIndex(index);
+                    window.activate(index);
+                    existingPage = true;
+                    break;
+                }
+            }
+            if (!existingPage) { window.openOpenOcd(); }
+            previewTarget = &window;
         }
         else if (view == "settings")
         {

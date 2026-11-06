@@ -75,6 +75,23 @@ add_test(NAME serial_transfer_tests COMMAND "${CMAKE_COMMAND}" -E env
 )
 set_tests_properties(serial_transfer_tests PROPERTIES TIMEOUT 60)
 
+# Controlled child-process fixture; it never accesses a probe and is not shipped.
+add_executable(fake_openocd fake_openocd.cpp)
+if(MINGW)
+    target_link_options(fake_openocd PRIVATE -static)
+endif()
+qt_add_executable(openocd_tests openocd_tests.cpp)
+workbench_configure_target(openocd_tests)
+target_link_libraries(openocd_tests PRIVATE workbench_ui Qt6::Test)
+add_dependencies(openocd_tests fake_openocd)
+add_test(NAME openocd_tests COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=${workbench_test_path}"
+    $<TARGET_FILE:openocd_tests>
+    -platform offscreen
+    -o "${PROJECT_BINARY_DIR}/openocd-tests.txt,txt"
+)
+set_tests_properties(openocd_tests PROPERTIES TIMEOUT 45)
+
 qt_add_executable(mcp_protocol_tests mcp_protocol_tests.cpp)
 workbench_configure_target(mcp_protocol_tests)
 target_link_libraries(mcp_protocol_tests PRIVATE workbench_ui Qt6::Test)
