@@ -88,6 +88,7 @@ src/client/main.cpp
 | 3D 网格、通道姿态绑定与 OpenGL 视图 | `src/ui/model3d_data.*`、`model3d_panel.*`、`model3d_view.*`；`tests/native/model3d_tests.cpp` |
 | JSON 助手、控件迁移与数据源 | `src/ui/json_tools.*`、`instrument_config.*` |
 | 串口控制卡片、控件组、模板与收发小窗 | `src/ui/control_card.*`、`serial_control_panel.*`、`serial_control_presets.cpp`、`serial_control_packet.cpp`、`serial_monitor_dialog.*` |
+| OpenOCD 多板标签、探针隔离、初始化/复位和 MCP | `src/core/openocd.*`、`openocd_workspace.cpp`、`src/ui/openocd_dialog.*`、`openocd_mcp.cpp`、`searchable_combo.*`、`src/mcp/openocd_tools.cpp`；`tests/native/openocd_tests.cpp` |
 | C 风格脚本解释器与编辑器 | `src/core/frame_script.*`、`script_worker.cpp`；`src/ui/script_editor.cpp`、`script_results.cpp` |
 | 主题、图标、按钮/勾选/下拉动画 | `src/ui/controls.*`、`button_motion.*` |
 | 标签分离、恢复、拖动与圆弧衔接 | `src/ui/docking.*` |
@@ -158,6 +159,7 @@ python -m venv .venv
 | MCP / 历史 / 权限 | `mcp_protocol_tests`、`native_tests`、`smoke_native.py` |
 | 波形 / JSON / 脚本 | `wave_settings_tests`、`json_tools_tests`、`frame_script_tests` |
 | 串口控制 / 文件传输 | `serial_control_tests`、`serial_transfer_tests` |
+| OpenOCD / 烧录 MCP | `openocd_tests`、`mcp_protocol_tests`、`smoke_openocd.py`（进程 fixture，不访问硬件） |
 | 外观 / 布局 / 背景 | `button_motion_tests`、`window_chrome_tests`、`background_tests`、`dialog_resize_tests`，加实际窗口检查 |
 | 安装与发布 | `smoke_release.py`、`smoke_installer.py`；用当次打包返回的 payload/manifest/installer 路径 |
 

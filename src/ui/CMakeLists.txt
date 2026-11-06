@@ -44,6 +44,11 @@ add_library(workbench_ui OBJECT
     ssh_dialogs.h
     file_transfer_dialog.cpp
     file_transfer_dialog.h
+    openocd_dialog.cpp
+    openocd_dialog.h
+    openocd_mcp.cpp
+    searchable_combo.cpp
+    searchable_combo.h
     agent_config.cpp
     agent_config.h
     agent_skill.cpp

@@ -451,6 +451,17 @@ QString Theme::stylesheet() const
         QWidget#sender { background: $side; border-top: 1px solid $line; }
         QLabel { color: $text; background: transparent; border: none; }
         QGroupBox { color: $text; }
+        QDialog#openOcdDialog QGroupBox { border: 1px solid $line; border-radius: 10px; margin-top: 10px; }
+        QDialog#openOcdDialog QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; }
+        QTableWidget#openocdImages { background: $panel; color: $text; gridline-color: $line; border: 1px solid $line; border-radius: 8px; selection-background-color: $selectbg; selection-color: $selectfg; }
+        QTableWidget#openocdImages::item:selected { background: $selectbg; color: $selectfg; }
+        QSplitter#openocdSplit::handle { background: $side; border-radius: 4px; }
+        QSplitter#openocdSplit::handle:hover { background: $hover; }
+        QFrame#searchComboPopup { background: $panel; color: $text; border: 1px solid $edge; border-radius: 10px; }
+        QFrame#searchComboPopup QListView { background: $panel; color: $text; border: none; outline: none; }
+        QFrame#searchComboPopup QListView::item { min-height: 28px; padding: 4px 7px; border-radius: 6px; }
+        QFrame#searchComboPopup QListView::item:selected { background: $selectbg; color: $selectfg; }
+        QFrame#searchComboPopup QListView::item:hover { background: $hover; color: $text; }
         QLabel#muted { color: $muted; font-size: 13px; }
         QLabel#section { font-size: 14px; font-weight: 600; color: $text; padding: 0 0 8px 0; border-bottom: 1px solid $line; }
         QLabel#brand { font-size: 14px; }
@@ -492,10 +503,10 @@ QString Theme::stylesheet() const
         QPushButton:checked { color: $ink; font-weight: 600; }
         QPushButton[keyboardFocus="true"]:focus, QToolButton[keyboardFocus="true"]:focus { color: $ink; }
         QPushButton:pressed, QToolButton:pressed { color: $text; }
-        QPushButton#primary, QPushButton#releaseHistoryDownload { background: $accent; color: $onaccent; border: 1px solid $edge; padding: 6px 16px; }
-        QPushButton#primary:hover, QPushButton#primary[keyboardFocus="true"]:focus, QPushButton#releaseHistoryDownload:hover, QPushButton#releaseHistoryDownload[keyboardFocus="true"]:focus { background: $accent; color: $onaccent; }
-        QPushButton#primary:pressed, QPushButton#releaseHistoryDownload:pressed { color: $onaccent; }
-        QPushButton#primary:disabled, QPushButton#releaseHistoryDownload:disabled { background: $line; color: $muted; border-color: $edge; }
+        QPushButton#primary, QPushButton[primary="true"], QPushButton#releaseHistoryDownload { background: $accent; color: $onaccent; border: 1px solid $edge; padding: 6px 16px; }
+        QPushButton#primary:hover, QPushButton#primary[keyboardFocus="true"]:focus, QPushButton[primary="true"]:hover, QPushButton[primary="true"][keyboardFocus="true"]:focus, QPushButton#releaseHistoryDownload:hover, QPushButton#releaseHistoryDownload[keyboardFocus="true"]:focus { background: $accent; color: $onaccent; }
+        QPushButton#primary:pressed, QPushButton[primary="true"]:pressed, QPushButton#releaseHistoryDownload:pressed { color: $onaccent; }
+        QPushButton#primary:disabled, QPushButton[primary="true"]:disabled, QPushButton#releaseHistoryDownload:disabled { background: $line; color: $muted; border-color: $edge; }
         QPushButton#outline, QPushButton[variant="outline"] { color: $text; border: 1px solid $line; background: $panel; }
         QPushButton#outline[keyboardFocus="true"]:focus, QPushButton[variant="outline"][keyboardFocus="true"]:focus { border-color: $stroke; color: $ink; }
         QPushButton#outline:hover, QPushButton[variant="outline"]:hover { color: $ink; border-color: $stroke; }
@@ -536,6 +547,8 @@ QString Theme::stylesheet() const
         QTabWidget#model3dMappingTabs { background: transparent; }
         QTabWidget#model3dMappingTabs::pane { padding: 0; border: none; border-top-left-radius: 0; top: -1px; }
         QTabWidget#model3dMappingTabs QTabBar::tab { margin: 0 3px 0 0; padding: 8px 10px; }
+        QTabWidget[openocdTabs="true"]::pane { border-top-left-radius: 0; border-top-right-radius: 0; }
+        QTabWidget[openocdTabs="true"] QTabBar::tab { margin-top: 0; }
         QMenu, QFrame[roundedPopup="true"] { background: $panel; border: 1px solid $line; border-radius: 10px; padding: 5px; }
         QFrame[roundedPopup="true"] QAbstractItemView { border: none; background: $panel; padding: 2px; }
         QMenu::item { padding: 10px 28px 10px 16px; border: none; border-radius: 6px; }
@@ -736,6 +749,18 @@ void drawIcon(QPainter &p, const QString &name, QRectF rect, const QColor &color
         stroke({{3, 8}, {21, 8}});
         stroke({{17, 14}, {8, 14}});
         stroke({{11, 11}, {8, 14}, {11, 17}});
+    }
+    else if (name == "chip")
+    {
+        p.drawRoundedRect(QRectF(6, 6, 12, 12), 2, 2);
+        p.drawRoundedRect(QRectF(10, 10, 4, 4), 0.6, 0.6);
+        for (int coordinate = 8; coordinate <= 16; coordinate += 4)
+        {
+            stroke({{qreal(coordinate), 3}, {qreal(coordinate), 6}});
+            stroke({{qreal(coordinate), 18}, {qreal(coordinate), 21}});
+            stroke({{3, qreal(coordinate)}, {6, qreal(coordinate)}});
+            stroke({{18, qreal(coordinate)}, {21, qreal(coordinate)}});
+        }
     }
     else if (name == "control")
     {

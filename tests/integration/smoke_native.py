@@ -48,7 +48,7 @@ async def check(url, bridge, allow, expected_version=None):
             initialized = await client.initialize()
             if expected_version:
                 assert initialized.serverInfo.version == expected_version
-            assert len((await client.list_tools()).tools) == 24
+            assert len((await client.list_tools()).tools) == 35
             assert "read_usage_guide" in initialized.instructions
             guide = unpack(await client.call_tool("read_usage_guide", {}))
             assert guide["guide"] and guide["skill_path_scope"] == "server_host"
@@ -66,6 +66,12 @@ async def check(url, bridge, allow, expected_version=None):
             assert status["version"] == initialized.serverInfo.version
             assert status["implementation"] == "Qt C++"
             assert status["allow_ai_control"] is allow
+            assert status["protocol_access"]["openocd"] is False
+            openocd_guide = unpack(await client.call_tool("read_usage_guide", {"topic": "openocd"}))
+            assert "openocd" in openocd_guide["available_topics"]
+            for name in ("get_openocd_state", "list_openocd_configs", "preview_openocd"):
+                denied = await client.call_tool(name, {})
+                assert denied.isError
             assert status["process"]["username"]
             events = unpack(await client.call_tool("read_all_events", {}))
             assert any(e["direction"] == "rx" for e in events["events"])
@@ -73,7 +79,7 @@ async def check(url, bridge, allow, expected_version=None):
             async with stdio_client(params) as (sr, sw):
                 async with ClientSession(sr, sw) as second:
                     await second.initialize()
-                    assert len((await second.list_tools()).tools) == 24
+                    assert len((await second.list_tools()).tools) == 35
                     other = unpack(await second.call_tool("read_all_events", {}))
                     assert other["session_id"] == events["session_id"]
                     assert other["events"][:len(events["events"])] == events["events"]
@@ -191,7 +197,7 @@ async def check(url, bridge, allow, expected_version=None):
                     assert invalid.isError
                     status = unpack(await client.call_tool("get_status"))
                     assert status["session_id"] == events["session_id"]
-                    print("PASS HTTP/stdio, 24 tools, shared history, baud reconfiguration, long poll, loopback, strict wave/1, integer/double values, reconnect, validation")
+                    print("PASS HTTP/stdio, 35 tools, shared history, baud reconfiguration, long poll, loopback, strict wave/1, integer/double values, reconnect, validation")
 
 
 def main():

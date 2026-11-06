@@ -261,7 +261,7 @@ private slots:
             QVERIFY(saved.open(QIODevice::ReadOnly));
             const auto protocols = QJsonDocument::fromJson(saved.readAll()).object()["mcp_protocols"].toObject();
             saved.close();
-            QCOMPARE(protocols.size(), 4);
+            QCOMPARE(protocols.size(), 5);
             for (const auto &value : protocols) { QVERIFY(!value.toBool()); }
             // Server policy updates also refresh an already open settings page.
             mcp.setProtocolEnabled("tcp-client", true);

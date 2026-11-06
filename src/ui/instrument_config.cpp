@@ -8,6 +8,7 @@ namespace sw
 {
 void Instrument::clearDisplay()
 {
+    if (flasher) { return; }
     if (model) { model->clearDisplay(); return; }
     if (plot) { plot->clearSamples(waveChannel, points->value()); }
     if (waveChannel && isStructured())
@@ -107,7 +108,7 @@ QJsonArray migrateInstrumentPages(const QJsonArray &pages)
                 result.append(separate);
             }
         }
-        else if (kind == "waveform" || kind == "json" || kind == "xml" || kind == "control" || kind == "model3d")
+        else if (kind == "waveform" || kind == "json" || kind == "xml" || kind == "control" || kind == "model3d" || kind == "openocd")
         {
             result.append(page);
         }
