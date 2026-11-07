@@ -2,6 +2,7 @@
 #pragma once
 
 #include <QtCore>
+#include <QTcpSocket>
 #include <memory>
 
 namespace sw
@@ -29,10 +30,13 @@ public:
     QJsonObject state(qint64 after = 0, int limit = 100) const;
     void start(const QString &operation, qint64 expectedRevision);
     void cancel(const QString &expectedJobId);
+    QJsonObject readRtt(qint64 after = 0, int limit = 100) const;
+    bool ownsProbe() const;
 
 signals:
     void configurationChanged();
     void stateChanged();
+    void rttDataAvailable();
 
 private:
     QJsonObject config;
@@ -57,6 +61,25 @@ private:
     qsizetype logBytes = 0;
     QList<QJsonObject> records;
 
+    QTcpSocket rttSocket;
+    QTimer rttReadTimer;
+    QStringDecoder rttDecoder {QStringDecoder::Utf8};
+    QString rttJob;
+    QString rttStatus = "idle";
+    QString rttHost;
+    int rttPort = 0;
+    bool rttClosing = false;
+    qint64 rttSequence = 0;
+    qint64 rttStartSequence = 0;
+    qint64 rttReceived = 0;
+    qsizetype rttBytes = 0;
+    QList<QJsonObject> rttRecords;
+
+    void initializeRtt();
+    void resetRtt(int port);
+    void connectRtt();
+    void receiveRtt();
+    void closeRtt();
     void appendLog(const QString &text);
     void readOutput();
     void finish(int code, QProcess::ExitStatus exitStatus);

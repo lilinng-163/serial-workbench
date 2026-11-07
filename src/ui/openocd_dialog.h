@@ -2,6 +2,7 @@
 #pragma once
 #include "controls.h"
 #include "openocd.h"
+#include "openocd_rtt.h"
 
 namespace sw
 {
@@ -10,6 +11,7 @@ class OpenOcdDialog : public QDialog
     Q_OBJECT
 public:
     explicit OpenOcdDialog(OpenOcdService *service, QWidget *parent = nullptr, bool embedded = false);
+    void setAppearance(const Theme &theme, const QFont &font);
     void accept() override;
     void reject() override;
     void saveConfiguration(const QString &path) const;
@@ -69,9 +71,12 @@ private:
     QPushButton *cancelJob;
     QProgressBar *progress;
     QTimer clock;
+    OpenOcdRttSettings *rttSettings;
+    OpenOcdRttConsole *rttConsole;
+    QPushButton *startRtt;
 
     void load();
-    void commit();
+    bool commit();
     void refreshCatalog();
     void refreshState();
     void refreshPlan();

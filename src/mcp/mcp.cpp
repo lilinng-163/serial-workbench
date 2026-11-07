@@ -482,7 +482,7 @@ void McpServer::finishCall(QTcpSocket *socket, const QJsonObject &rpc, const QSt
 
 QJsonValue McpServer::call(const QString &name, const QJsonObject &a)
 {
-    if (QStringList {"list_openocd_views", "create_openocd_view", "close_openocd_view", "list_openocd_configs", "get_openocd_state", "configure_openocd", "preview_openocd", "start_openocd", "cancel_openocd", "export_openocd_configuration", "import_openocd_configuration"}.contains(name))
+    if (QStringList {"list_openocd_views", "create_openocd_view", "close_openocd_view", "list_openocd_configs", "get_openocd_state", "read_openocd_rtt", "configure_openocd", "preview_openocd", "start_openocd", "cancel_openocd", "export_openocd_configuration", "import_openocd_configuration"}.contains(name))
     {
         return openOcdTool(name, a);
     }

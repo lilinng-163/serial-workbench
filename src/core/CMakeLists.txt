@@ -14,6 +14,7 @@ add_library(workbench_core STATIC
     script_worker.cpp
     serial_transfer.cpp
     serial_transfer.h
+    openocd_rtt.cpp
     openocd.cpp
     openocd.h
     openocd_workspace.cpp

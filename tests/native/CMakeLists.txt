@@ -92,6 +92,20 @@ add_test(NAME openocd_tests COMMAND "${CMAKE_COMMAND}" -E env
 )
 set_tests_properties(openocd_tests PROPERTIES TIMEOUT 45)
 
+qt_add_executable(fake_rtt_openocd fake_rtt_openocd.cpp)
+workbench_configure_target(fake_rtt_openocd)
+target_link_libraries(fake_rtt_openocd PRIVATE Qt6::Core Qt6::Network)
+qt_add_executable(openocd_rtt_tests openocd_rtt_tests.cpp)
+workbench_configure_target(openocd_rtt_tests)
+target_link_libraries(openocd_rtt_tests PRIVATE workbench_ui Qt6::Test)
+add_dependencies(openocd_rtt_tests fake_rtt_openocd)
+add_test(NAME openocd_rtt_tests COMMAND "${CMAKE_COMMAND}" -E env
+    "PATH=${workbench_test_path}"
+    $<TARGET_FILE:openocd_rtt_tests> -platform offscreen
+    -o "${PROJECT_BINARY_DIR}/openocd-rtt-tests.txt,txt"
+)
+set_tests_properties(openocd_rtt_tests PROPERTIES TIMEOUT 45)
+
 qt_add_executable(mcp_protocol_tests mcp_protocol_tests.cpp)
 workbench_configure_target(mcp_protocol_tests)
 target_link_libraries(mcp_protocol_tests PRIVATE workbench_ui Qt6::Test)

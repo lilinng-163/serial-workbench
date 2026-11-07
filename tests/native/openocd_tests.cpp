@@ -688,7 +688,7 @@ private slots:
         QVERIFY(split->handleWidth() >= 8);
         const auto config = engine.openocd->configuration();
         logs->setPlainText("Log selection remains intact\nsecond line\n");
-        QCOMPARE(tabs->count(), 3);
+        QCOMPARE(tabs->count(), 4);
         QTest::mouseClick(dialog->findChild<QPushButton *>("openocdAdvanced"), Qt::LeftButton);
         QCOMPARE(tabs->currentIndex(), 1);
         tabs->setCurrentIndex(2);

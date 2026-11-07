@@ -1164,6 +1164,7 @@ void Pane::applyAppearance()
     if (instrument)
     {
         if (instrument->model) { instrument->model->setTheme(window->theme); }
+        if (instrument->flasher) { instrument->flasher->setAppearance(window->theme, window->dataFont); }
         if (instrument->controls)
         {
             instrument->controls->setTheme(window->theme);

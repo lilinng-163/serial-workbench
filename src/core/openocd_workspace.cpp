@@ -106,7 +106,7 @@ void Engine::checkOpenOcdProbe(const OpenOcdService *requested) const
     const auto serial = requested->configuration()["adapter_serial"].toString().trimmed();
     for (auto other : openocdViews)
     {
-        if (other == requested || !other->busy() || other->state()["operation"] == "version") { continue; }
+        if (other == requested || !other->ownsProbe()) { continue; }
         const auto occupied = other->configuration()["adapter_serial"].toString().trimmed();
         if (serial.isEmpty() || occupied.isEmpty())
         {

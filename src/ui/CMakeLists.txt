@@ -44,6 +44,8 @@ add_library(workbench_ui OBJECT
     ssh_dialogs.h
     file_transfer_dialog.cpp
     file_transfer_dialog.h
+    openocd_rtt.cpp
+    openocd_rtt.h
     openocd_dialog.cpp
     openocd_dialog.h
     openocd_mcp.cpp

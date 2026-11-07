@@ -1,5 +1,14 @@
 # 开发交接记录
 
+## 2026-11-07 — OpenOCD RTT 查看窗开发预览
+
+- 从 `8f496a7` 建立 `codex/openocd-rtt`。每个板卡页新增 RTT 配置与彩色终端。支持可调大小的独立窗口、暂停显示、清空当前视图、复制和导出文本。配置随板卡页保存和导入导出，启动工作台时保持空闲。
+- 工作台启动模式沿用本页探针/目标配置，搜索指定 RAM 范围内的 RTT 控制块，可选通道、轮询间隔与 GDB 端口。RTT 默认保持目标状态，也可显式恢复运行或复位运行。初始连接有超时，连接成功后持续接收。已有服务模式使用独立 TCP 连接。停止只处理本页拥有的会话。
+- MCP 复用 `configure_openocd`、`preview_openocd`、`start_openocd`、`cancel_openocd`，新增只读 `read_openocd_rtt`，工具总数 36。GUI 和 MCP 共用每页 512 KiB / 2000 段 RTT 缓存，读者独立分页。保留原始字节和增量 UTF-8 文本。OpenOCD 协议与 AI 控制权限沿用现有开关。更新了中英 README、随包 skill 与内置 OpenOCD 指南，skill 校验通过。
+- Windows Release 编译通过。OpenOCD 测试 27 项、RTT 测试 8 项通过，另外完成 RTT Windows 实窗检查。解压包验证了 GUI 启动、HTTP/STDIO 工具清单、烧录模拟回归、RTT 模拟进程与已有服务、ANSI/UTF-8、独立游标、停止行为。
+- 实机通过 CMSIS-DAP v2 接入参考 STM32F103 固件。从现有 map 核对 `_SEGGER_RTT=0x2000002C`，使用通道 0、保持目标状态读取启动信息与绿/黄/红 ANSI 日志。Windows 监听表确认 GDB 3333 和 RTT 自动端口由同一 OpenOCD 进程提供。结束后释放了测试会话。IDE 断点操作仍待验证。
+- 独立 Windows x64 测试包 `dist/previews/SerialWorkbench-0.15.41-rtt-preview-windows-x64.zip`，21,583,603 字节，SHA-256 `64b1ad4ec31abda6a6d3a30f82c7d109db35be6b7ac5c13571bc444ef3798d49`。解压运行 `Start-Preview.cmd`，配置保存在解压目录。实窗和实机证据位于 `build/rtt-preview/`。本次交付为本地预览。
+
 ## 2026-11-07 — v0.15.41 已发布至 GitHub 与网站，清理本地测试包
 
 - PR #9 保留历史合入主线，发行提交为 `811bb8bd614a286a162a47ee50e9a44647f34d72`。GitHub `v0.15.41` 已发布为 latest；安装包、便携 ZIP、单文件 EXE 和 SHA256SUMS 的远端大小、SHA-256 均与本地一致。
