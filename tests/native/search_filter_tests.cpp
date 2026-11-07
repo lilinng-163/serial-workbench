@@ -98,6 +98,8 @@ private slots:
         box.setText("[");
         QVERIFY(box.property("invalidFilter").toBool());
         QVERIFY(box.toolTip().contains(box.criteria().error));
+        option(&box, "filterWord")->setChecked(true);
+        QVERIFY(box.property("invalidFilter").toBool());
         box.clear();
         QVERIFY(!box.property("invalidFilter").toBool());
     }

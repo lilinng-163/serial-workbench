@@ -40,7 +40,7 @@ QWidget *fileField(QLineEdit *edit, QWidget *parent, bool directory, const QStri
     {
         const auto path = directory ? QFileDialog::getExistingDirectory(parent, title, edit->text())
             : QFileDialog::getOpenFileName(parent, title, edit->text());
-        if (!path.isEmpty()) { edit->setText(QDir::fromNativeSeparators(path)); }
+        if (!path.isEmpty() && !edit->isReadOnly()) { edit->setText(QDir::fromNativeSeparators(path)); }
     });
     return row;
 }
@@ -71,13 +71,23 @@ QTabWidget *tabs(const QString &name)
     widget->tabBar()->setDrawBase(false);
     return widget;
 }
+
+QPlainTextEdit *outputText(const QString &name)
+{
+    auto edit = new QPlainTextEdit();
+    edit->setObjectName(name);
+    edit->setReadOnly(true);
+    edit->setLineWrapMode(QPlainTextEdit::NoWrap);
+    edit->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    return edit;
+}
 }
 
 OpenOcdDialog::OpenOcdDialog(OpenOcdService *owner, QWidget *parent, bool embedded) : QDialog(parent), service(owner), embeddedMode(embedded)
 {
     if (embedded) { setWindowFlags(Qt::Widget); }
     setObjectName("openOcdDialog");
-    setWindowTitle("OpenOCD 烧录");
+    setWindowTitle("OpenOCD");
     setWindowIcon(QIcon(":/brand/lightning.svg"));
     if (embedded)
     {
@@ -92,7 +102,7 @@ OpenOcdDialog::OpenOcdDialog(OpenOcdService *owner, QWidget *parent, bool embedd
     auto layout = new QVBoxLayout(this);
     layout->setContentsMargins(12, 8, 12, 8);
     layout->setSpacing(10);
-    auto heading = new QLabel("OpenOCD 烧录");
+    auto heading = new QLabel("OpenOCD");
     heading->setObjectName("themeTitle");
     auto headingFont = font();
     headingFont.setPointSize(16);
@@ -113,8 +123,17 @@ OpenOcdDialog::OpenOcdDialog(OpenOcdService *owner, QWidget *parent, bool embedd
         delete heading;
         delete subtitle;
     }
+    workspaceTabs = tabs("openocdWorkspaceTabs");
+    workspaceTabs->tabBar()->setObjectName("openocdWorkspaceBar");
+    layout->addWidget(workspaceTabs, 1);
+    flashPage = new QWidget();
+    auto flashLayout = new QVBoxLayout(flashPage);
+    flashLayout->setContentsMargins(8, 8, 8, 6);
+    flashLayout->setSpacing(8);
+    workspaceTabs->addTab(flashPage, "固件烧录");
+
     content = new QStackedWidget();
-    layout->addWidget(content, 1);
+    flashLayout->addWidget(content, 1);
     split = new QSplitter(Qt::Horizontal);
     split->setObjectName("openocdSplit");
     split->setHandleWidth(10);
@@ -126,7 +145,7 @@ OpenOcdDialog::OpenOcdDialog(OpenOcdService *owner, QWidget *parent, bool embedd
     configurationTabs->setMinimumWidth(360);
     configurationTabs->installEventFilter(this);
     split->addWidget(configurationTabs);
-    editor = new QWidget();
+    auto editor = new QWidget();
     auto body = new QVBoxLayout(editor);
     body->setContentsMargins(0, 0, 8, 0);
     body->setSpacing(14);
@@ -217,17 +236,18 @@ OpenOcdDialog::OpenOcdDialog(OpenOcdService *owner, QWidget *parent, bool embedd
     auto firmware = new QGroupBox("固件");
     auto firmwareLayout = new QVBoxLayout(firmware);
     firmwareLayout->setContentsMargins(12, 18, 12, 12);
-    images = new QTableWidget(0, 2);
+    images = new QTableWidget(0, 2, firmware);
     images->setObjectName("openocdImages");
-    images->setHorizontalHeaderLabels({"文件路径", "地址（BIN 必填）"});
+    images->setHorizontalHeaderLabels({"文件路径", "BIN 烧录地址"});
     images->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     images->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
-    images->setColumnWidth(1, 155);
+    images->setColumnWidth(1, 126);
+    images->setWordWrap(false);
     images->setTextElideMode(Qt::ElideMiddle);
     images->verticalHeader()->hide();
     images->setSelectionBehavior(QAbstractItemView::SelectRows);
-    images->setMinimumHeight(100);
-    images->setMaximumHeight(130);
+    connect(images->horizontalHeader(), &QHeaderView::geometriesChanged,
+        this, &OpenOcdDialog::resizeFirmwareTable, Qt::QueuedConnection);
     auto filesRow = new QHBoxLayout();
     auto add = new QPushButton("选择固件…");
     auto remove = new QPushButton("移除选中");
@@ -276,6 +296,9 @@ OpenOcdDialog::OpenOcdDialog(OpenOcdService *owner, QWidget *parent, bool embedd
     toolLayout->addStretch();
     configurationTabs->addTab(scrollPanel(toolPage, "openocdToolScroll"), "OpenOCD 工具");
 
+    configurationEditors = {mode, board, adapter, target, transport, flow, adapterOptions, firmware, importConfig};
+    for (auto browse : tool->findChildren<QPushButton *>()) { configurationEditors.append(browse); }
+
     output = new QWidget();
     output->setObjectName("openocdOutputPane");
     output->setMinimumWidth(300);
@@ -283,18 +306,10 @@ OpenOcdDialog::OpenOcdDialog(OpenOcdService *owner, QWidget *parent, bool embedd
     outputLayout->setContentsMargins(0, 0, 0, 0);
     outputLayout->setSpacing(6);
     resultTabs = tabs("openocdResultTabs");
-    logs = new QPlainTextEdit();
-    logs->setObjectName("openocdLogs");
-    logs->setReadOnly(true);
+    logs = outputText("openocdLogs");
     logs->setMinimumHeight(100);
     logs->setMaximumBlockCount(1500);
-    logs->setLineWrapMode(QPlainTextEdit::NoWrap);
-    logs->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
-    plan = new QPlainTextEdit();
-    plan->setObjectName("openocdPlan");
-    plan->setReadOnly(true);
-    plan->setLineWrapMode(QPlainTextEdit::NoWrap);
-    plan->setFont(logs->font());
+    plan = outputText("openocdPlan");
     resultTabs->addTab(logs, "运行日志");
     resultTabs->addTab(plan, "执行预览");
     outputLayout->addWidget(resultTabs, 1);
@@ -333,8 +348,26 @@ OpenOcdDialog::OpenOcdDialog(OpenOcdService *owner, QWidget *parent, bool embedd
     actions->addStretch();
     actions->addWidget(cancelJob);
     actions->addWidget(flash);
-    layout->addLayout(actions);
+    flashLayout->addLayout(actions);
 
+    rttPage = createRttPage();
+    workspaceTabs->addTab(rttPage, "RTT 日志");
+
+    connect(rttSettings, &OpenOcdRttSettings::edited, this, &OpenOcdDialog::commit);
+    connect(workspaceTabs, &QTabWidget::currentChanged, this, [this]
+    {
+        if (layoutReady) { refreshPlan(); }
+    });
+    connect(rttAction, &QPushButton::clicked, this, [this]
+    {
+        if (service->busy())
+        {
+            const auto state = service->state(0, 1);
+            if (state["operation"] == "rtt") { cancelRun(state["job_id"].toString()); }
+            return;
+        }
+        if (commit()) { run("rtt"); }
+    });
     connect(rescan, &QPushButton::clicked, this, &OpenOcdDialog::refreshCatalog);
     connect(importConfig, &QPushButton::clicked, this, [this]
     {
@@ -370,11 +403,19 @@ OpenOcdDialog::OpenOcdDialog(OpenOcdService *owner, QWidget *parent, bool embedd
     });
     for (auto spin : {speed, timeout}) { connect(spin, &QSpinBox::valueChanged, this, &OpenOcdDialog::commit); }
     for (auto check : {verify, resetRun}) { connect(check, &QCheckBox::toggled, this, &OpenOcdDialog::commit); }
-    connect(images, &QTableWidget::cellChanged, this, &OpenOcdDialog::commit);
+    connect(images, &QTableWidget::itemChanged, this, [this](QTableWidgetItem *item)
+    {
+        if (item->column() == 0)
+        {
+            const QSignalBlocker blocker(images);
+            item->setToolTip(item->text());
+        }
+        commit();
+    });
     connect(add, &QPushButton::clicked, this, [this]
     {
         const auto files = QFileDialog::getOpenFileNames(this, "选择固件", {}, "固件 (*.elf *.hex *.ihex *.s19 *.srec *.bin)");
-        if (files.isEmpty()) { return; }
+        if (files.isEmpty() || service->busy()) { return; }
         syncing = true;
         if (strategy->currentData() != "esp") { images->setRowCount(0); }
         for (const auto &file : files)
@@ -405,8 +446,8 @@ OpenOcdDialog::OpenOcdDialog(OpenOcdService *owner, QWidget *parent, bool embedd
     connect(flash, &QPushButton::clicked, this, [this] { run("flash"); });
     connect(cancelJob, &QPushButton::clicked, this, [this]
     {
-        try { service->cancel(service->state()["job_id"].toString()); }
-        catch (const std::exception &exception) { status->setText(QString::fromUtf8(exception.what())); }
+        const auto state = service->state(0, 1);
+        if (state["operation"] != "rtt") { cancelRun(state["job_id"].toString()); }
     });
     connect(service, &OpenOcdService::configurationChanged, this, &OpenOcdDialog::load);
     connect(service, &OpenOcdService::stateChanged, this, &OpenOcdDialog::refreshState);
@@ -418,6 +459,69 @@ OpenOcdDialog::OpenOcdDialog(OpenOcdService *owner, QWidget *parent, bool embedd
     load();
     layoutReady = true;
     arrangeContent();
+}
+
+QWidget *OpenOcdDialog::createRttPage()
+{
+    auto page = new QWidget();
+    auto layout = new QVBoxLayout(page);
+    layout->setContentsMargins(8, 8, 8, 6);
+    layout->setSpacing(8);
+
+    rttSettings = new OpenOcdRttSettings();
+    auto settings = scrollPanel(rttSettings, "openocdRttScroll");
+    rttSettingsDialog = new QDialog(this);
+    rttSettingsDialog->setObjectName("openocdRttSettingsDialog");
+    rttSettingsDialog->setWindowTitle("RTT 连接设置");
+    rttSettingsDialog->setWindowIcon(windowIcon());
+    rttSettingsDialog->setMinimumSize(420, 360);
+    rttSettingsDialog->resize(570, 670);
+    auto settingsLayout = new QVBoxLayout(rttSettingsDialog);
+    settingsLayout->addWidget(settings, 1);
+    auto done = new QPushButton("关闭");
+    done->setAutoDefault(false);
+    settingsLayout->addWidget(done, 0, Qt::AlignRight);
+    connect(done, &QPushButton::clicked, rttSettingsDialog, &QDialog::close);
+
+    rttResultTabs = tabs("openocdRttResultTabs");
+    rttConsole = new OpenOcdRttConsole(service);
+    rttLogs = outputText("openocdRttLogs");
+    rttLogs->setMaximumBlockCount(1500);
+    rttPlan = outputText("openocdRttPlan");
+    rttResultTabs->addTab(rttConsole, "RTT 终端");
+    rttResultTabs->addTab(rttLogs, "连接日志");
+    rttResultTabs->addTab(rttPlan, "执行预览");
+
+    layout->addWidget(rttResultTabs, 1);
+
+    auto actions = new QHBoxLayout();
+    auto configure = new QPushButton("连接设置…");
+    configure->setObjectName("openocdRttSettingsAction");
+    configure->setProperty("variant", "outline");
+    configure->setAutoDefault(false);
+    actions->addWidget(configure);
+    actions->addStretch();
+    connect(configure, &QPushButton::clicked, this, [this]
+    {
+        rttSettingsDialog->show();
+        rttSettingsDialog->raise();
+        rttSettingsDialog->activateWindow();
+    });
+    rttAction = new QPushButton("启动 RTT");
+    rttAction->setObjectName("openocdRttAction");
+    rttAction->setAutoDefault(false);
+    rttAction->setProperty("primary", true);
+    rttAction->setMinimumWidth(128);
+    actions->addWidget(rttAction);
+    layout->addLayout(actions);
+    return page;
+}
+
+void OpenOcdDialog::setAppearance(const Theme &theme, const QFont &font)
+{
+    rttConsole->setAppearance(theme, font);
+    rttSettingsDialog->setPalette(theme.palette());
+    rttSettingsDialog->setStyleSheet(theme.stylesheet());
 }
 
 void OpenOcdDialog::resizeEvent(QResizeEvent *event)
@@ -481,7 +585,9 @@ void OpenOcdDialog::arrangeContent()
             output->setMinimumWidth(0);
             compactTabs->addTab(configurationTabs, "配置");
             compactTabs->addTab(output, "运行输出");
-            compactTabs->setCurrentWidget(service->busy() ? output : static_cast<QWidget *>(configurationTabs));
+            const auto state = service->state(0, 1);
+            const bool flashBusy = state["running"].toBool() && state["operation"] != "rtt";
+            compactTabs->setCurrentWidget(flashBusy ? output : static_cast<QWidget *>(configurationTabs));
             content->setCurrentWidget(compactTabs);
         }
         else
@@ -503,6 +609,7 @@ void OpenOcdDialog::arrangeContent()
     const auto direction = configurationTabs->width() < 680 ? QBoxLayout::TopToBottom : QBoxLayout::LeftToRight;
     columns->setDirection(direction);
     advancedColumns->setDirection(direction);
+
 }
 
 void OpenOcdDialog::load()
@@ -510,6 +617,7 @@ void OpenOcdDialog::load()
     if (syncing) { return; }
     syncing = true;
     const auto config = service->configuration();
+    rttSettings->load(config);
     executable->setText(config["executable"].toString());
     scripts->setText(config["scripts_dir"].toString());
     selectValue(mode, config["mode"]);
@@ -540,28 +648,36 @@ void OpenOcdDialog::load()
     refreshPlan();
 }
 
-void OpenOcdDialog::commit()
+bool OpenOcdDialog::commit()
 {
-    if (syncing) { return; }
+    if (syncing || service->busy()) { return false; }
     QJsonArray files;
     for (int row = 0; row < images->rowCount(); ++row)
     {
         files.append(QJsonObject {{"path", images->item(row, 0) ? images->item(row, 0)->text() : ""},
             {"address", images->item(row, 1) ? images->item(row, 1)->text() : ""}});
     }
-    const QJsonObject config {
+    QJsonObject config {
         {"executable", executable->text()}, {"scripts_dir", scripts->text()}, {"mode", mode->currentData().toString()},
         {"board", board->currentText()}, {"interface", adapter->currentText()}, {"target", target->currentText()},
         {"transport", transport->currentData().toString()}, {"strategy", strategy->currentData().toString()}, {"startup", startup->currentData().toString()},
         {"reset_config", resetConfig->currentData().toString()}, {"speed_khz", speed->value()}, {"timeout_ms", timeout->value() * 1000},
         {"adapter_serial", adapterSerial->text()}, {"verify", verify->isChecked()}, {"reset_run", resetRun->isChecked()}, {"images", files}
     };
+    const auto rtt = rttSettings->configuration();
+    for (auto field = rtt.begin(); field != rtt.end(); ++field) { config[field.key()] = *field; }
     syncing = true;
     try { service->configure(config, service->revision()); }
-    catch (const std::exception &exception) { status->setText(QString::fromUtf8(exception.what())); }
+    catch (const std::exception &exception)
+    {
+        syncing = false;
+        status->setText(QString::fromUtf8(exception.what()));
+        return false;
+    }
     syncing = false;
     refreshState();
     refreshPlan();
+    return true;
 }
 
 void OpenOcdDialog::refreshCatalog()
@@ -586,15 +702,25 @@ void OpenOcdDialog::refreshCatalog()
             .arg(catalog["boards"].toArray().size()).arg(catalog["interfaces"].toArray().size()).arg(catalog["targets"].toArray().size())
             .arg(catalog["truncated"].toBool() ? "（列表已截断，可填写完整路径）" : "")
         : catalogError);
-    if (!catalogError.isEmpty()) { configurationTabs->setCurrentIndex(2); }
+    if (!catalogError.isEmpty() && !service->busy() && workspaceTabs->currentWidget() == flashPage
+        && service->configuration()["rtt_mode"] != "external")
+    {
+        configurationTabs->setCurrentIndex(2);
+    }
+}
+
+void OpenOcdDialog::resizeFirmwareTable()
+{
+    const int visibleFiles = qBound(3, images->rowCount(), 6);
+    const auto header = images->horizontalHeader();
+    const int fileHeight = qMax(header->height(), header->sizeHint().height())
+        + visibleFiles * images->verticalHeader()->defaultSectionSize() + 4;
+    images->setFixedHeight(fileHeight);
 }
 
 void OpenOcdDialog::refreshPlan()
 {
-    const int visibleFiles = qBound(1, images->rowCount(), 3);
-    const int fileHeight = images->horizontalHeader()->sizeHint().height()
-        + visibleFiles * images->verticalHeader()->defaultSectionSize() + 4;
-    images->setFixedHeight(qMax(76, fileHeight));
+    resizeFirmwareTable();
     const bool boardMode = mode->currentData() == "board";
     deviceForm->setRowVisible(board, boardMode);
     deviceForm->setRowVisible(adapter, !boardMode);
@@ -609,14 +735,18 @@ void OpenOcdDialog::refreshPlan()
             : startup->currentData() == "reset_init" ? "先初始化，复位暂停并执行板级钩子，再擦写固件。"
             : startup->currentData() == "reset_halt" ? "先初始化，复位后暂停，再擦写固件；不会执行 reset-init 钩子。"
             : "先初始化并暂停，不执行复位。仅适用于已经完成所需板级初始化的目标。");
+    const bool showingRtt = workspaceTabs->currentWidget() == rttPage;
+    auto previewText = showingRtt ? rttPlan : plan;
     try
     {
-        const auto preview = service->preview("flash");
-        plan->setPlainText(preview["executable"].toString() + "\n\n" + preview["script"].toString());
+        const auto preview = service->preview(showingRtt ? "rtt" : "flash");
+        const auto program = preview["executable"].toString();
+        const auto script = preview["script"].toString();
+        previewText->setPlainText(program.isEmpty() ? script : program + "\n\n" + script);
     }
     catch (const std::exception &exception)
     {
-        plan->setPlainText("完善配置后将在这里显示执行步骤。\n\n" + QString::fromUtf8(exception.what()));
+        previewText->setPlainText("完善配置后将在这里显示执行步骤。\n\n" + QString::fromUtf8(exception.what()));
     }
 }
 
@@ -624,34 +754,84 @@ void OpenOcdDialog::refreshState()
 {
     auto state = service->state(logCursor, 200);
     const auto job = state["job_id"].toString();
+    const auto operation = state["operation"].toString();
+    const bool isRtt = operation == "rtt";
+    auto jobLogs = isRtt ? rttLogs : logs;
     if (displayedJob != job)
     {
         displayedJob = job;
-        logs->clear();
-        resultTabs->setCurrentWidget(logs);
-        if (compact) { compactTabs->setCurrentWidget(output); }
+        jobLogs->clear();
+        if (isRtt)
+        {
+            workspaceTabs->setCurrentWidget(rttPage);
+            rttResultTabs->setCurrentWidget(rttConsole);
+        }
+        else
+        {
+            workspaceTabs->setCurrentWidget(flashPage);
+            resultTabs->setCurrentWidget(logs);
+            if (compact) { compactTabs->setCurrentWidget(output); }
+        }
         logCursor = 0;
         state = service->state(logCursor, 200);
     }
-    const bool follow = logs->verticalScrollBar()->value() >= logs->verticalScrollBar()->maximum() - 2;
-    auto cursor = logs->textCursor();
+    auto scroll = jobLogs->verticalScrollBar();
+    const bool follow = scroll->value() >= scroll->maximum() - 2;
+    auto cursor = jobLogs->textCursor();
     cursor.movePosition(QTextCursor::End);
     if (state["gap"].toBool() && logCursor > 0) { cursor.insertText("\n… 较早日志已超出保留范围 …\n"); }
     for (const auto &value : state["records"].toArray()) { cursor.insertText(value.toObject()["text"].toString()); }
     logCursor = state["next_cursor"].toInteger();
-    if (follow) { logs->verticalScrollBar()->setValue(logs->verticalScrollBar()->maximum()); }
+    if (follow) { scroll->setValue(scroll->maximum()); }
     const bool busy = state["running"].toBool();
-    configurationTabs->setEnabled(!busy);
+    const bool stoppable = busy && state["status"] == "running";
+    for (auto editor : configurationEditors) { editor->setEnabled(!busy); }
+    for (auto edit : {executable, scripts, adapterSerial}) { edit->setReadOnly(busy); }
+    rttSettings->setEnabled(!busy);
     version->setEnabled(!busy);
     connectTarget->setEnabled(!busy);
     flash->setEnabled(!busy);
-    cancelJob->setEnabled(busy && state["status"] != "cancelling" && state["status"] != "timed_out");
-    progress->setVisible(busy);
+    flash->setToolTip(busy && isRtt ? "停止 RTT 后可以烧录" : QString());
+    cancelJob->setVisible(busy && !isRtt);
+    cancelJob->setEnabled(stoppable && !isRtt);
+    rttAction->setEnabled(!busy || (isRtt && stoppable));
+    rttAction->setText(busy && isRtt ? (stoppable ? "停止 RTT" : "正在停止 RTT…") : "启动 RTT");
+    const auto rtt = state["rtt"].toObject();
+    const auto rttPhase = rtt["status"].toString();
+    const auto jobStatus = state["status"].toString();
+    const auto received = rtt["received_bytes"].toInteger();
+    progress->setVisible(busy && !(isRtt && rttPhase == "connected"));
+    if (rttWasActive && isRtt && !busy && received == 0 && (jobStatus == "failed" || jobStatus == "timed_out")
+        && workspaceTabs->currentWidget() == rttPage && rttResultTabs->currentWidget() == rttConsole)
+    {
+        rttResultTabs->setCurrentWidget(rttLogs);
+    }
+    rttWasActive = busy && isRtt;
     if (busy && !clock.isActive()) { clock.start(); }
     if (!busy) { clock.stop(); }
     const QMap<QString, QString> titles {{"idle", "尚未启动"}, {"running", "正在执行"}, {"succeeded", "执行完成"},
         {"failed", "执行失败"}, {"cancelled", "已取消"}, {"cancelling", "正在结束进程"}, {"timed_out", "运行超时"}};
-    QString text = titles.value(state["status"].toString());
+    QString text = titles.value(jobStatus);
+    if (stoppable && isRtt)
+    {
+        if (rttPhase == "connected") { text = rtt["connection_bytes"].toInteger() ? "RTT 正在接收" : "RTT 已连接，等待固件输出"; }
+        else if (rttPhase == "connecting" || rttPhase == "reconnecting")
+        {
+            text = (rttPhase == "reconnecting" ? "正在重连 RTT " : "正在连接 RTT ")
+                + QString("%1:%2").arg(rtt["host"].toString()).arg(rtt["port"].toInt());
+            const int attempts = rtt["connect_attempts"].toInt();
+            if (attempts > 1) { text += QString(" · 第 %1 次尝试").arg(attempts); }
+        }
+        else { text = "正在启动 OpenOCD 并查找 RTT 控制块"; }
+        const auto config = service->configuration();
+        if (rttPhase == "connected" && config["rtt_mode"] == "managed" && config["rtt_gdb_port"].toInt() > 0)
+        {
+            text += QString(" · GDB 127.0.0.1:%1").arg(config["rtt_gdb_port"].toInt());
+        }
+    }
+    else if (stoppable && operation == "flash") { text = "正在烧录"; }
+    else if (stoppable && operation == "connect") { text = "正在检查连接"; }
+    else if (stoppable && operation == "version") { text = "正在检查版本"; }
     if (!job.isEmpty()) { text += QString(" · %1 s").arg(state["elapsed_ms"].toInteger() / 1000.0, 0, 'f', 1); }
     if (!state["error"].toString().isEmpty()) { text += " · " + state["error"].toString(); }
     status->setText(text);
@@ -661,6 +841,12 @@ void OpenOcdDialog::refreshState()
 void OpenOcdDialog::run(const QString &operation)
 {
     try { service->start(operation, service->revision()); }
+    catch (const std::exception &exception) { status->setText(QString::fromUtf8(exception.what())); }
+}
+
+void OpenOcdDialog::cancelRun(const QString &jobId)
+{
+    try { service->cancel(jobId); }
     catch (const std::exception &exception) { status->setText(QString::fromUtf8(exception.what())); }
 }
 }

@@ -97,6 +97,7 @@ public:
     QTimer blink;
     void feed(const QByteArray &data);
     void reset(const QString &encoding = "utf-8");
+    void resetInputStream(const QString &encoding = "utf-8");
     QString text() const;
     QString visibleText() const;
     int historyLineCount() const { return int(history.size()); }

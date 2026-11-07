@@ -2,30 +2,10 @@
 #pragma once
 
 #include "controls.h"
-#include <QRegularExpression>
+#include "log_filter.h"
 
 namespace sw
 {
-// OR groups of AND terms. Compiled once when the query/options change.
-class SearchFilter
-{
-public:
-    QString text;
-    bool caseSensitive = false;
-    bool wholeWord = false;
-    bool regularExpression = false;
-    bool logical = false;
-    QString error;
-
-    void compile();
-    bool matches(const QString &line) const;
-    QJsonObject settings() const;
-    void restore(const QJsonObject &saved);
-
-private:
-    QList<QList<QRegularExpression>> groups;
-};
-
 class FilterBox : public SearchBox
 {
     Q_OBJECT

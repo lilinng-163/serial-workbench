@@ -35,7 +35,7 @@ Built with **Qt 6 and C++17**. The Windows application and its native MCP bridge
 | 🕘 **Version history** | Review the latest three stable releases in Settings, download verified installers, and see the running version in the status bar. |
 | 🎛️ **Serial controls** | Sliders, numeric inputs, switches, buttons and choices; groups, draggable/resizable cards that follow window width, presets and per-control automatic sending. |
 | 📦 **Files & protocols** | Paced raw file sending, XMODEM-CRC and XMODEM-1K file transfer, and C-style frame scripts with persistent state and checksum helpers. |
-| 💾 **OpenOCD (development)** | Independent workbench tabs for multiple boards, each with shared GUI/MCP configuration, job and logs. JSON configuration import/export, searchable board/probe/target choices, selectable initialization/reset, firmware addresses, verification and cancellation. Parallel jobs use distinct probe serial numbers. Responsive configuration/output layout. Uses an external OpenOCD installation. [Guide](skills/serial-workbench/references/openocd.md). |
+| 💾 **OpenOCD (development)** | Independent workbench tabs for multiple boards, each with shared GUI/MCP configuration, job and logs. JSON configuration import/export, searchable board/probe/target choices, selectable initialization/reset, firmware addresses, verification and cancellation. Parallel jobs use distinct probe serial numbers. Separate Firmware and RTT workspaces keep configuration tabs available for viewing during active sessions. RTT has a full-width ANSI terminal, separate connection settings, native GUI/MCP search, a resizable floating viewer, independent MCP reads, an optional shared GDB server, and connection to an existing RTT server. Uses an external OpenOCD installation. [Guide](skills/serial-workbench/references/openocd.md). |
 | 🤖 **AI collaboration** | Streamable HTTP and STDIO MCP, protocol-level access switches, read-only defaults and an explicit AI control permission. |
 | 🎨 **Workspace** | Detachable tabs, light/dark themes, a color picker and hex theme colors, custom backgrounds, data fonts and per-page clear actions. |
 
@@ -62,7 +62,7 @@ Screenshots are captured from the application using generated example data and l
 
 **[Download the latest release →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.41 adds OpenOCD flashing tabs with independent board configurations and logs, searchable probe/target lists, JSON configuration import/export, and shared GUI/CLI/MCP control. OpenOCD and probe drivers are installed separately. [Release notes](docs/releases/0.15.41.md).
+v0.15.42 adds a full-width OpenOCD RTT console with independent connection settings, reconnects to a running RTT service after an unexpected TCP disconnect, and shares log search with MCP. The firmware table shows more segments and keeps long filenames visible. [Release notes](docs/releases/0.15.42.md).
 
 | Package | Use it when… |
 | --- | --- |

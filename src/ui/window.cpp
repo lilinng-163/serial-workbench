@@ -1164,6 +1164,7 @@ void Pane::applyAppearance()
     if (instrument)
     {
         if (instrument->model) { instrument->model->setTheme(window->theme); }
+        if (instrument->flasher) { instrument->flasher->setAppearance(window->theme, window->dataFont); }
         if (instrument->controls)
         {
             instrument->controls->setTheme(window->theme);
@@ -2713,7 +2714,7 @@ QMenu *Window::newPageMenu()
         action->setObjectName("new_" + kind);
     }
     menu->addSeparator();
-    auto flash = menu->addAction(icon("chip", theme.text), "新建 OpenOCD 烧录页", this, &Window::openOpenOcd);
+    auto flash = menu->addAction(icon("chip", theme.text), "新建 OpenOCD 页", this, &Window::openOpenOcd);
     flash->setObjectName("openOpenOcd");
     return menu;
 }
@@ -3306,7 +3307,7 @@ void Window::closeTab(int index)
     const auto flasher = pane->instrument ? pane->instrument->flasherService : nullptr;
     if (flasher && flasher->busy())
     {
-        error("该烧录页正在执行任务，请先完成或取消后再关闭；其他页面继续运行。");
+        error("该 OpenOCD 页正在执行任务，结束任务后即可关闭。");
         return;
     }
     const auto flasherId = flasher ? flasher->viewId : QString();
@@ -3429,7 +3430,7 @@ void Window::updateStatus()
     {
         int running = 0;
         for (auto view : engine->openocdViews) { if (view->busy()) { ++running; } }
-        status->setText(QString("OpenOCD · %1 个烧录页 · %2 个任务运行中").arg(engine->openocdViews.size()).arg(running));
+        status->setText(QString("OpenOCD · %1 个板卡页 · %2 个任务运行中").arg(engine->openocdViews.size()).arg(running));
         status->setToolTip("每页独立配置与日志；多个探针并行时需填写各自的序列号。");
     }
     const auto selectedPort = port->currentText();

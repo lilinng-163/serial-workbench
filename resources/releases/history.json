@@ -2,6 +2,24 @@
   {
     "assets": [
       {
+        "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.41/SerialWorkbench-0.15.41-windows-x64-setup.exe",
+        "digest": "sha256:40f502c16a2c269290c48cf311539badeaadd014935bc8786c113334a484d1cf",
+        "name": "SerialWorkbench-0.15.41-windows-x64-setup.exe",
+        "size": 17175999,
+        "state": "uploaded"
+      }
+    ],
+    "body": "# Serial Workbench 0.15.41\n\n- 新增 OpenOCD 烧录标签页，每块板子分别保存目标、探针、固件、任务和运行日志。多个不同探针可并行执行；并行任务要求明确且不同的探针序列号。\n- 支持开发板或“调试器 + 芯片”配置，可搜索配置库；提供传输方式、调试时钟、初始化、复位、校验和运行选项，以及通用烧录与 Espressif 多 BIN 分段流程。\n- 配置可导出、导入 JSON，便于复用和交接。导入不会自动连接或烧录；程序、配置库和固件路径仍指向本机文件。\n- GUI、CLI 和 MCP 共用页面、配置与任务。新增独立的 OpenOCD 权限开关，支持枚举、执行预览、启动/取消、日志读取及配置导入导出。\n- 大窗口左右显示配置与日志，小窗口使用完整标签页；保持左侧参数栏，优化标签衔接，移除常驻拖动提示、“专注日志”和快速方案下拉。\n\nWindows x64 提供安装包、便携 ZIP、单文件 EXE 和 SHA-256 校验文件。需要另外安装适配目标的 OpenOCD 与调试器驱动；恢复页面不会自动执行任务。\n\nOpenOCD 的 27 项 Windows 测试、14 项 MCP 协议测试及发行目录 HTTP/STDIO 检查已通过，浅深色和紧凑布局已实窗检查。任务验证使用模拟进程；真实 OpenOCD 仅验证版本和无硬件 Tcl，尚未完成实体多板烧录验证。\n\n## English\n\n- Add OpenOCD tabs with separate board/probe/firmware settings, jobs and logs. Concurrent hardware jobs require distinct explicit probe serial numbers.\n- Search board, adapter and target configurations; configure transport, clock, initialization, reset, verification and run behavior. Support generic flashing and Espressif multi-segment BIN workflows.\n- Import and export JSON configurations through the GUI and MCP. Imported paths refer to local files; importing or restoring a page never starts flashing.\n- Share pages, configurations and jobs across the GUI, CLI and MCP, with a separate OpenOCD access switch and existing AI write permission checks.\n- Use side-by-side configuration and logs in wide windows and complete tabs in compact windows. Preserve the connection sidebar and simplify the tab headers and toolbar.\n\nWindows x64 installer, portable ZIP, single-file EXE and checksums are provided. Install the appropriate OpenOCD distribution and probe drivers separately.\n\nAll 27 Windows OpenOCD tests, 14 MCP protocol tests and packaged HTTP/STDIO checks passed. Light, dark and compact layouts were inspected in native windows. Job tests use a process fixture; real OpenOCD checks cover version reporting and hardware-free Tcl only, not physical multi-board flashing.\n",
+    "draft": false,
+    "html_url": "https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.41",
+    "name": "Serial Workbench 0.15.41",
+    "prerelease": false,
+    "published_at": "2026-11-06T16:00:10Z",
+    "tag_name": "v0.15.41"
+  },
+  {
+    "assets": [
+      {
         "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.40/SerialWorkbench-0.15.40-windows-x64-setup.exe",
         "digest": "sha256:01c4654837324a3962a317b4713e5fd583087b037ca8b02065b19aa3b519e73d",
         "name": "SerialWorkbench-0.15.40-windows-x64-setup.exe",
@@ -34,23 +52,5 @@
     "prerelease": false,
     "published_at": "2026-11-05T03:09:13Z",
     "tag_name": "v0.15.39"
-  },
-  {
-    "assets": [
-      {
-        "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.38/SerialWorkbench-0.15.38-windows-x64-setup.exe",
-        "digest": "sha256:43312063521bc2de299f171f076758141176a04763f28efa776f5f673be526a8",
-        "name": "SerialWorkbench-0.15.38-windows-x64-setup.exe",
-        "size": 16989819,
-        "state": "uploaded"
-      }
-    ],
-    "body": "# Serial Workbench 0.15.38\n\n修复收发终端大面积选中文字时出现的一像素横缝。\n\n- 终端相邻字符的背景共用对齐后的物理像素边界，避免特定字号或显示缩放下出现空隙；选区和 ANSI 彩色背景均已修复。\n- 保持文字位置、复制范围、历史滚动和键盘操作。已有连接、主题、3D 模型及 MCP 配置沿用原设置。\n- 在 100%、125%、150%、200% 缩放及 11、12、13pt 字号下完成 24 组像素回归；终端测试 61 项通过，Windows 实际窗口已检查大面积拖选。\n\n推荐安装包 `SerialWorkbench-0.15.38-windows-x64-setup.exe`。另提供便携 ZIP、单文件 EXE 和 `SHA256SUMS.txt`，无需另装 Qt 或 Python。安装器处理同目录工作台与 MCP 桥的占用；升级后重新连接 Agent 的 MCP。\n\n发行构建的完整原生 CTest 22/22 通过。本次复用既有打包流程，没有重复进行安装升级和硬件测试。\n\n## English\n\n- Fix one-pixel gaps between terminal cell backgrounds at certain font sizes and display scales. Both text selections and ANSI backgrounds now share physical pixel boundaries.\n- Preserve text placement, selection/copy ranges, scrollback and keyboard behavior, along with existing connection, theme, 3D and MCP settings.\n- Verify 24 pixel regression cases across 100%, 125%, 150% and 200% scales and 11, 12 and 13pt fonts. All 61 terminal tests pass, with large selections also checked in a real Windows window.\n\nThe Windows x64 setup installer is recommended. Portable ZIP, single-file EXE and checksums are also available; Qt and Python do not need to be installed. Reconnect Agent MCP sessions after upgrading.\n\nAll 22 native CTest suites passed for the release build. This update reuses the existing packaging process; installer-upgrade and hardware tests were not repeated.\n",
-    "draft": false,
-    "html_url": "https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.38",
-    "name": "Serial Workbench 0.15.38",
-    "prerelease": false,
-    "published_at": "2026-10-31T11:45:04Z",
-    "tag_name": "v0.15.38"
   }
 ]

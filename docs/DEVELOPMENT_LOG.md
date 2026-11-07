@@ -1,5 +1,44 @@
 # 开发交接记录
 
+## 2026-11-07 — 扩大 OpenOCD 固件表格
+
+- 固件表格预留三行，随分段数扩展至六行，更多分段可滚动。高度计入主题表头的实际尺寸。缩窄 BIN 地址列，长路径从中间省略，悬停显示完整路径。
+- Windows Release 构建及 `openocd_tests` 通过。实窗用单个 ELF 和八个 BIN 占位文件检查文件名与地址，确认六行完整显示。使用解压包的运行库复查启动和表格布局。
+- 本地测试包 `dist/previews/SerialWorkbench-0.15.41-openocd-firmware-table-preview-windows-x64.zip`，21,605,569 字节，SHA-256 `c75cc34de4b05fc1069378585e7440772f355782ae4f64e95418bba3c8cda0a7`。截图位于 `build/openocd-firmware-table/`。
+
+## 2026-11-07 — RTT 全宽终端、搜索与断线恢复
+
+- RTT 终端使用页面主区域，连接参数收进独立的「连接设置」窗口。连接日志和执行预览保留独立页签。终端和弹窗都支持 `Ctrl+F`、大小写、全词、正则及 `&&` / `||`。筛选结果按行显示，清空搜索可返回彩色终端。
+- 新增 `search_openocd_rtt`，与界面共用每个板卡页的筛选条件。MCP 工具总数 37，搜索沿用 OpenOCD 读权限。`read_openocd_rtt` 保留独立游标和原始数据，GUI 暂停或清空仅影响当前视图。搜索处理跨 TCP 数据块的 UTF-8 和 ANSI 序列，中英 README 和随包 skill 已同步。
+- OpenOCD 的 `dropped 'rtt' connection` 表示已接受的客户端连接被移除。工作台在服务仍可用时有界重试同一端点，保留原任务、日志和游标，沿用芯片当前状态。超过重试预算会在连接日志中报告。板子必须复位的原因仍待复现。
+- Windows Release 编译通过。OpenOCD、RTT、MCP 协议、搜索和终端按键回归通过。模拟服务主动断开后从同一 OpenOCD 进程续收，原日志与游标保留。Windows 实窗验证全宽终端、独立设置、窄窗口和 GUI / MCP 搜索同步。解压包通过 HTTP / STDIO 功能检查；一次测试清理返回 CLI 退出异常，独立复查时 CLI 与工作台均正常退出。
+- 通过 CMSIS-DAP 连接原 STM32F103 固件，以保持目标状态的模式收到 970 字节，并通过 MCP 搜到 10 条心跳。实机本轮验证收数和搜索，断线恢复由模拟服务覆盖。截图与验证记录位于 `build/rtt-terminal-preview/`。
+- 本地测试包 `dist/previews/SerialWorkbench-0.15.41-rtt-terminal-preview-windows-x64.zip`，21,608,169 字节，SHA-256 `f537633a4f1ac9518ad3ec0d9dfae17b756046f5818771605755da1d9993dc75`。解压运行 `Start-Preview.cmd`，可沿用旧预览的 `preview-settings.json`。
+
+## 2026-11-07 — RTT 连接等待与表单对齐
+
+- 将 RTT 设置合并为一个表单。连接方式、端口、控制块参数和 GDB 字段使用同一列。已有服务模式显示主机，切回工作台启动模式时保留已保存的外部主机地址。
+- 工作台启动模式在开放 TCP 端口前确认 OpenOCD 能读出 RTT 控制块及通道信息，固件就绪稍晚时短暂重试。TCP 阶段最多等待 5 秒，对暂时拒绝进行有界重试，取消会清理等待。状态分别显示初始化、TCP 连接和等待固件输出。启动失败会提供连接日志和相应错误，端口冲突提示包含端口号及自动分配选项。
+- 首轮回归复现旧版两组字段相差 6 像素，并确认不可用端点的错误缺少目标地址。修复后 OpenOCD、RTT 和 MCP 协议三组测试通过，Windows 实窗验证两种连接方式的对齐、无输出提示和失败后的日志定位。解压测试包通过 HTTP / STDIO 的 OpenOCD 和 RTT 验证。
+- 通过 CMSIS-DAP 和原 STM32F103 固件实测固定 9090。错误控制块标识在约 2.1 秒给出诊断，未开始 TCP 握手。正确标识收到彩色心跳，停止后再次使用同一端口成功收数。实测保持目标状态。
+- 独立测试包 `dist/previews/SerialWorkbench-0.15.41-rtt-connection-preview-windows-x64.zip`，21,593,860 字节，SHA-256 `692c33079708feb43f074b0a9067bdfe4df377e5ef673610c31693ce73e1464d`。解压运行 `Start-Preview.cmd`，可复制旧预览的 `preview-settings.json`。Windows 截图、首轮复现和实机记录位于 `build/rtt-connect-preview/`。
+
+## 2026-11-07 — 分开 OpenOCD 固件烧录与 RTT 工作区
+
+- 在 `codex/openocd-rtt` 的 `9946127` 基础上把每个 OpenOCD 页划分为并列的“固件烧录”和“RTT 日志”。烧录页保留目标、初始化、工具和固件配置，RTT 页有独立终端、连接日志和执行预览。RTT 启停合并为一个按钮，新建入口统一称为 OpenOCD 页。
+- 接收 RTT 时可以打开三个烧录配置页并查看既有烧录日志。只锁定配置编辑和会冲突的启动操作，切换页签不暂停 RTT。烧录页和 RTT 页各自保留最近一次任务的诊断输出。窗口窄时 RTT 设置和终端上下排布。
+- Windows Release 构建、OpenOCD、RTT 和 MCP 协议测试通过。Windows 实窗确认两个工作区、紧凑布局和接收期间的页签切换。回归测试在烧录配置页停留期间发送样本，切回 RTT 后显示该样本，并检查停止后可恢复编辑。首轮测试的临时 JSON 引用已修正，初始日志和最终截图留在 `build/rtt-workspaces-preview/`。
+- `dist/previews/SerialWorkbench-0.15.41-rtt-workspaces-preview-windows-x64.zip` 为独立测试包，21,588,942 字节，SHA-256 `62b0f2e1162c191343d42d00f28c12533e0d9b6d096189e6453d51461e265699`。解压后验证 GUI 启动和包内 OpenOCD / RTT HTTP、STDIO 流程，本轮使用模拟数据验证界面交互。运行 `Start-Preview.cmd`，原预览目录的 `preview-settings.json` 可复制到新目录继续使用。
+
+## 2026-11-07 — OpenOCD RTT 查看窗开发预览
+
+- 从 `8f496a7` 建立 `codex/openocd-rtt`。每个板卡页新增 RTT 配置与彩色终端。支持可调大小的独立窗口、暂停显示、清空当前视图、复制和导出文本。配置随板卡页保存和导入导出，启动工作台时保持空闲。
+- 工作台启动模式沿用本页探针/目标配置，搜索指定 RAM 范围内的 RTT 控制块，可选通道、轮询间隔与 GDB 端口。RTT 默认保持目标状态，也可显式恢复运行或复位运行。初始连接有超时，连接成功后持续接收。已有服务模式使用独立 TCP 连接。停止只处理本页拥有的会话。
+- MCP 复用 `configure_openocd`、`preview_openocd`、`start_openocd`、`cancel_openocd`，新增只读 `read_openocd_rtt`，工具总数 36。GUI 和 MCP 共用每页 512 KiB / 2000 段 RTT 缓存，读者独立分页。保留原始字节和增量 UTF-8 文本。OpenOCD 协议与 AI 控制权限沿用现有开关。更新了中英 README、随包 skill 与内置 OpenOCD 指南，skill 校验通过。
+- Windows Release 编译通过。OpenOCD 测试 27 项、RTT 测试 8 项通过，另外完成 RTT Windows 实窗检查。解压包验证了 GUI 启动、HTTP/STDIO 工具清单、烧录模拟回归、RTT 模拟进程与已有服务、ANSI/UTF-8、独立游标、停止行为。
+- 实机通过 CMSIS-DAP v2 接入参考 STM32F103 固件。从现有 map 核对 `_SEGGER_RTT=0x2000002C`，使用通道 0、保持目标状态读取启动信息与绿/黄/红 ANSI 日志。Windows 监听表确认 GDB 3333 和 RTT 自动端口由同一 OpenOCD 进程提供。结束后释放了测试会话。IDE 断点操作仍待验证。
+- 独立 Windows x64 测试包 `dist/previews/SerialWorkbench-0.15.41-rtt-preview-windows-x64.zip`，21,583,603 字节，SHA-256 `64b1ad4ec31abda6a6d3a30f82c7d109db35be6b7ac5c13571bc444ef3798d49`。解压运行 `Start-Preview.cmd`，配置保存在解压目录。实窗和实机证据位于 `build/rtt-preview/`。本次交付为本地预览。
+
 ## 2026-11-07 — v0.15.41 已发布至 GitHub 与网站，清理本地测试包
 
 - PR #9 保留历史合入主线，发行提交为 `811bb8bd614a286a162a47ee50e9a44647f34d72`。GitHub `v0.15.41` 已发布为 latest；安装包、便携 ZIP、单文件 EXE 和 SHA256SUMS 的远端大小、SHA-256 均与本地一致。

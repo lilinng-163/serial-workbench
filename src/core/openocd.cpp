@@ -3,7 +3,9 @@
 #include "core.h"
 #include <cmath>
 #include <algorithm>
+#include <QTcpServer>
 #include <string>
+#include <limits>
 #ifdef Q_OS_WIN
 #include <QtCore/qt_windows.h>
 #endif
@@ -33,7 +35,17 @@ QJsonObject defaults()
         {"verify", true},
         {"reset_run", true},
         {"timeout_ms", 120000},
-        {"images", QJsonArray {}}
+        {"images", QJsonArray {}},
+        {"rtt_mode", "managed"},
+        {"rtt_address", ""},
+        {"rtt_size", "0x100"},
+        {"rtt_id", "SEGGER RTT"},
+        {"rtt_channel", 0},
+        {"rtt_poll_ms", 10},
+        {"rtt_startup", "attach"},
+        {"rtt_host", "127.0.0.1"},
+        {"rtt_port", 0},
+        {"rtt_gdb_port", 0}
     };
 }
 
@@ -60,6 +72,25 @@ QJsonObject normalized(const QJsonObject &base, const QJsonObject &patch)
     checkChoice(result, "reset_config", {"board", "none", "srst_only", "connect_assert_srst"});
     checkChoice(result, "strategy", {"program", "esp"});
     checkChoice(result, "startup", {"default", "reset_init", "reset_halt", "halt"});
+    checkChoice(result, "rtt_mode", {"managed", "external"});
+    checkChoice(result, "rtt_startup", {"attach", "resume", "reset_run"});
+    const QMap<QString, QPair<int, int>> rttRanges {
+        {"rtt_channel", {0, 255}}, {"rtt_poll_ms", {1, 1000}},
+        {"rtt_port", {0, 65535}}, {"rtt_gdb_port", {0, 65535}}
+    };
+    for (auto it = rttRanges.begin(); it != rttRanges.end(); ++it)
+    {
+        const double value = result[it.key()].toDouble();
+        if (!std::isfinite(value) || value != std::floor(value) || value < it->first || value > it->second)
+        {
+            fail("RTT 参数范围不正确：" + it.key());
+        }
+    }
+    if (result["rtt_id"].toString().isEmpty() || result["rtt_id"].toString().toUtf8().size() > 15
+        || result["rtt_id"].toString().contains('\n') || result["rtt_id"].toString().contains('\r'))
+    {
+        fail("RTT 标识应为 1..15 字节的单行文本");
+    }
     for (const auto &key : {"speed_khz", "timeout_ms"})
     {
         const double value = result[key].toDouble();
@@ -185,7 +216,7 @@ QString hexAddress(const QString &text)
     static const QRegularExpression pattern("^(?:0[xX][0-9a-fA-F]{1,16}|[0-9]{1,20})$");
     bool ok = false;
     const auto number = trimmed.toULongLong(&ok, trimmed.startsWith("0x", Qt::CaseInsensitive) ? 16 : 10);
-    if (!pattern.match(trimmed).hasMatch() || !ok) { fail("烧录地址应为 0x 开头的十六进制数或十进制数"); }
+    if (!pattern.match(trimmed).hasMatch() || !ok) { fail("地址和范围应为 0x 开头的十六进制数或十进制数"); }
     return "0x" + QString::number(number, 16);
 }
 
@@ -205,6 +236,7 @@ OpenOcdService::OpenOcdService(QObject *parent) : QObject(parent), config(defaul
         arguments->flags |= CREATE_NO_WINDOW;
     });
 #endif
+    initializeRtt();
     process.setProcessChannelMode(QProcess::MergedChannels);
     deadline.setSingleShot(true);
     killTimer.setSingleShot(true);
@@ -227,6 +259,7 @@ OpenOcdService::OpenOcdService(QObject *parent) : QObject(parent), config(defaul
 
 OpenOcdService::~OpenOcdService()
 {
+    closeRtt();
     disconnect(&process, nullptr, this, nullptr);
     if (process.state() != QProcess::NotRunning)
     {
@@ -343,7 +376,17 @@ QJsonObject OpenOcdService::catalog(const QString &executable, const QString &sc
 
 QJsonObject OpenOcdService::preview(const QString &requested) const
 {
-    if (!QStringList {"version", "connect", "flash"}.contains(requested)) { fail("OpenOCD operation 应为 version、connect 或 flash"); }
+    if (!QStringList {"version", "connect", "flash", "rtt"}.contains(requested)) { fail("OpenOCD operation 应为 version、connect、flash 或 rtt"); }
+    if (requested == "rtt" && config["rtt_mode"] == "external")
+    {
+        if (config["rtt_host"].toString().trimmed().isEmpty() || config["rtt_port"].toInt() == 0)
+        {
+            fail("接入已有 RTT 服务需要填写主机和端口（1..65535）");
+        }
+        return {{"view_id", viewId}, {"operation", requested}, {"revision", configRevision},
+            {"writes_flash", false}, {"touches_hardware", false}, {"external", true},
+            {"script", "只连接已有 RTT TCP 服务，不启动 OpenOCD、不发送数据、不复位目标。"}};
+    }
     const auto program = executablePath(config["executable"].toString());
     QJsonObject result {{"view_id", viewId}, {"executable", program}, {"operation", requested}, {"revision", configRevision},
         {"writes_flash", requested == "flash"}, {"touches_hardware", requested != "version"}};
@@ -354,7 +397,10 @@ QJsonObject OpenOcdService::preview(const QString &requested) const
         return result;
     }
     const auto root = scriptsPath(program, config["scripts_dir"].toString());
-    QStringList setup {"gdb_port disabled", "tcl_port disabled", "telnet_port disabled"};
+    const bool rtt = requested == "rtt";
+    const int gdbPort = rtt ? config["rtt_gdb_port"].toInt() : 0;
+    QStringList setup {"bindto 127.0.0.1", "gdb_port " + (gdbPort ? QString::number(gdbPort) : "disabled"),
+        "tcl_port disabled", "telnet_port disabled"};
     const auto source = [&](const QString &kind)
     {
         return "source " + tclWord(configPath(root, config[kind].toString(), kind));
@@ -379,7 +425,36 @@ QJsonObject OpenOcdService::preview(const QString &requested) const
     QStringList commands;
     QJsonArray stagedImages;
     const auto startup = config["startup"].toString();
-    if (requested == "connect") { commands = initializeCommands(startup, true); }
+    if (rtt)
+    {
+        const auto address = hexAddress(config["rtt_address"].toString());
+        const auto size = hexAddress(config["rtt_size"].toString());
+        const auto length = size.mid(2).toULongLong(nullptr, 16);
+        const auto first = address.mid(2).toULongLong(nullptr, 16);
+        if (length == 0 || length > 16 * 1024 * 1024 || first > std::numeric_limits<quint64>::max() - length)
+        {
+            fail("RTT 搜索范围应为 1 字节到 16 MiB，且不能超出地址空间");
+        }
+        const int port = config["rtt_port"].toInt();
+        if (port && port == gdbPort) { fail("RTT 与 GDB 端口不能相同"); }
+        commands.append("init");
+        if (config["rtt_startup"] == "reset_run") { commands.append({"reset run", "sleep 500"}); }
+        else if (config["rtt_startup"] == "resume") { commands.append("resume"); }
+        commands.append("rtt setup " + address + " " + size + " " + tclWord(config["rtt_id"].toString()));
+        commands.append("rtt polling_interval " + QString::number(config["rtt_poll_ms"].toInt()));
+        // Some OpenOCD releases report success from 'rtt start' before the
+        // control block is available. Confirm it before exposing the TCP port.
+        commands.append("for {set sw_rtt_try 0} {$sw_rtt_try < 8} {incr sw_rtt_try} {\n"
+            "        if {![catch {rtt start; rtt channels} sw_rtt_error]} { break }\n"
+            "        if {$sw_rtt_try == 7} { error \"RTT control block or channels not ready: $sw_rtt_error\" }\n"
+            "        sleep 250\n"
+            "    }");
+        commands.append("rtt server start " + (port ? QString::number(port) : QString("@RTT_PORT@"))
+            + " " + QString::number(config["rtt_channel"].toInt()));
+        result["persistent"] = true;
+        result["gdb_port"] = gdbPort;
+    }
+    else if (requested == "connect") { commands = initializeCommands(startup, true); }
     else
     {
         const auto images = config["images"].toArray();
@@ -452,7 +527,7 @@ QJsonObject OpenOcdService::preview(const QString &requested) const
     // after every requested operation plus a zero exit code counts as success.
     const auto script = "if {[catch {\n    " + (setup + commands).join("\n    ")
         + "\n} sw_error]} {\n    echo $sw_error\n    shutdown error\n}\n"
-        + "echo SW_OPENOCD_COMPLETE\nshutdown\n";
+        + "echo SW_OPENOCD_COMPLETE\n" + (rtt ? QString() : QString("shutdown\n"));
     result["scripts_dir"] = root;
     result["arguments"] = QJsonArray {"-s", nativeToolPath(root), "-f", "<generated-job.cfg>"};
     result["staged_images"] = stagedImages;
@@ -477,6 +552,7 @@ void OpenOcdService::appendLog(const QString &text)
 
 void OpenOcdService::readOutput()
 {
+    if (!process.isOpen()) { return; }
     const QString text = decoder.decode(process.readAllStandardOutput());
     if (text.isEmpty()) { return; }
     appendLog(text);
@@ -484,7 +560,11 @@ void OpenOcdService::readOutput()
     qsizetype newline = 0;
     while ((newline = markerPending.indexOf('\n')) >= 0)
     {
-        if (markerPending.left(newline).trimmed() == marker) { completedMarker = true; }
+        if (markerPending.left(newline).trimmed() == marker)
+        {
+            completedMarker = true;
+            if (operation == "rtt" && rttStatus == "starting") { connectRtt(); }
+        }
         markerPending.remove(0, newline + 1);
     }
     markerPending = markerPending.right(8192);
@@ -504,7 +584,7 @@ QJsonObject OpenOcdService::state(qint64 after, int limit) const
         if (page.size() >= limit) { break; }
     }
     return {{"view_id", viewId}, {"title", title}, {"configuration", config}, {"revision", configRevision}, {"job_id", jobId},
-        {"status", status}, {"running", running}, {"operation", operation}, {"error", error},
+        {"status", status}, {"running", running}, {"operation", operation}, {"error", error}, {"rtt", readRtt(rttSequence, 1)},
         {"exit_code", exitCode < 0 ? QJsonValue() : QJsonValue(exitCode)},
         {"elapsed_ms", running ? elapsed.elapsed() : durationMs}, {"records", page},
         {"next_cursor", cursor}, {"latest_cursor", sequence},
@@ -516,9 +596,25 @@ void OpenOcdService::start(const QString &requested, qint64 expectedRevision)
     if (busy()) { fail("OpenOCD 已有运行中的任务"); }
     if (expectedRevision != configRevision) { fail("OpenOCD 配置已更改，请重新预览并使用当前 revision"); }
     const auto plan = preview(requested);
-    if (requested != "version")
+    const bool external = plan["external"].toBool();
+    if (requested != "version" && !external)
     {
         if (auto engine = qobject_cast<Engine *>(parent())) { engine->checkOpenOcdProbe(this); }
+    }
+    QTcpServer reservation;
+    int port = config["rtt_port"].toInt();
+    if (requested == "rtt" && !external)
+    {
+        if (!reservation.listen(QHostAddress::LocalHost, quint16(port)))
+        {
+            if (port && reservation.serverError() == QAbstractSocket::AddressInUseError)
+            {
+                fail(QString("RTT 端口 %1 已被占用。可将端口设为 0 自动选择，或接入该端口上的已有 RTT 服务。").arg(port));
+            }
+            fail("无法绑定 RTT 端口：" + reservation.errorString());
+        }
+        port = reservation.serverPort();
+        if (port == config["rtt_gdb_port"].toInt()) { fail("RTT 自动端口与 GDB 冲突，请重试或指定其他端口"); }
     }
     workspace = std::make_unique<QTemporaryDir>(QDir::tempPath() + "/sw-openocd-XXXXXX");
     if (!workspace->isValid()) { fail("无法创建 OpenOCD 临时工作目录"); }
@@ -526,7 +622,7 @@ void OpenOcdService::start(const QString &requested, qint64 expectedRevision)
     for (const auto &value : plan["arguments"].toArray()) { arguments.append(value.toString()); }
     const auto nextJobId = QUuid::createUuid().toString(QUuid::Id128);
     marker = "SW_OPENOCD_COMPLETE_" + nextJobId;
-    if (requested != "version")
+    if (requested != "version" && !external)
     {
         for (const auto &value : plan["staged_images"].toArray())
         {
@@ -537,7 +633,8 @@ void OpenOcdService::start(const QString &requested, qint64 expectedRevision)
             }
         }
         QFile script(workspace->filePath("job.cfg"));
-        const auto bytes = plan["script"].toString().replace("echo SW_OPENOCD_COMPLETE\n", "echo " + marker + "\n").toUtf8();
+        const auto bytes = plan["script"].toString().replace("echo SW_OPENOCD_COMPLETE\n", "echo " + marker + "\n")
+            .replace("@RTT_PORT@", QString::number(port)).toUtf8();
         if (!script.open(QIODevice::WriteOnly) || script.write(bytes) != bytes.size()) { fail("无法写入 OpenOCD 任务配置"); }
         script.close();
         // Relative ASCII name also works when the Windows temp parent is Unicode.
@@ -557,10 +654,19 @@ void OpenOcdService::start(const QString &requested, qint64 expectedRevision)
     decoder.resetState();
     elapsed.start();
     running = true;
+    if (requested == "rtt") { resetRtt(port); }
+    if (external)
+    {
+        deadline.start(config["timeout_ms"].toInt());
+        connectRtt();
+        emit stateChanged();
+        return;
+    }
     process.setProgram(plan["executable"].toString());
     process.setArguments(arguments);
     process.setWorkingDirectory(workspace->path());
     deadline.start(requested == "version" ? qMin(10000, config["timeout_ms"].toInt()) : config["timeout_ms"].toInt());
+    reservation.close();
     process.start(QIODevice::ReadOnly);
     emit stateChanged();
 }
@@ -572,19 +678,31 @@ void OpenOcdService::finish(int code, QProcess::ExitStatus exitStatus)
     if (markerPending.trimmed() == marker) { completedMarker = true; }
     deadline.stop();
     killTimer.stop();
+    if (operation == "rtt") { closeRtt(); }
     durationMs = elapsed.elapsed();
     running = false;
     exitCode = code;
     if (status == "cancelling")
     {
         status = "cancelled";
-        error = "任务已取消；目标可能已被暂停或部分写入，请核对设备后重新操作";
+        error = operation == "rtt" ? "RTT 查看已停止" : "任务已取消；目标可能已被暂停或部分写入，请核对设备后重新操作";
     }
-    else if (status == "timed_out") { error = "OpenOCD 运行超时，已结束本次进程；请检查日志和设备状态"; }
-    else if (exitStatus != QProcess::NormalExit || code != 0 || (operation != "version" && !completedMarker))
+    else if (status == "timed_out")
+    {
+        if (error.isEmpty()) { error = "OpenOCD 运行超时，已结束本次进程；请检查日志和设备状态"; }
+    }
+    else if (operation == "rtt" || exitStatus != QProcess::NormalExit || code != 0 || (operation != "version" && !completedMarker))
     {
         status = "failed";
-        if (error.isEmpty()) { error = code == 0 ? "OpenOCD 未完成全部步骤，请查看日志" : "OpenOCD 执行失败，请查看日志和退出码"; }
+        if (error.isEmpty())
+        {
+            if (operation == "rtt")
+            {
+                error = completedMarker ? "OpenOCD 已退出，RTT 会话结束。请查看连接日志。"
+                    : "OpenOCD 未能启动 RTT。请在连接日志中检查探针、控制块与端口。";
+            }
+            else { error = code == 0 ? "OpenOCD 未完成全部步骤，请查看日志" : "OpenOCD 执行失败，请查看日志和退出码"; }
+        }
     }
     else { status = "succeeded"; }
     workspace.reset();
@@ -596,6 +714,22 @@ void OpenOcdService::stop(const QString &reason)
     if (!running || status == "cancelling" || status == "timed_out") { return; }
     status = reason;
     deadline.stop();
+    if (operation == "rtt")
+    {
+        if (reason == "timed_out")
+        {
+            if (rttStatus == "reconnecting") { error = "RTT 重连超时 " + rttEndpoint() + "。请查看连接日志。"; }
+            else if (rttStatus == "connecting") { error = "连接 RTT 服务超时 " + rttEndpoint() + "。请核对主机和端口。"; }
+            else { error = "OpenOCD 启动 RTT 超时。请在连接日志中检查探针和目标状态。"; }
+            appendLog(error + "\n");
+        }
+        closeRtt();
+        if (config["rtt_mode"] == "external")
+        {
+            finish(0, QProcess::NormalExit);
+            return;
+        }
+    }
     process.terminate();
     if (process.state() != QProcess::NotRunning) { killTimer.start(800); }
     emit stateChanged();

@@ -548,7 +548,11 @@ QString Theme::stylesheet() const
         QTabWidget#model3dMappingTabs::pane { padding: 0; border: none; border-top-left-radius: 0; top: -1px; }
         QTabWidget#model3dMappingTabs QTabBar::tab { margin: 0 3px 0 0; padding: 8px 10px; }
         QTabWidget[openocdTabs="true"]::pane { border-top-left-radius: 0; border-top-right-radius: 0; }
-        QTabWidget[openocdTabs="true"] QTabBar::tab { margin-top: 0; }
+        QTabWidget[openocdTabs="true"] QTabBar::tab { margin-top: 0; border-bottom: 1px solid transparent; }
+        QTabWidget[openocdTabs="true"] QTabBar::tab:selected { border-bottom-color: $edge; }
+        QTabWidget#openocdWorkspaceTabs::pane { padding: 0; border-top: 1px solid $line; }
+        QTabBar#openocdWorkspaceBar::tab { padding: 9px 18px; min-width: 84px; margin-right: 4px; font-weight: 600; border-bottom: 2px solid transparent; }
+        QTabBar#openocdWorkspaceBar::tab:selected { border-bottom-color: $stroke; }
         QMenu, QFrame[roundedPopup="true"] { background: $panel; border: 1px solid $line; border-radius: 10px; padding: 5px; }
         QFrame[roundedPopup="true"] QAbstractItemView { border: none; background: $panel; padding: 2px; }
         QMenu::item { padding: 10px 28px 10px 16px; border: none; border-radius: 6px; }

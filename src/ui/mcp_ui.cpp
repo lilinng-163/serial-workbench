@@ -124,23 +124,8 @@ void Window::installMcpUi()
         if (a.contains("filter"))
         {
             if (!a["filter"].isObject()) { fail("filter 必须是对象"); }
-            auto next = view.filter->settings();
-            const auto patch = a["filter"].toObject();
-            for (auto item = patch.begin(); item != patch.end(); ++item)
-            {
-                if (!next.contains(item.key())) { fail("未知的搜索参数：" + item.key()); }
-                if ((item.key() == "text" && !item->isString())
-                    || (item.key() != "text" && !item->isBool()))
-                {
-                    fail("搜索参数类型错误：" + item.key());
-                }
-                next[item.key()] = item.value();
-            }
-            if (next["text"].toString().size() > 2048) { fail("搜索内容最多 2048 字符"); }
-            SearchFilter check;
-            check.restore(next);
-            if (!check.error.isEmpty()) { fail(check.error); }
-            view.filter->restore(next);
+            const auto next = patchedSearchFilter(view.filter->criteria(), a["filter"].toObject());
+            view.filter->restore(next.settings());
             guard->saveSettings();
         }
         const auto rows = visibleRows(view);

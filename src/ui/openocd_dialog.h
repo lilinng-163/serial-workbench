@@ -2,6 +2,7 @@
 #pragma once
 #include "controls.h"
 #include "openocd.h"
+#include "openocd_rtt.h"
 
 namespace sw
 {
@@ -10,6 +11,7 @@ class OpenOcdDialog : public QDialog
     Q_OBJECT
 public:
     explicit OpenOcdDialog(OpenOcdService *service, QWidget *parent = nullptr, bool embedded = false);
+    void setAppearance(const Theme &theme, const QFont &font);
     void accept() override;
     void reject() override;
     void saveConfiguration(const QString &path) const;
@@ -24,6 +26,10 @@ private:
     bool syncing = false;
     qint64 logCursor = 0;
     QString displayedJob;
+    bool rttWasActive = false;
+    QTabWidget *workspaceTabs;
+    QWidget *flashPage;
+    QWidget *rttPage;
     QSplitter *split;
     QStackedWidget *content;
     QTabWidget *compactTabs;
@@ -37,8 +43,9 @@ private:
     QTimer layoutTimer;
     QTabWidget *configurationTabs;
     QTabWidget *resultTabs;
+    QTabWidget *rttResultTabs;
     QList<int> configurationSizes;
-    QWidget *editor;
+    QList<QWidget *> configurationEditors;
     QFormLayout *deviceForm;
     QFormLayout *flowForm;
     QPushButton *advanced;
@@ -63,19 +70,28 @@ private:
     QLabel *status;
     QPlainTextEdit *logs;
     QPlainTextEdit *plan;
+    QPlainTextEdit *rttLogs;
+    QPlainTextEdit *rttPlan;
     QPushButton *version;
     QPushButton *connectTarget;
     QPushButton *flash;
     QPushButton *cancelJob;
     QProgressBar *progress;
     QTimer clock;
+    OpenOcdRttSettings *rttSettings;
+    QDialog *rttSettingsDialog;
+    OpenOcdRttConsole *rttConsole;
+    QPushButton *rttAction;
 
+    QWidget *createRttPage();
     void load();
-    void commit();
+    bool commit();
     void refreshCatalog();
     void refreshState();
+    void resizeFirmwareTable();
     void refreshPlan();
     void run(const QString &operation);
+    void cancelRun(const QString &jobId);
     void arrangeContent();
 };
 }

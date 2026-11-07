@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include "log_filter.h"
 #include <QtCore>
+#include <QTcpSocket>
 #include <memory>
 
 namespace sw
@@ -14,7 +16,7 @@ public:
     explicit OpenOcdService(QObject *parent = nullptr);
     ~OpenOcdService() override;
     QString viewId = QUuid::createUuid().toString(QUuid::Id128);
-    QString title = "OpenOCD 烧录";
+    QString title = "OpenOCD";
     bool hasPage = false;
 
     QJsonObject configuration() const { return config; }
@@ -29,10 +31,17 @@ public:
     QJsonObject state(qint64 after = 0, int limit = 100) const;
     void start(const QString &operation, qint64 expectedRevision);
     void cancel(const QString &expectedJobId);
+    QJsonObject readRtt(qint64 after = 0, int limit = 100) const;
+    const SearchFilter &rttFilter() const { return rttSearchFilter; }
+    void setRttFilter(const SearchFilter &filter);
+    QJsonObject searchRtt(int offset, int limit, const QString &snapshot = {}, qint64 after = 0, qint64 through = -1) const;
+    bool ownsProbe() const;
 
 signals:
     void configurationChanged();
     void stateChanged();
+    void rttDataAvailable();
+    void rttFilterChanged();
 
 private:
     QJsonObject config;
@@ -57,6 +66,35 @@ private:
     qsizetype logBytes = 0;
     QList<QJsonObject> records;
 
+    QTcpSocket rttSocket;
+    QTimer rttReadTimer;
+    QTimer rttConnectRetry;
+    QElapsedTimer rttConnectedSince;
+    QStringDecoder rttDecoder {QStringDecoder::Utf8};
+    QString rttJob;
+    QString rttStatus = "idle";
+    QString rttHost;
+    int rttPort = 0;
+    int rttConnectAttempts = 0;
+    int rttConnection = 0;
+    int rttUnstableDrops = 0;
+    bool rttClosing = false;
+    qint64 rttSequence = 0;
+    qint64 rttStartSequence = 0;
+    qint64 rttReceived = 0;
+    qint64 rttBytesAtConnect = 0;
+    qsizetype rttBytes = 0;
+    QList<QJsonObject> rttRecords;
+    SearchFilter rttSearchFilter;
+    qint64 rttFilterRevision = 0;
+
+    void initializeRtt();
+    void resetRtt(int port);
+    void connectRtt();
+    bool reconnectRtt(const QString &reason);
+    QString rttEndpoint() const;
+    void receiveRtt();
+    void closeRtt();
     void appendLog(const QString &text);
     void readOutput();
     void finish(int code, QProcess::ExitStatus exitStatus);
