@@ -219,7 +219,49 @@ private slots:
         QVERIFY(!settings.findChild<QWidget *>("rttAddress")->isVisible());
     }
 
-    void externalUtf8AnsiCursorsAndDisconnect()
+    void managedReconnectKeepsOpenOcd()
+    {
+        sw::OpenOcdService service;
+        service.restore(fixture());
+        qputenv("SW_FAKE_RTT_DROP_FIRST", "1");
+        const auto restoreEnvironment = qScopeGuard([] { qunsetenv("SW_FAKE_RTT_DROP_FIRST"); });
+        service.start("rtt", service.revision());
+        const auto job = service.state()["job_id"].toString();
+        QTRY_COMPARE_WITH_TIMEOUT(service.readRtt()["connection"].toInt(), 2, 3500);
+        QTRY_VERIFY(service.readRtt()["connection_bytes"].toInteger() > 0);
+        QCOMPARE(service.state()["job_id"].toString(), job);
+        QVERIFY(service.ownsProbe());
+        QVERIFY(service.readRtt()["received_bytes"].toInteger() > service.readRtt()["connection_bytes"].toInteger());
+        QString log;
+        for (const auto &value : service.state()["records"].toArray()) { log += value.toObject()["text"].toString(); }
+        QCOMPARE(log.count("SW_OPENOCD_COMPLETE_"), 1);
+        QVERIFY(log.contains("RTT TCP 已重新连接"));
+        cancel(service);
+        QTRY_VERIFY_WITH_TIMEOUT(!service.busy(), 2000);
+    }
+
+    void repeatedShortDisconnectsStopRecovery()
+    {
+        QTcpServer server;
+        QVERIFY(server.listen(QHostAddress::LocalHost));
+        int accepted = 0;
+        connect(&server, &QTcpServer::newConnection, &server, [&]
+        {
+            auto socket = server.nextPendingConnection();
+            ++accepted;
+            connect(socket, &QTcpSocket::disconnected, socket, &QObject::deleteLater);
+            QTimer::singleShot(30, socket, &QTcpSocket::disconnectFromHost);
+        });
+        sw::OpenOcdService service;
+        service.configure(external(server), service.revision());
+        service.start("rtt", service.revision());
+        QTRY_VERIFY_WITH_TIMEOUT(!service.busy(), 4500);
+        QCOMPARE(service.state()["status"].toString(), QString("failed"));
+        QCOMPARE(accepted, 4);
+        QVERIFY(server.isListening());
+    }
+
+    void externalUtf8AnsiCursorsAndReconnect()
     {
         QTcpServer server;
         QVERIFY(server.listen(QHostAddress::LocalHost));
@@ -242,10 +284,17 @@ private slots:
         for (const auto &record : service.readRtt()["records"].toArray()) { decoded += record.toObject()["text"].toString(); }
         QCOMPARE(decoded.toUtf8(), bytes);
         QCOMPARE(raw(service.readRtt()), bytes); // Independent reader starts at 0.
+        const auto job = service.readRtt()["job_id"].toString();
+        const auto previous = service.readRtt()["latest_cursor"].toInteger();
         socket->disconnectFromHost();
-        QTRY_VERIFY(!service.busy());
-        QCOMPARE(service.state()["status"].toString(), QString("failed"));
-        QCOMPARE(raw(service.readRtt()), bytes);
+        QTRY_VERIFY(server.hasPendingConnections());
+        auto resumed = server.nextPendingConnection();
+        resumed->write("resumed\r\n");
+        QTRY_COMPARE(raw(service.readRtt(previous)), QByteArray("resumed\r\n"));
+        QCOMPARE(raw(service.readRtt()), bytes + "resumed\r\n");
+        QCOMPARE(service.readRtt()["job_id"].toString(), job);
+        QCOMPARE(service.readRtt()["connection"].toInt(), 2);
+        cancel(service);
         QVERIFY(server.isListening());
     }
 
@@ -349,6 +398,29 @@ private slots:
         clickTab(workspaces, 1);
         QTRY_VERIFY(terminal->isVisible() && terminal->text().contains("while viewing firmware"));
 
+        auto filter = dialog.findChild<sw::FilterBox *>("openocdRttFilter");
+        auto filtered = dialog.findChild<QPlainTextEdit *>("rttFilteredLines");
+        QVERIFY(filter && filtered);
+        engine.allowControl = false;
+        const auto results = mcp.call("search_openocd_rtt", {{"view_id", service->viewId}, {"limit", 1},
+            {"filter", QJsonObject {{"text", "ERROR || viewing firmware"}, {"logical", true}, {"case_sensitive", true},
+                {"whole_word", true}, {"regex", true}}}}).toObject();
+        QCOMPARE(results["total_matches"].toInt(), 2);
+        QCOMPARE(results["rows"].toArray().first().toObject()["text"].toString(), QString("ERROR"));
+        const auto next = mcp.call("search_openocd_rtt", {{"view_id", service->viewId}, {"offset", results["next_offset"]},
+            {"snapshot", results["snapshot"]}}).toObject();
+        QCOMPARE(next["rows"].toArray().first().toObject()["text"].toString(), QString("while viewing firmware"));
+        QCOMPARE(filter->text(), QString("ERROR || viewing firmware"));
+        QTRY_VERIFY(filtered->isVisible());
+        QCOMPARE(filtered->toPlainText(), QString("ERROR\nwhile viewing firmware"));
+        QVERIFY_EXCEPTION_THROWN(mcp.call("search_openocd_rtt", {{"filter", QJsonObject {{"text", "["}}}}), std::runtime_error);
+        QCOMPARE(filter->text(), QString("ERROR || viewing firmware"));
+        filter->setText("viewing firmware");
+        QCOMPARE(mcp.call("search_openocd_rtt", {}).toObject()["total_matches"].toInt(), 1);
+        QVERIFY_EXCEPTION_THROWN(mcp.call("search_openocd_rtt", {{"snapshot", results["snapshot"]}}), std::runtime_error);
+        filter->clear();
+        QTRY_VERIFY(terminal->isVisible());
+
         pause->click();
         socket->write("paused sample\r\n");
         QTRY_VERIFY(raw(service->readRtt()).contains("paused sample"));
@@ -371,6 +443,7 @@ private slots:
         QVERIFY(service->busy());
         mcp.setProtocolEnabled("openocd", false);
         QVERIFY_EXCEPTION_THROWN(mcp.call("read_openocd_rtt", {}), std::runtime_error);
+        QVERIFY_EXCEPTION_THROWN(mcp.call("search_openocd_rtt", {}), std::runtime_error);
         QTest::mouseClick(rttAction, Qt::LeftButton);
         QTRY_VERIFY(!service->busy());
         QCOMPARE(rttAction->text(), QString("启动 RTT"));
@@ -402,7 +475,12 @@ private slots:
         dialog.show();
         QVERIFY(QTest::qWaitForWindowExposed(&dialog));
         QTest::qWait(200);
-        QVERIFY(dialog.grab().save(captures + "/rtt-settings-light.png"));
+        auto settings = dialog.findChild<QDialog *>("openocdRttSettingsDialog");
+        QVERIFY(settings && !settings->isVisible());
+        dialog.findChild<QPushButton *>("openocdRttSettingsAction")->click();
+        QVERIFY(QTest::qWaitForWindowExposed(settings));
+        QVERIFY(settings->grab().save(captures + "/rtt-settings-light.png"));
+        settings->close();
         service.configure(external(server), service.revision());
         dialog.findChild<QPushButton *>("openocdRttAction")->click();
         QTRY_VERIFY(server.hasPendingConnections());
@@ -412,6 +490,7 @@ private slots:
         socket->write("\x1b[32m[INFO] SEGGER RTT ready\x1b[0m\r\n\x1b[33m[WARN] temperature: 56.2 C\x1b[0m\r\n\x1b[31m[ERROR] example fault\x1b[0m\r\n");
         auto terminal = dialog.findChild<sw::TerminalView *>("rttTerminal");
         QTRY_VERIFY(terminal->text().contains("example fault"));
+        QVERIFY(terminal->width() > dialog.width() - 90);
         QVERIFY(dialog.grab().save(captures + "/rtt-colors-light.png"));
         workspaces->setCurrentIndex(0);
         QTest::qWait(100);
@@ -423,6 +502,13 @@ private slots:
         dialog.setAppearance(theme, sw::Theme::defaultDataFont());
         QTest::qWait(200);
         QVERIFY(dialog.grab().save(captures + "/rtt-colors-dark.png"));
+        auto filter = dialog.findChild<sw::FilterBox *>("openocdRttFilter");
+        filter->restore({{"text", "WARN || ERROR"}, {"logical", true}});
+        auto filtered = dialog.findChild<QPlainTextEdit *>("rttFilteredLines");
+        QTRY_VERIFY(filtered->isVisible() && filtered->toPlainText().contains("example fault"));
+        QVERIFY(!filtered->toPlainText().contains("SEGGER RTT ready"));
+        QVERIFY(dialog.grab().save(captures + "/rtt-search-dark.png"));
+        filter->clear();
         QVERIFY(!dialog.findChild<QPushButton *>("rttPopout")->isWindow());
         dialog.findChild<QPushButton *>("rttPopout")->click();
         auto popup = dialog.findChild<QDialog *>("rttFloatingWindow");

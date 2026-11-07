@@ -31,7 +31,6 @@ private:
     QWidget *flashPage;
     QWidget *rttPage;
     QSplitter *split;
-    QSplitter *rttSplit;
     QStackedWidget *content;
     QTabWidget *compactTabs;
     QWidget *output;
@@ -80,6 +79,7 @@ private:
     QProgressBar *progress;
     QTimer clock;
     OpenOcdRttSettings *rttSettings;
+    QDialog *rttSettingsDialog;
     OpenOcdRttConsole *rttConsole;
     QPushButton *rttAction;
 

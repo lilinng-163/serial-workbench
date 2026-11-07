@@ -369,9 +369,7 @@ TerminalView::TerminalView(QWidget *parent) : QWidget(parent)
 void TerminalView::reset(const QString &encoding)
 {
     selectionScrollTimer.stop();
-    auto codec = QTextCodec::codecForName(encoding.toLatin1());
-    decoder.reset((codec ? codec : QTextCodec::codecForName("UTF-8"))->makeDecoder());
-    ansi = {};
+    resetInputStream(encoding);
     history.clear();
     primaryGrid.clear();
     alternateScreen = false;
@@ -388,6 +386,13 @@ void TerminalView::reset(const QString &encoding)
     grid = QVector<QVector<Cell>>(rows, QVector<Cell>(columns));
     updateScrollBar(true);
     update();
+}
+
+void TerminalView::resetInputStream(const QString &encoding)
+{
+    auto codec = QTextCodec::codecForName(encoding.toLatin1());
+    decoder.reset((codec ? codec : QTextCodec::codecForName("UTF-8"))->makeDecoder());
+    ansi = {};
 }
 
 void TerminalView::newline()

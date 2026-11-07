@@ -1,5 +1,14 @@
 # 开发交接记录
 
+## 2026-11-07 — RTT 全宽终端、搜索与断线恢复
+
+- RTT 终端使用页面主区域，连接参数收进独立的「连接设置」窗口。连接日志和执行预览保留独立页签。终端和弹窗都支持 `Ctrl+F`、大小写、全词、正则及 `&&` / `||`。筛选结果按行显示，清空搜索可返回彩色终端。
+- 新增 `search_openocd_rtt`，与界面共用每个板卡页的筛选条件。MCP 工具总数 37，搜索沿用 OpenOCD 读权限。`read_openocd_rtt` 保留独立游标和原始数据，GUI 暂停或清空仅影响当前视图。搜索处理跨 TCP 数据块的 UTF-8 和 ANSI 序列，中英 README 和随包 skill 已同步。
+- OpenOCD 的 `dropped 'rtt' connection` 表示已接受的客户端连接被移除。工作台在服务仍可用时有界重试同一端点，保留原任务、日志和游标，沿用芯片当前状态。超过重试预算会在连接日志中报告。板子必须复位的原因仍待复现。
+- Windows Release 编译通过。OpenOCD、RTT、MCP 协议、搜索和终端按键回归通过。模拟服务主动断开后从同一 OpenOCD 进程续收，原日志与游标保留。Windows 实窗验证全宽终端、独立设置、窄窗口和 GUI / MCP 搜索同步。解压包通过 HTTP / STDIO 功能检查；一次测试清理返回 CLI 退出异常，独立复查时 CLI 与工作台均正常退出。
+- 通过 CMSIS-DAP 连接原 STM32F103 固件，以保持目标状态的模式收到 970 字节，并通过 MCP 搜到 10 条心跳。实机本轮验证收数和搜索，断线恢复由模拟服务覆盖。截图与验证记录位于 `build/rtt-terminal-preview/`。
+- 本地测试包 `dist/previews/SerialWorkbench-0.15.41-rtt-terminal-preview-windows-x64.zip`，21,608,169 字节，SHA-256 `f537633a4f1ac9518ad3ec0d9dfae17b756046f5818771605755da1d9993dc75`。解压运行 `Start-Preview.cmd`，可沿用旧预览的 `preview-settings.json`。
+
 ## 2026-11-07 — RTT 连接等待与表单对齐
 
 - 将 RTT 设置合并为一个表单。连接方式、端口、控制块参数和 GDB 字段使用同一列。已有服务模式显示主机，切回工作台启动模式时保留已保存的外部主机地址。

@@ -146,7 +146,16 @@ OpenOcdRttConsole::OpenOcdRttConsole(OpenOcdService *owner, QWidget *parent, boo
     auto layout = new QVBoxLayout(this);
     layout->setContentsMargins(6, 6, 6, 6);
     layout->setSpacing(6);
-    auto actions = new QHBoxLayout();
+    toolbar = new QBoxLayout(QBoxLayout::TopToBottom);
+    toolbar->setSpacing(6);
+    filter = new FilterBox();
+    filter->setObjectName("openocdRttFilter");
+    filter->setPlaceholderText("搜索 RTT 日志");
+    filter->restore(owner->rttFilter().settings());
+    toolbar->addWidget(filter, 1);
+    auto buttons = new QWidget();
+    auto actions = new QHBoxLayout(buttons);
+    actions->setContentsMargins(0, 0, 0, 0);
     actions->setSpacing(4);
     pause = new QPushButton("暂停");
     pause->setObjectName("rttPause");
@@ -165,7 +174,8 @@ OpenOcdRttConsole::OpenOcdRttConsole(OpenOcdService *owner, QWidget *parent, boo
         actions->addWidget(button);
     }
     actions->addStretch();
-    layout->addLayout(actions);
+    toolbar->addWidget(buttons);
+    layout->addLayout(toolbar);
     popout->setVisible(!floating);
     status = hint("尚未启动 RTT");
     status->setObjectName("rttConsoleStatus");
@@ -178,14 +188,48 @@ OpenOcdRttConsole::OpenOcdRttConsole(OpenOcdService *owner, QWidget *parent, boo
     terminal->rightClickPasteEnabled = false;
     terminal->cursorVisible = false;
     terminal->blink.stop();
-    layout->addWidget(terminal, 1);
+    matches = new QPlainTextEdit();
+    matches->setObjectName("rttFilteredLines");
+    matches->setReadOnly(true);
+    matches->setLineWrapMode(QPlainTextEdit::NoWrap);
+    display = new QStackedWidget();
+    display->addWidget(terminal);
+    display->addWidget(matches);
+    layout->addWidget(display, 1);
     setAppearance(Theme::make(false), Theme::defaultDataFont());
     timer.setSingleShot(true);
     timer.setInterval(33);
     connect(&timer, &QTimer::timeout, this, &OpenOcdRttConsole::drain);
+    searchTimer.setSingleShot(true);
+    searchTimer.setInterval(160);
+    connect(&searchTimer, &QTimer::timeout, this, &OpenOcdRttConsole::refreshSearch);
+    connect(filter, &FilterBox::criteriaChanged, this, [this]
+    {
+        if (service) { service->setRttFilter(filter->criteria()); }
+        if (filter->text().isEmpty() || !filter->criteria().error.isEmpty()) { refreshSearch(); }
+        else { scheduleSearch(); }
+    });
+    connect(owner, &OpenOcdService::rttFilterChanged, this, [this]
+    {
+        const auto next = service->rttFilter().settings();
+        if (filter->settings() != next) { filter->restore(next); }
+        scheduleSearch();
+    });
+    auto find = new QShortcut(QKeySequence::Find, this);
+    find->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(find, &QShortcut::activated, filter, [this]
+    {
+        filter->setFocus(Qt::ShortcutFocusReason);
+        filter->selectAll();
+    });
     connect(owner, &OpenOcdService::rttDataAvailable, this, &OpenOcdRttConsole::schedule);
     connect(owner, &OpenOcdService::stateChanged, this, [this] { updateStatus(); schedule(); });
-    connect(owner, &QObject::destroyed, this, [this] { timer.stop(); status->setText("此板卡页面已关闭"); });
+    connect(owner, &QObject::destroyed, this, [this]
+    {
+        timer.stop();
+        searchTimer.stop();
+        status->setText("此板卡页面已关闭");
+    });
     connect(pause, &QPushButton::toggled, this, [this](bool paused)
     {
         pause->setText(paused ? "继续" : "暂停");
@@ -198,21 +242,24 @@ OpenOcdRttConsole::OpenOcdRttConsole(OpenOcdService *owner, QWidget *parent, boo
         {
             const auto state = service->readRtt();
             cursor = state["latest_cursor"].toInteger();
+            clearedThrough = cursor;
             displayedJob = state["job_id"].toString();
         }
+        displayedConnection = 0;
         terminal->reset();
         terminal->cursorVisible = false;
+        refreshSearch();
     });
     connect(copy, &QPushButton::clicked, this, [this]
     {
-        QApplication::clipboard()->setText(terminal->hasSelection() ? terminal->selectedText() : terminal->text());
+        QApplication::clipboard()->setText(displayText(true));
     });
     connect(save, &QPushButton::clicked, this, [this]
     {
         const auto path = QFileDialog::getSaveFileName(this, "导出当前 RTT 终端文本", "rtt-log.txt", "文本 (*.txt)");
         if (path.isEmpty()) { return; }
         QSaveFile file(path);
-        const auto bytes = terminal->text().toUtf8();
+        const auto bytes = displayText(false).toUtf8();
         if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit())
         {
             status->setText("导出失败：" + file.errorString());
@@ -226,9 +273,12 @@ void OpenOcdRttConsole::setAppearance(const Theme &theme, const QFont &font)
 {
     terminal->theme = theme;
     terminal->setFont(font);
-    terminal->setStyleSheet(QString("font-family: '%1'; font-size: %2pt; font-weight: %3; font-style: %4;")
+    matches->setFont(font);
+    const auto fontStyle = QString("font-family: '%1'; font-size: %2pt; font-weight: %3; font-style: %4;")
         .arg(font.families().join("', '")).arg(font.pointSizeF()).arg(int(font.weight()))
-        .arg(font.italic() ? "italic" : "normal"));
+        .arg(font.italic() ? "italic" : "normal");
+    terminal->setStyleSheet(fontStyle);
+    matches->setStyleSheet(fontStyle);
     terminal->update();
     if (popup)
     {
@@ -242,6 +292,14 @@ void OpenOcdRttConsole::showEvent(QShowEvent *event)
 {
     QWidget::showEvent(event);
     schedule();
+    scheduleSearch();
+}
+
+void OpenOcdRttConsole::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    const int minimum = filter->minimumWidth() + toolbar->itemAt(1)->widget()->minimumSizeHint().width() + 18;
+    toolbar->setDirection(width() >= minimum ? QBoxLayout::LeftToRight : QBoxLayout::TopToBottom);
 }
 
 void OpenOcdRttConsole::schedule()
@@ -256,21 +314,79 @@ void OpenOcdRttConsole::drain()
     if (displayedJob != state["job_id"].toString())
     {
         displayedJob = state["job_id"].toString();
+        clearedThrough = 0;
+        displayedConnection = 0;
         terminal->reset();
         terminal->cursorVisible = false;
         state = service->readRtt(0, 8);
     }
     if (state["gap"].toBool())
     {
-        terminal->feed("\x1b[0m\r\n[较早 RTT 数据已超出保留范围]\r\n");
+        terminal->resetInputStream();
+        terminal->feed("\r\n[较早 RTT 数据已超出保留范围]\r\n");
     }
     for (const auto &value : state["records"].toArray())
     {
-        terminal->feed(QByteArray::fromHex(value.toObject()["hex"].toString().toLatin1()));
+        const auto record = value.toObject();
+        const int connection = record["connection"].toInt();
+        if (displayedConnection != 0 && connection != displayedConnection)
+        {
+            terminal->resetInputStream();
+            if (terminal->x != 0) { terminal->feed("\r\n"); }
+        }
+        displayedConnection = connection;
+        terminal->feed(QByteArray::fromHex(record["hex"].toString().toLatin1()));
     }
     cursor = state["next_cursor"].toInteger();
     updateStatus();
+    scheduleSearch();
     if (state["has_more"].toBool()) { schedule(); }
+}
+
+void OpenOcdRttConsole::scheduleSearch()
+{
+    if (service && isVisible() && !filter->text().isEmpty() && !searchTimer.isActive()) { searchTimer.start(); }
+}
+
+void OpenOcdRttConsole::refreshSearch()
+{
+    if (!service) { return; }
+    const auto &criteria = filter->criteria();
+    if (criteria.text.isEmpty() || !criteria.error.isEmpty())
+    {
+        display->setCurrentWidget(terminal);
+        searchSummary = criteria.error;
+        updateStatus();
+        return;
+    }
+    const auto page = service->searchRtt(0, 2000, {}, clearedThrough, cursor);
+    QStringList lines;
+    for (const auto &value : page["rows"].toArray()) { lines.append(value.toObject()["text"].toString()); }
+    const auto text = lines.join('\n');
+    if (text != matches->toPlainText())
+    {
+        auto scroll = matches->verticalScrollBar();
+        const int previous = scroll->value();
+        const bool follow = previous == scroll->maximum();
+        matches->setPlainText(text);
+        scroll->setValue(follow ? scroll->maximum() : previous);
+    }
+    display->setCurrentWidget(matches);
+    const int count = page["total_matches"].toInt();
+    searchSummary = lines.size() < count ? QString("匹配 %1 行，显示前 %2 行").arg(count).arg(lines.size())
+        : QString("匹配 %1 行").arg(count);
+    updateStatus();
+}
+
+QString OpenOcdRttConsole::displayText(bool selected) const
+{
+    if (display->currentWidget() == matches)
+    {
+        const auto selection = matches->textCursor();
+        return selected && selection.hasSelection() ? selection.selectedText().replace(QChar::ParagraphSeparator, '\n')
+            : matches->toPlainText();
+    }
+    return selected && terminal->hasSelection() ? terminal->selectedText() : terminal->text();
 }
 
 void OpenOcdRttConsole::updateStatus()
@@ -279,7 +395,8 @@ void OpenOcdRttConsole::updateStatus()
     const auto state = service->readRtt(cursor, 1);
     const auto bytes = state["received_bytes"].toInteger();
     const QMap<QString, QString> names {{"idle", "尚未启动"}, {"starting", "OpenOCD 初始化 RTT"},
-        {"connecting", "正在连接 RTT 服务"}, {"connected", bytes ? "已连接" : "已连接，等待固件输出"}, {"closed", "已停止"}};
+        {"connecting", "正在连接 RTT 服务"}, {"reconnecting", "连接已断开，正在重连"},
+        {"connected", state["connection_bytes"].toInteger() ? "已连接" : "已连接，等待固件输出"}, {"closed", "已停止"}};
     auto text = names.value(state["status"].toString());
     if (state["port"].toInt() > 0)
     {
@@ -287,6 +404,7 @@ void OpenOcdRttConsole::updateStatus()
         if (bytes) { text += QString(" · %1 B").arg(bytes); }
     }
     if (pause->isChecked()) { text += " · 显示已暂停"; }
+    if (!searchSummary.isEmpty()) { text += " · " + searchSummary; }
     status->setText(text);
 }
 

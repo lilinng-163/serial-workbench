@@ -30,7 +30,7 @@ description: Use Serial Workbench CLI or MCP to share device connections, search
 
 Agent 配置和安装 skill 先读 [接入指南](references/agents.md)，也可 `read_usage_guide(topic="agents")`。用 CLI `agents` 获取实际支持 ID，不猜客户端配置路径。
 
-OpenOCD 烧录与 RTT 先读 [烧录与 RTT 指南](references/openocd.md) 或 `read_usage_guide(topic="openocd")`。每块板子使用独立标签页，GUI 与 MCP 共用该页配置和任务。先 `list_openocd_views`，修改/执行/取消/关闭必须指定 `view_id`；并行硬件任务需各页填写不同探针序列号。`export_openocd_configuration` / `import_openocd_configuration` 与 GUI 导入导出共用 JSON 格式；导入需最新 revision，替换当前页配置且不启动任务。独立的 `protocol_access.openocd` 开关默认关闭，修改或执行还需要 AI 控制权限。配置枚举和预览不连接硬件，`connect` 会暂停目标，`flash` 会擦写闪存；按用户授权选择操作，不猜测 BIN 地址。RTT 使用 `start_openocd(operation="rtt")` 和 `read_openocd_rtt`；支持启动自有 OpenOCD 或接入已有服务，查看模式不写闪存。不要用第二个 OpenOCD 争用 IDE 已占用的探针。
+OpenOCD 烧录与 RTT 先读 [烧录与 RTT 指南](references/openocd.md) 或 `read_usage_guide(topic="openocd")`。每块板子使用独立标签页，GUI 与 MCP 共用该页配置和任务。先 `list_openocd_views`，修改/执行/取消/关闭必须指定 `view_id`；并行硬件任务需各页填写不同探针序列号。`export_openocd_configuration` / `import_openocd_configuration` 与 GUI 导入导出共用 JSON 格式；导入需最新 revision，替换当前页配置且不启动任务。独立的 `protocol_access.openocd` 开关默认关闭，修改或执行还需要 AI 控制权限。配置枚举和预览不连接硬件，`connect` 会暂停目标，`flash` 会擦写闪存；按用户授权选择操作，不猜测 BIN 地址。RTT 使用 `start_openocd(operation="rtt")` 和 `read_openocd_rtt`。按行筛选用 `search_openocd_rtt`，与 GUI 共用大小写、全词、正则和逻辑条件。RTT 支持启动自有 OpenOCD 或接入已有服务，查看模式不写闪存。不要用第二个 OpenOCD 争用 IDE 已占用的探针。
 
 波形按连接、网络对端和流名隔离。先查看 `sources.*.available_streams`，按用户所需用途选择流名；`stream="imu"` 只取命名流，`stream=""` 只取未命名，省略则返回全部。命名样本有 `samples[].stream`，不要将不同流的同名字段合并为同一信号。每个对端最多 32 种流名、所有流共用 5000 条历史；limit 在筛选后生效，index 和 total_samples 仍是对端所有流的序号/总数。流名区分大小写、最长 32 个字符，字母或下划线开头，后续可有字母、数字、下划线、连字符。3D 模型页选择同一连接、对端和流名后可绑定数值；旧未命名报文若同字段但含义不同，需发送端加流名，不能凭数值猜用途。
 

@@ -461,7 +461,19 @@ QWidget *OpenOcdDialog::createRttPage()
 
     rttSettings = new OpenOcdRttSettings();
     auto settings = scrollPanel(rttSettings, "openocdRttScroll");
-    settings->setMinimumSize(260, 110);
+    rttSettingsDialog = new QDialog(this);
+    rttSettingsDialog->setObjectName("openocdRttSettingsDialog");
+    rttSettingsDialog->setWindowTitle("RTT 连接设置");
+    rttSettingsDialog->setWindowIcon(windowIcon());
+    rttSettingsDialog->setMinimumSize(420, 360);
+    rttSettingsDialog->resize(570, 670);
+    auto settingsLayout = new QVBoxLayout(rttSettingsDialog);
+    settingsLayout->addWidget(settings, 1);
+    auto done = new QPushButton("关闭");
+    done->setAutoDefault(false);
+    settingsLayout->addWidget(done, 0, Qt::AlignRight);
+    connect(done, &QPushButton::clicked, rttSettingsDialog, &QDialog::close);
+
     rttResultTabs = tabs("openocdRttResultTabs");
     rttConsole = new OpenOcdRttConsole(service);
     rttLogs = outputText("openocdRttLogs");
@@ -471,29 +483,36 @@ QWidget *OpenOcdDialog::createRttPage()
     rttResultTabs->addTab(rttLogs, "连接日志");
     rttResultTabs->addTab(rttPlan, "执行预览");
 
-    rttSplit = new QSplitter(Qt::Horizontal);
-    rttSplit->setObjectName("openocdRttSplit");
-    rttSplit->setChildrenCollapsible(false);
-    rttSplit->setHandleWidth(10);
-    rttSplit->addWidget(settings);
-    rttSplit->addWidget(rttResultTabs);
-    rttSplit->setStretchFactor(1, 1);
-    rttSplit->setSizes({420, 580});
-    rttSplit->handle(1)->setToolTip("拖动分隔条调整设置与终端的大小");
-    layout->addWidget(rttSplit, 1);
+    layout->addWidget(rttResultTabs, 1);
 
+    auto actions = new QHBoxLayout();
+    auto configure = new QPushButton("连接设置…");
+    configure->setObjectName("openocdRttSettingsAction");
+    configure->setProperty("variant", "outline");
+    configure->setAutoDefault(false);
+    actions->addWidget(configure);
+    actions->addStretch();
+    connect(configure, &QPushButton::clicked, this, [this]
+    {
+        rttSettingsDialog->show();
+        rttSettingsDialog->raise();
+        rttSettingsDialog->activateWindow();
+    });
     rttAction = new QPushButton("启动 RTT");
     rttAction->setObjectName("openocdRttAction");
     rttAction->setAutoDefault(false);
     rttAction->setProperty("primary", true);
     rttAction->setMinimumWidth(128);
-    layout->addWidget(rttAction, 0, Qt::AlignRight);
+    actions->addWidget(rttAction);
+    layout->addLayout(actions);
     return page;
 }
 
 void OpenOcdDialog::setAppearance(const Theme &theme, const QFont &font)
 {
     rttConsole->setAppearance(theme, font);
+    rttSettingsDialog->setPalette(theme.palette());
+    rttSettingsDialog->setStyleSheet(theme.stylesheet());
 }
 
 void OpenOcdDialog::resizeEvent(QResizeEvent *event)
@@ -582,12 +601,6 @@ void OpenOcdDialog::arrangeContent()
     columns->setDirection(direction);
     advancedColumns->setDirection(direction);
 
-    const auto rttDirection = width() < 860 ? Qt::Vertical : Qt::Horizontal;
-    if (rttSplit->orientation() != rttDirection)
-    {
-        rttSplit->setOrientation(rttDirection);
-        rttSplit->setSizes(rttDirection == Qt::Vertical ? QList<int> {160, 360} : QList<int> {420, 580});
-    }
 }
 
 void OpenOcdDialog::load()
@@ -786,10 +799,11 @@ void OpenOcdDialog::refreshState()
     QString text = titles.value(jobStatus);
     if (stoppable && isRtt)
     {
-        if (rttPhase == "connected") { text = received ? "RTT 正在接收" : "RTT 已连接，等待固件输出"; }
-        else if (rttPhase == "connecting")
+        if (rttPhase == "connected") { text = rtt["connection_bytes"].toInteger() ? "RTT 正在接收" : "RTT 已连接，等待固件输出"; }
+        else if (rttPhase == "connecting" || rttPhase == "reconnecting")
         {
-            text = QString("正在连接 RTT %1:%2").arg(rtt["host"].toString()).arg(rtt["port"].toInt());
+            text = (rttPhase == "reconnecting" ? "正在重连 RTT " : "正在连接 RTT ")
+                + QString("%1:%2").arg(rtt["host"].toString()).arg(rtt["port"].toInt());
             const int attempts = rtt["connect_attempts"].toInt();
             if (attempts > 1) { text += QString(" · 第 %1 次尝试").arg(attempts); }
         }

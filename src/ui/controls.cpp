@@ -455,8 +455,8 @@ QString Theme::stylesheet() const
         QDialog#openOcdDialog QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; }
         QTableWidget#openocdImages { background: $panel; color: $text; gridline-color: $line; border: 1px solid $line; border-radius: 8px; selection-background-color: $selectbg; selection-color: $selectfg; }
         QTableWidget#openocdImages::item:selected { background: $selectbg; color: $selectfg; }
-        QSplitter#openocdSplit::handle, QSplitter#openocdRttSplit::handle { background: $side; border-radius: 4px; }
-        QSplitter#openocdSplit::handle:hover, QSplitter#openocdRttSplit::handle:hover { background: $hover; }
+        QSplitter#openocdSplit::handle { background: $side; border-radius: 4px; }
+        QSplitter#openocdSplit::handle:hover { background: $hover; }
         QFrame#searchComboPopup { background: $panel; color: $text; border: 1px solid $edge; border-radius: 10px; }
         QFrame#searchComboPopup QListView { background: $panel; color: $text; border: none; outline: none; }
         QFrame#searchComboPopup QListView::item { min-height: 28px; padding: 4px 7px; border-radius: 6px; }

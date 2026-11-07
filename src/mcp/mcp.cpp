@@ -33,7 +33,7 @@ static QString toolSummary(const QString &name, const QJsonObject &args)
     if (name == "send_data") { return QString("发送 %1 个字符").arg(args["payload"].toString().size()); }
     if (name == "set_frame_script") { return args["enabled"].toBool() ? "设置并启用帧脚本" : "设置并停用帧脚本"; }
     if (name == "validate_frame_script") { return "离线验证帧脚本"; }
-    if (name == "search_logs") { return QString("搜索「%1」").arg(args["filter"].toObject()["text"].toString()); }
+    if (name == "search_logs" || name == "search_openocd_rtt") { return QString("搜索「%1」").arg(args["filter"].toObject()["text"].toString()); }
     if (name == "list_search_views") { return "列出界面搜索视图"; }
     return name;
 }
@@ -482,7 +482,7 @@ void McpServer::finishCall(QTcpSocket *socket, const QJsonObject &rpc, const QSt
 
 QJsonValue McpServer::call(const QString &name, const QJsonObject &a)
 {
-    if (QStringList {"list_openocd_views", "create_openocd_view", "close_openocd_view", "list_openocd_configs", "get_openocd_state", "read_openocd_rtt", "configure_openocd", "preview_openocd", "start_openocd", "cancel_openocd", "export_openocd_configuration", "import_openocd_configuration"}.contains(name))
+    if (QStringList {"list_openocd_views", "create_openocd_view", "close_openocd_view", "list_openocd_configs", "get_openocd_state", "read_openocd_rtt", "search_openocd_rtt", "configure_openocd", "preview_openocd", "start_openocd", "cancel_openocd", "export_openocd_configuration", "import_openocd_configuration"}.contains(name))
     {
         return openOcdTool(name, a);
     }

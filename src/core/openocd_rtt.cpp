@@ -10,6 +10,8 @@ constexpr qsizetype MaxRttBytes = 512 * 1024;
 constexpr int MaxRttRecords = 2000;
 constexpr int RttTcpTimeoutMs = 5000;
 constexpr int MaxRttConnectAttempts = 12;
+constexpr int RttStableConnectionMs = 3000;
+constexpr int MaxRttUnstableDrops = 3;
 }
 
 void OpenOcdService::initializeRtt()
@@ -27,18 +29,22 @@ void OpenOcdService::initializeRtt()
     });
     connect(&rttSocket, &QTcpSocket::connected, this, [this]
     {
-        if (!running || operation != "rtt" || rttClosing || rttStatus != "connecting") { return; }
+        if (!running || operation != "rtt" || rttClosing || (rttStatus != "connecting" && rttStatus != "reconnecting")) { return; }
+        const bool recovered = rttStatus == "reconnecting";
         rttStatus = "connected";
-        // The deadline bounds startup, not an ongoing log session.
+        ++rttConnection;
+        rttBytesAtConnect = rttReceived;
+        rttConnectedSince.start();
+        rttDecoder.resetState();
         deadline.stop();
         rttConnectRetry.stop();
-        appendLog("RTT TCP 已连接 " + rttEndpoint() + "\n");
+        appendLog((recovered ? "RTT TCP 已重新连接 " : "RTT TCP 已连接 ") + rttEndpoint() + "\n");
         emit stateChanged();
     });
     connect(&rttSocket, &QTcpSocket::errorOccurred, this, [this](QAbstractSocket::SocketError socketError)
     {
         if (!running || status != "running" || operation != "rtt" || rttClosing) { return; }
-        if (rttStatus == "connecting" && socketError == QAbstractSocket::ConnectionRefusedError
+        if ((rttStatus == "connecting" || rttStatus == "reconnecting") && socketError == QAbstractSocket::ConnectionRefusedError
             && deadline.isActive() && rttConnectAttempts < MaxRttConnectAttempts)
         {
             if (rttConnectAttempts == 1)
@@ -50,6 +56,7 @@ void OpenOcdService::initializeRtt()
             rttConnectRetry.start();
             return;
         }
+        if (reconnectRtt(rttSocket.errorString())) { return; }
         const auto message = rttStatus == "connected" ? "RTT 服务已断开 " : "无法连接 RTT 服务 ";
         error = message + rttEndpoint() + "：" + rttSocket.errorString();
         appendLog(error + "\n");
@@ -58,6 +65,7 @@ void OpenOcdService::initializeRtt()
     connect(&rttSocket, &QTcpSocket::disconnected, this, [this]
     {
         if (!running || status != "running" || operation != "rtt" || rttClosing || rttStatus != "connected") { return; }
+        if (reconnectRtt("对端关闭连接")) { return; }
         error = "RTT 服务已断开 " + rttEndpoint();
         appendLog(error + "\n");
         stop("failed");
@@ -77,19 +85,22 @@ void OpenOcdService::resetRtt(int port)
     rttStartSequence = rttSequence;
     rttRecords.clear();
     rttReceived = 0;
+    rttBytesAtConnect = 0;
     rttBytes = 0;
     rttDecoder.resetState();
     rttHost = config["rtt_mode"] == "external" ? config["rtt_host"].toString().trimmed() : "127.0.0.1";
     rttPort = port;
     rttConnectAttempts = 0;
+    rttConnection = 0;
+    rttUnstableDrops = 0;
     rttStatus = "starting";
 }
 
 void OpenOcdService::connectRtt()
 {
     if (!running || status != "running" || operation != "rtt" || rttClosing || !deadline.isActive()) { return; }
-    if (rttStatus != "starting" && rttStatus != "connecting") { return; }
-    if (config["rtt_mode"] == "managed" && process.state() != QProcess::Running) { return; }
+    if (rttStatus != "starting" && rttStatus != "connecting" && rttStatus != "reconnecting") { return; }
+    if (config["rtt_mode"] == "managed" && process.state() == QProcess::NotRunning) { return; }
 
     if (rttStatus == "starting")
     {
@@ -105,6 +116,30 @@ void OpenOcdService::connectRtt()
     ++rttConnectAttempts;
     rttSocket.connectToHost(rttHost, quint16(rttPort));
     emit stateChanged();
+}
+
+bool OpenOcdService::reconnectRtt(const QString &reason)
+{
+    if (rttStatus != "connected" || (config["rtt_mode"] == "managed" && process.state() == QProcess::NotRunning))
+    {
+        return false;
+    }
+    if (rttConnectedSince.elapsed() >= RttStableConnectionMs) { rttUnstableDrops = 0; }
+    if (rttUnstableDrops >= MaxRttUnstableDrops)
+    {
+        appendLog("RTT 服务反复断开，已停止自动重连。\n");
+        return false;
+    }
+
+    ++rttUnstableDrops;
+    closeRtt();
+    rttStatus = "reconnecting";
+    rttConnectAttempts = 0;
+    appendLog("RTT TCP 断开，正在重连 " + rttEndpoint() + "：" + reason + "\n");
+    deadline.start(RttTcpTimeoutMs);
+    rttConnectRetry.start();
+    emit stateChanged();
+    return true;
 }
 
 QString OpenOcdService::rttEndpoint() const
@@ -128,6 +163,7 @@ void OpenOcdService::receiveRtt()
         rttRecords.append(QJsonObject {
             {"seq", ++rttSequence},
             {"time", QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs)},
+            {"connection", rttConnection},
             {"size", bytes.size()},
             {"hex", QString::fromLatin1(bytes.toHex())},
             {"text", text}
@@ -176,7 +212,8 @@ QJsonObject OpenOcdService::readRtt(qint64 after, int limit) const
     }
     return {
         {"view_id", viewId}, {"job_id", rttJob}, {"status", rttStatus},
-        {"host", rttHost}, {"port", rttPort}, {"connect_attempts", rttConnectAttempts}, {"received_bytes", rttReceived},
+        {"host", rttHost}, {"port", rttPort}, {"connect_attempts", rttConnectAttempts},
+        {"connection", rttConnection}, {"connection_bytes", rttReceived - rttBytesAtConnect}, {"received_bytes", rttReceived},
         {"records", page}, {"next_cursor", cursor}, {"latest_cursor", rttSequence},
         {"gap", rttRecords.isEmpty() ? effectiveAfter < rttSequence : effectiveAfter + 1 < rttRecords.first()["seq"].toInteger()},
         {"has_more", cursor < rttSequence}

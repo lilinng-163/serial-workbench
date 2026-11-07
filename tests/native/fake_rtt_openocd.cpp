@@ -19,11 +19,17 @@ int main(int argc, char **argv)
     if (!server.listen(QHostAddress::LocalHost, port)) { return 5; }
     QTimer samples;
     samples.setInterval(30);
+    bool dropFirst = qEnvironmentVariableIsSet("SW_FAKE_RTT_DROP_FIRST");
     QObject::connect(&server, &QTcpServer::newConnection, &application, [&]
     {
         while (server.hasPendingConnections())
         {
             auto socket = server.nextPendingConnection();
+            if (dropFirst)
+            {
+                dropFirst = false;
+                QTimer::singleShot(110, socket, &QTcpSocket::disconnectFromHost);
+            }
             QObject::connect(&samples, &QTimer::timeout, socket, [socket]
             {
                 if (socket->state() == QAbstractSocket::ConnectedState)

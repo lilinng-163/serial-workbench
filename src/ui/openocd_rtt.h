@@ -45,18 +45,30 @@ public:
 
 protected:
     void showEvent(QShowEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
 private:
     QPointer<OpenOcdService> service;
+    QBoxLayout *toolbar;
+    FilterBox *filter;
+    QStackedWidget *display;
     TerminalView *terminal;
+    QPlainTextEdit *matches;
     QPushButton *pause;
     QLabel *status;
     QTimer timer;
+    QTimer searchTimer;
     qint64 cursor = 0;
+    qint64 clearedThrough = 0;
+    int displayedConnection = 0;
     QString displayedJob;
+    QString searchSummary;
     QPointer<QDialog> popup;
     void schedule();
     void drain();
+    void scheduleSearch();
+    void refreshSearch();
+    QString displayText(bool selected) const;
     void updateStatus();
     void openWindow();
 };

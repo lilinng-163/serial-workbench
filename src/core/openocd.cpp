@@ -718,8 +718,9 @@ void OpenOcdService::stop(const QString &reason)
     {
         if (reason == "timed_out")
         {
-            error = rttStatus == "connecting" ? "连接 RTT 服务超时 " + rttEndpoint() + "。请核对主机和端口。"
-                : "OpenOCD 启动 RTT 超时。请在连接日志中检查探针和目标状态。";
+            if (rttStatus == "reconnecting") { error = "RTT 重连超时 " + rttEndpoint() + "。请查看连接日志。"; }
+            else if (rttStatus == "connecting") { error = "连接 RTT 服务超时 " + rttEndpoint() + "。请核对主机和端口。"; }
+            else { error = "OpenOCD 启动 RTT 超时。请在连接日志中检查探针和目标状态。"; }
             appendLog(error + "\n");
         }
         closeRtt();

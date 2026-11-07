@@ -21,9 +21,9 @@ async def check(url, bridge, config, rtt_fixture=None):
         async with ClientSession(read, write) as client:
             await client.initialize()
             tools = {item.name: item for item in (await client.list_tools()).tools}
-            assert len(tools) == 36
+            assert len(tools) == 37
             assert all(name in tools for name in (
-                "get_openocd_state", "read_openocd_rtt", "list_openocd_configs", "configure_openocd",
+                "get_openocd_state", "read_openocd_rtt", "search_openocd_rtt", "list_openocd_configs", "configure_openocd",
                 "preview_openocd", "start_openocd", "cancel_openocd",
                 "list_openocd_views", "create_openocd_view", "close_openocd_view",
                 "export_openocd_configuration", "import_openocd_configuration"))
@@ -131,14 +131,32 @@ async def check_rtt(client, other, view, config, fixture):
 
     # Existing-server mode never owns or terminates the server process.
     payload = "\x1b[33m[WARN] 已有 RTT 服务\x1b[0m\r\n".encode()
+    after_reconnect = "\x1b[32m[INFO] RTT 继续接收\x1b[0m\r\n".encode()
+    allow_drop = asyncio.Event()
     disconnected = asyncio.Event()
+    connections = 0
+
     async def serve(reader, writer):
-        writer.write(payload)
-        await writer.drain()
-        await reader.read()
-        writer.close()
-        await writer.wait_closed()
-        disconnected.set()
+        nonlocal connections
+        connections += 1
+        first = connections == 1
+        try:
+            if first:
+                # Split an ANSI sequence and a UTF-8 character across writes.
+                for part in (payload[:3], payload[3:13], payload[13:]):
+                    writer.write(part)
+                    await writer.drain()
+                    await asyncio.sleep(0.08)
+                await allow_drop.wait()
+            else:
+                writer.write(after_reconnect)
+                await writer.drain()
+                await reader.read()
+        finally:
+            writer.close()
+            await writer.wait_closed()
+            if not first:
+                disconnected.set()
 
     server = await asyncio.start_server(serve, "127.0.0.1", 0)
     async with server:
@@ -155,10 +173,28 @@ async def check_rtt(client, other, view, config, fixture):
             await asyncio.sleep(0.05)
         assert bytes.fromhex("".join(record["hex"] for record in received["records"])) == payload
         assert received["job_id"] == active["job_id"]
+        match = unpack(await client.call_tool("search_openocd_rtt", {"view_id": view_id,
+            "filter": {"text": "^\\[WARN\\] 已有 RTT 服务$", "regex": True, "case_sensitive": True}}))
+        assert [row["text"] for row in match["rows"]] == ["[WARN] 已有 RTT 服务"]
+        same = unpack(await other.call_tool("search_openocd_rtt", {"view_id": view_id}))
+        assert same["rows"] == match["rows"] and same["filter"] == match["filter"]
+        before_drop = received["next_cursor"]
+        allow_drop.set()
+        for _ in range(100):
+            resumed = unpack(await other.call_tool("read_openocd_rtt", {"view_id": view_id, "after": before_drop}))
+            if resumed["connection_bytes"] == len(after_reconnect) and resumed["connection"] == 2:
+                break
+            await asyncio.sleep(0.05)
+        assert resumed["status"] == "connected" and resumed["job_id"] == active["job_id"]
+        assert bytes.fromhex("".join(record["hex"] for record in resumed["records"])) == after_reconnect
+        assert (await client.call_tool("search_openocd_rtt", {"view_id": view_id, "snapshot": match["snapshot"]})).isError
+        combined = unpack(await other.call_tool("search_openocd_rtt", {"view_id": view_id,
+            "filter": {"text": "RTT && 服务 || 继续接收", "regex": False, "logical": True}}))
+        assert combined["total_matches"] == 2
         unpack(await other.call_tool("cancel_openocd", {"view_id": view_id, "job_id": active["job_id"]}))
         await asyncio.wait_for(disconnected.wait(), 3)
         assert server.is_serving()
-    print("PASS RTT HTTP/STDIO: managed process, ANSI/UTF-8, independent cursors, external server, cancellation")
+    print("PASS RTT HTTP/STDIO: managed process, ANSI/UTF-8, reconnect, native search, independent cursors and cancellation")
 
 
 def main():
@@ -198,9 +234,10 @@ def main():
             asyncio.run(check(f"http://127.0.0.1:{port}/mcp", bridge, config, args.rtt_fixture))
         finally:
             try:
-                subprocess.run([str(app.with_name("SerialWorkbenchCLI.exe")), "stop", "--settings", str(settings)],
-                               check=True, capture_output=True, timeout=10)
-                process.wait(timeout=10)
+                stopped = subprocess.run([str(app.with_name("SerialWorkbenchCLI.exe")), "stop", "--settings", str(settings)],
+                                         capture_output=True, encoding="utf-8", errors="replace", timeout=10)
+                assert stopped.returncode == 0, (stopped.stdout, stopped.stderr, process.poll())
+                assert process.wait(timeout=10) == 0, process.returncode
             finally:
                 if process.poll() is None:
                     process.terminate()
