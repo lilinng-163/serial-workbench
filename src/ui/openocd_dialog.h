@@ -26,7 +26,11 @@ private:
     bool syncing = false;
     qint64 logCursor = 0;
     QString displayedJob;
+    QTabWidget *workspaceTabs;
+    QWidget *flashPage;
+    QWidget *rttPage;
     QSplitter *split;
+    QSplitter *rttSplit;
     QStackedWidget *content;
     QTabWidget *compactTabs;
     QWidget *output;
@@ -39,8 +43,9 @@ private:
     QTimer layoutTimer;
     QTabWidget *configurationTabs;
     QTabWidget *resultTabs;
+    QTabWidget *rttResultTabs;
     QList<int> configurationSizes;
-    QWidget *editor;
+    QList<QWidget *> configurationEditors;
     QFormLayout *deviceForm;
     QFormLayout *flowForm;
     QPushButton *advanced;
@@ -65,6 +70,8 @@ private:
     QLabel *status;
     QPlainTextEdit *logs;
     QPlainTextEdit *plan;
+    QPlainTextEdit *rttLogs;
+    QPlainTextEdit *rttPlan;
     QPushButton *version;
     QPushButton *connectTarget;
     QPushButton *flash;
@@ -73,14 +80,16 @@ private:
     QTimer clock;
     OpenOcdRttSettings *rttSettings;
     OpenOcdRttConsole *rttConsole;
-    QPushButton *startRtt;
+    QPushButton *rttAction;
 
+    QWidget *createRttPage();
     void load();
     bool commit();
     void refreshCatalog();
     void refreshState();
     void refreshPlan();
     void run(const QString &operation);
+    void cancelRun(const QString &jobId);
     void arrangeContent();
 };
 }

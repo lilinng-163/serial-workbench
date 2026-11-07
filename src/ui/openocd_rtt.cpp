@@ -84,7 +84,7 @@ OpenOcdRttSettings::OpenOcdRttSettings(QWidget *parent) : QWidget(parent)
             if (auto item = form->itemAt(row, QFormLayout::LabelRole)) { item->widget()->setMinimumWidth(90); }
         }
     }
-    fields->addRow(hint("沿用目标页的调试器、芯片和序列号。地址可从 ELF / map 中的 _SEGGER_RTT 获取；搜索范围必须位于芯片的可读 RAM。"));
+    fields->addRow(hint("调试器、芯片和序列号沿用「固件烧录」里的设置。地址可从 ELF / map 中的 _SEGGER_RTT 获取，搜索范围应位于芯片的可读 RAM。"));
     layout->addWidget(managed);
     layout->addWidget(hint("固件需已启用 RTT。终端保留 ANSI 颜色；暂停显示不暂停芯片。若 IDE 已占用调试器，请接入它的 RTT 服务。"));
     layout->addStretch();

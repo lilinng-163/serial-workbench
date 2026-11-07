@@ -1,5 +1,12 @@
 # 开发交接记录
 
+## 2026-11-07 — 分开 OpenOCD 固件烧录与 RTT 工作区
+
+- 在 `codex/openocd-rtt` 的 `9946127` 基础上把每个 OpenOCD 页划分为并列的“固件烧录”和“RTT 日志”。烧录页保留目标、初始化、工具和固件配置，RTT 页有独立终端、连接日志和执行预览。RTT 启停合并为一个按钮，新建入口统一称为 OpenOCD 页。
+- 接收 RTT 时可以打开三个烧录配置页并查看既有烧录日志。只锁定配置编辑和会冲突的启动操作，切换页签不暂停 RTT。烧录页和 RTT 页各自保留最近一次任务的诊断输出。窗口窄时 RTT 设置和终端上下排布。
+- Windows Release 构建、OpenOCD、RTT 和 MCP 协议测试通过。Windows 实窗确认两个工作区、紧凑布局和接收期间的页签切换。回归测试在烧录配置页停留期间发送样本，切回 RTT 后显示该样本，并检查停止后可恢复编辑。首轮测试的临时 JSON 引用已修正，初始日志和最终截图留在 `build/rtt-workspaces-preview/`。
+- `dist/previews/SerialWorkbench-0.15.41-rtt-workspaces-preview-windows-x64.zip` 为独立测试包，21,588,942 字节，SHA-256 `62b0f2e1162c191343d42d00f28c12533e0d9b6d096189e6453d51461e265699`。解压后验证 GUI 启动和包内 OpenOCD / RTT HTTP、STDIO 流程，本轮使用模拟数据验证界面交互。运行 `Start-Preview.cmd`，原预览目录的 `preview-settings.json` 可复制到新目录继续使用。
+
 ## 2026-11-07 — OpenOCD RTT 查看窗开发预览
 
 - 从 `8f496a7` 建立 `codex/openocd-rtt`。每个板卡页新增 RTT 配置与彩色终端。支持可调大小的独立窗口、暂停显示、清空当前视图、复制和导出文本。配置随板卡页保存和导入导出，启动工作台时保持空闲。

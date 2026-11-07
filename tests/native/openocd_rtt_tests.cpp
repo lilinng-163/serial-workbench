@@ -208,6 +208,22 @@ private slots:
         dialog.setAttribute(Qt::WA_DeleteOnClose, false);
         dialog.resize(1200, 820);
         dialog.show();
+        auto workspaces = dialog.findChild<QTabWidget *>("openocdWorkspaceTabs");
+        auto configTabs = dialog.findChild<QTabWidget *>("openocdConfigurationTabs");
+        auto flash = dialog.findChild<QPushButton *>("openocdFlash");
+        auto rttAction = dialog.findChild<QPushButton *>("openocdRttAction");
+        auto flashLogs = dialog.findChild<QPlainTextEdit *>("openocdLogs");
+        auto rttMode = dialog.findChild<QComboBox *>("rttMode");
+        auto executable = dialog.findChild<QLineEdit *>("openocdExecutable");
+        QVERIFY(workspaces && configTabs && flash && rttAction && flashLogs && rttMode && executable);
+        QVERIFY(flash->isVisible());
+        QVERIFY(!rttAction->isVisible());
+        flashLogs->setPlainText("Previous firmware log");
+        const auto clickTab = [](QTabWidget *tabs, int index)
+        {
+            auto bar = tabs->tabBar();
+            QTest::mouseClick(bar, Qt::LeftButton, Qt::NoModifier, bar->tabRect(index).center());
+        };
         QVERIFY_EXCEPTION_THROWN(mcp.call("read_openocd_rtt", {}), std::runtime_error);
         mcp.setProtocolEnabled("openocd", true);
         QVERIFY(mcp.call("read_openocd_rtt", {}).toObject()["records"].toArray().isEmpty());
@@ -220,11 +236,43 @@ private slots:
         auto terminal = dialog.findChild<sw::TerminalView *>("rttTerminal");
         auto pause = dialog.findChild<QPushButton *>("rttPause");
         QTRY_VERIFY(terminal->isVisible());
+        QVERIFY(rttAction->isVisible() && rttAction->isEnabled());
+        QCOMPARE(rttAction->text(), QString("停止 RTT"));
+        QVERIFY(!flash->isVisible());
+        QVERIFY(!rttMode->isEnabled());
         socket->write("\x1b[31mERROR\x1b[0m\r\n");
         QTRY_VERIFY(terminal->text().contains("ERROR"));
         const auto red = terminal->grid.first().first().foreground;
         QVERIFY(red.isValid());
         QVERIFY(red.red() > red.green());
+
+        const auto runningJob = service->state()["job_id"].toString();
+        const auto revision = service->revision();
+        clickTab(workspaces, 0);
+        QCOMPARE(workspaces->currentIndex(), 0);
+        QVERIFY(!terminal->isVisible());
+        QVERIFY(!rttAction->isVisible());
+        QVERIFY(flash->isVisible() && !flash->isEnabled());
+        QVERIFY(!dialog.findChild<QPushButton *>("openocdCancel")->isVisible());
+        QCOMPARE(flashLogs->toPlainText(), QString("Previous firmware log"));
+        dialog.resize(820, 650);
+        auto compact = dialog.findChild<QTabWidget *>("openocdCompactTabs");
+        QTRY_VERIFY(compact->isVisible() && configTabs->isVisible());
+        for (const int index : {1, 2, 0})
+        {
+            clickTab(configTabs, index);
+            QCOMPARE(configTabs->currentIndex(), index);
+            QVERIFY(configTabs->currentWidget()->isVisible());
+        }
+        QVERIFY(executable->isReadOnly());
+        QVERIFY(!dialog.findChild<QComboBox *>("openocdMode")->isEnabled());
+        QCOMPARE(service->revision(), revision);
+        QCOMPARE(service->state()["job_id"].toString(), runningJob);
+        socket->write("while viewing firmware\r\n");
+        QTRY_VERIFY(raw(service->readRtt()).contains("while viewing firmware"));
+        clickTab(workspaces, 1);
+        QTRY_VERIFY(terminal->isVisible() && terminal->text().contains("while viewing firmware"));
+
         pause->click();
         socket->write("paused sample\r\n");
         QTRY_VERIFY(raw(service->readRtt()).contains("paused sample"));
@@ -247,7 +295,13 @@ private slots:
         QVERIFY(service->busy());
         mcp.setProtocolEnabled("openocd", false);
         QVERIFY_EXCEPTION_THROWN(mcp.call("read_openocd_rtt", {}), std::runtime_error);
-        cancel(*service);
+        QTest::mouseClick(rttAction, Qt::LeftButton);
+        QTRY_VERIFY(!service->busy());
+        QCOMPARE(rttAction->text(), QString("启动 RTT"));
+        QVERIFY(rttMode->isEnabled());
+        clickTab(workspaces, 0);
+        QVERIFY(flash->isEnabled() && flash->isVisible());
+        QVERIFY(!executable->isReadOnly());
         QVERIFY(server.isListening());
     }
 
@@ -267,20 +321,24 @@ private slots:
         dialog.setPalette(theme.palette());
         dialog.setStyleSheet(theme.stylesheet());
         dialog.setAppearance(theme, sw::Theme::defaultDataFont());
-        dialog.findChild<QTabWidget *>("openocdConfigurationTabs")->setCurrentIndex(3);
-        dialog.findChild<QTabWidget *>("openocdResultTabs")->setCurrentIndex(2);
+        auto workspaces = dialog.findChild<QTabWidget *>("openocdWorkspaceTabs");
+        workspaces->setCurrentIndex(1);
         dialog.show();
         QVERIFY(QTest::qWaitForWindowExposed(&dialog));
         QTest::qWait(200);
         QVERIFY(dialog.grab().save(captures + "/rtt-settings-light.png"));
         service.configure(external(server), service.revision());
-        service.start("rtt", service.revision());
+        dialog.findChild<QPushButton *>("openocdRttAction")->click();
         QTRY_VERIFY(server.hasPendingConnections());
         auto socket = server.nextPendingConnection();
         socket->write("\x1b[32m[INFO] SEGGER RTT ready\x1b[0m\r\n\x1b[33m[WARN] temperature: 56.2 C\x1b[0m\r\n\x1b[31m[ERROR] example fault\x1b[0m\r\n");
         auto terminal = dialog.findChild<sw::TerminalView *>("rttTerminal");
         QTRY_VERIFY(terminal->text().contains("example fault"));
         QVERIFY(dialog.grab().save(captures + "/rtt-colors-light.png"));
+        workspaces->setCurrentIndex(0);
+        QTest::qWait(100);
+        QVERIFY(dialog.grab().save(captures + "/firmware-during-rtt.png"));
+        workspaces->setCurrentIndex(1);
         theme = sw::Theme::make(true);
         dialog.setPalette(theme.palette());
         dialog.setStyleSheet(theme.stylesheet());

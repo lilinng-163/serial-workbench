@@ -31,7 +31,7 @@ OpenOcdService *Engine::openOcdView(const QString &id) const
 {
     if (id.isEmpty())
     {
-        if (openocdViews.isEmpty()) { fail("尚无 OpenOCD 页面，请先 create_openocd_view 或在 GUI 新建烧录页"); }
+        if (openocdViews.isEmpty()) { fail("尚无 OpenOCD 页面，请先 create_openocd_view 或在 GUI 新建 OpenOCD 页"); }
         if (openocdViews.size() != 1) { fail("存在多个 OpenOCD 页面，请先 list_openocd_views 并明确指定 view_id"); }
         return openocdViews.first();
     }
@@ -82,7 +82,7 @@ void Engine::restoreOpenOcdViews(const QJsonArray &profiles)
         identifiers.insert(id);
         auto view = std::make_unique<OpenOcdService>();
         view->viewId = id;
-        view->title = profile["title"].toString("OpenOCD 烧录").left(200);
+        view->title = profile["title"].toString(view->title).left(200);
         view->hasPage = profile["has_page"].toBool(true);
         view->restore(profile["configuration"].toObject());
         prepared.push_back(std::move(view));

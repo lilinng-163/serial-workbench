@@ -15,7 +15,7 @@ public:
     explicit OpenOcdService(QObject *parent = nullptr);
     ~OpenOcdService() override;
     QString viewId = QUuid::createUuid().toString(QUuid::Id128);
-    QString title = "OpenOCD 烧录";
+    QString title = "OpenOCD";
     bool hasPage = false;
 
     QJsonObject configuration() const { return config; }
