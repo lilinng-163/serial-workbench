@@ -20,7 +20,8 @@ signals:
 private:
     Combo *mode;
     Combo *startup;
-    QWidget *managed;
+    QFormLayout *fields;
+    QLabel *managedHint;
     QLineEdit *host;
     QLineEdit *address;
     QLineEdit *size;

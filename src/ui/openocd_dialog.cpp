@@ -769,17 +769,33 @@ void OpenOcdDialog::refreshState()
     rttAction->setEnabled(!busy || (isRtt && stoppable));
     rttAction->setText(busy && isRtt ? (stoppable ? "停止 RTT" : "正在停止 RTT…") : "启动 RTT");
     const auto rtt = state["rtt"].toObject();
-    progress->setVisible(busy && !(isRtt && rtt["status"] == "connected"));
+    const auto rttPhase = rtt["status"].toString();
+    const auto jobStatus = state["status"].toString();
+    const auto received = rtt["received_bytes"].toInteger();
+    progress->setVisible(busy && !(isRtt && rttPhase == "connected"));
+    if (rttWasActive && isRtt && !busy && received == 0 && (jobStatus == "failed" || jobStatus == "timed_out")
+        && workspaceTabs->currentWidget() == rttPage && rttResultTabs->currentWidget() == rttConsole)
+    {
+        rttResultTabs->setCurrentWidget(rttLogs);
+    }
+    rttWasActive = busy && isRtt;
     if (busy && !clock.isActive()) { clock.start(); }
     if (!busy) { clock.stop(); }
     const QMap<QString, QString> titles {{"idle", "尚未启动"}, {"running", "正在执行"}, {"succeeded", "执行完成"},
         {"failed", "执行失败"}, {"cancelled", "已取消"}, {"cancelling", "正在结束进程"}, {"timed_out", "运行超时"}};
-    QString text = titles.value(state["status"].toString());
+    QString text = titles.value(jobStatus);
     if (stoppable && isRtt)
     {
-        text = rtt["status"] == "connected" ? "RTT 正在接收" : "正在连接 RTT";
+        if (rttPhase == "connected") { text = received ? "RTT 正在接收" : "RTT 已连接，等待固件输出"; }
+        else if (rttPhase == "connecting")
+        {
+            text = QString("正在连接 RTT %1:%2").arg(rtt["host"].toString()).arg(rtt["port"].toInt());
+            const int attempts = rtt["connect_attempts"].toInt();
+            if (attempts > 1) { text += QString(" · 第 %1 次尝试").arg(attempts); }
+        }
+        else { text = "正在启动 OpenOCD 并查找 RTT 控制块"; }
         const auto config = service->configuration();
-        if (config["rtt_mode"] == "managed" && config["rtt_gdb_port"].toInt() > 0)
+        if (rttPhase == "connected" && config["rtt_mode"] == "managed" && config["rtt_gdb_port"].toInt() > 0)
         {
             text += QString(" · GDB 127.0.0.1:%1").arg(config["rtt_gdb_port"].toInt());
         }

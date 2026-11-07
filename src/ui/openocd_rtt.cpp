@@ -35,26 +35,19 @@ OpenOcdRttSettings::OpenOcdRttSettings(QWidget *parent) : QWidget(parent)
     auto layout = new QVBoxLayout(this);
     layout->setContentsMargins(8, 12, 12, 12);
     layout->setSpacing(12);
-    auto connection = new QFormLayout();
-    connection->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
-    connection->setVerticalSpacing(9);
+    fields = new QFormLayout();
+    fields->setContentsMargins(0, 0, 0, 0);
+    fields->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    fields->setVerticalSpacing(9);
     mode = new Combo();
     mode->setObjectName("rttMode");
     mode->addItem("工作台启动 OpenOCD", "managed");
     mode->addItem("接入已有 RTT 服务", "external");
     host = textField("rttHost", "127.0.0.1");
     port = numberField("rttPort", 0, 65535);
-    port->setSpecialValueText("自动选择空闲端口");
-    connection->addRow("连接方式", mode);
-    connection->addRow("RTT 主机", host);
-    connection->addRow("RTT 端口", port);
-    layout->addLayout(connection);
-
-    managed = new QWidget();
-    auto fields = new QFormLayout(managed);
-    fields->setContentsMargins(0, 0, 0, 0);
-    fields->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
-    fields->setVerticalSpacing(9);
+    fields->addRow("连接方式", mode);
+    fields->addRow("RTT 主机", host);
+    fields->addRow("RTT 端口", port);
     address = textField("rttAddress", "_SEGGER_RTT 地址或 RAM 起始地址，如 0x20000000");
     size = textField("rttSize", "如 0x100 或 0x10000");
     identifier = textField("rttId", "SEGGER RTT");
@@ -77,15 +70,13 @@ OpenOcdRttSettings::OpenOcdRttSettings(QWidget *parent) : QWidget(parent)
     fields->addRow("轮询间隔", poll);
     fields->addRow("启动时", startup);
     fields->addRow("GDB 端口", gdb);
-    for (auto form : {connection, fields})
+    for (int row = 0; row < fields->rowCount(); ++row)
     {
-        for (int row = 0; row < form->rowCount(); ++row)
-        {
-            if (auto item = form->itemAt(row, QFormLayout::LabelRole)) { item->widget()->setMinimumWidth(90); }
-        }
+        fields->itemAt(row, QFormLayout::LabelRole)->widget()->setMinimumWidth(90);
     }
-    fields->addRow(hint("调试器、芯片和序列号沿用「固件烧录」里的设置。地址可从 ELF / map 中的 _SEGGER_RTT 获取，搜索范围应位于芯片的可读 RAM。"));
-    layout->addWidget(managed);
+    managedHint = hint("调试器、芯片和序列号沿用「固件烧录」里的设置。地址可从 ELF / map 中的 _SEGGER_RTT 获取，搜索范围应位于芯片的可读 RAM。");
+    fields->addRow(managedHint);
+    layout->addLayout(fields);
     layout->addWidget(hint("固件需已启用 RTT。终端保留 ANSI 颜色；暂停显示不暂停芯片。若 IDE 已占用调试器，请接入它的 RTT 服务。"));
     layout->addStretch();
 
@@ -109,14 +100,17 @@ OpenOcdRttSettings::OpenOcdRttSettings(QWidget *parent) : QWidget(parent)
         connect(spin, &QSpinBox::valueChanged, this, [this] { if (!loading) { emit edited(); } });
     }
     connect(startup, &QComboBox::currentIndexChanged, this, [this] { if (!loading) { emit edited(); } });
+    updateMode();
 }
 
 void OpenOcdRttSettings::updateMode()
 {
     const bool external = mode->currentData() == "external";
-    managed->setVisible(!external);
-    host->setEnabled(external);
-    if (!external) { host->setText("127.0.0.1"); }
+    fields->setRowVisible(host, external);
+    const QList<QWidget *> managedFields {address, size, identifier, channel, poll, startup, gdb, managedHint};
+    for (auto field : managedFields) { fields->setRowVisible(field, !external); }
+    port->setSpecialValueText(external ? "请输入服务端口" : "自动选择空闲端口");
+    port->setToolTip(external ? "填写已有 RTT TCP 服务的端口" : "设为 0 可自动选择空闲端口");
 }
 
 void OpenOcdRttSettings::load(const QJsonObject &config)
@@ -283,12 +277,14 @@ void OpenOcdRttConsole::updateStatus()
 {
     if (!service) { return; }
     const auto state = service->readRtt(cursor, 1);
-    const QMap<QString, QString> names {{"idle", "尚未启动"}, {"starting", "启动 OpenOCD"},
-        {"connecting", "连接中"}, {"connected", "已连接"}, {"closed", "已停止"}};
+    const auto bytes = state["received_bytes"].toInteger();
+    const QMap<QString, QString> names {{"idle", "尚未启动"}, {"starting", "OpenOCD 初始化 RTT"},
+        {"connecting", "正在连接 RTT 服务"}, {"connected", bytes ? "已连接" : "已连接，等待固件输出"}, {"closed", "已停止"}};
     auto text = names.value(state["status"].toString());
     if (state["port"].toInt() > 0)
     {
-        text += QString(" · %1:%2 · %3 B").arg(state["host"].toString()).arg(state["port"].toInt()).arg(state["received_bytes"].toInteger());
+        text += QString(" · %1:%2").arg(state["host"].toString()).arg(state["port"].toInt());
+        if (bytes) { text += QString(" · %1 B").arg(bytes); }
     }
     if (pause->isChecked()) { text += " · 显示已暂停"; }
     status->setText(text);

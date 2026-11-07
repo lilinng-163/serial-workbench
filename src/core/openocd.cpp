@@ -442,7 +442,13 @@ QJsonObject OpenOcdService::preview(const QString &requested) const
         else if (config["rtt_startup"] == "resume") { commands.append("resume"); }
         commands.append("rtt setup " + address + " " + size + " " + tclWord(config["rtt_id"].toString()));
         commands.append("rtt polling_interval " + QString::number(config["rtt_poll_ms"].toInt()));
-        commands.append("rtt start");
+        // Some OpenOCD releases report success from 'rtt start' before the
+        // control block is available. Confirm it before exposing the TCP port.
+        commands.append("for {set sw_rtt_try 0} {$sw_rtt_try < 8} {incr sw_rtt_try} {\n"
+            "        if {![catch {rtt start; rtt channels} sw_rtt_error]} { break }\n"
+            "        if {$sw_rtt_try == 7} { error \"RTT control block or channels not ready: $sw_rtt_error\" }\n"
+            "        sleep 250\n"
+            "    }");
         commands.append("rtt server start " + (port ? QString::number(port) : QString("@RTT_PORT@"))
             + " " + QString::number(config["rtt_channel"].toInt()));
         result["persistent"] = true;
@@ -599,7 +605,14 @@ void OpenOcdService::start(const QString &requested, qint64 expectedRevision)
     int port = config["rtt_port"].toInt();
     if (requested == "rtt" && !external)
     {
-        if (!reservation.listen(QHostAddress::LocalHost, quint16(port))) { fail("RTT 端口被占用，请选择其他端口或接入已有服务"); }
+        if (!reservation.listen(QHostAddress::LocalHost, quint16(port)))
+        {
+            if (port && reservation.serverError() == QAbstractSocket::AddressInUseError)
+            {
+                fail(QString("RTT 端口 %1 已被占用。可将端口设为 0 自动选择，或接入该端口上的已有 RTT 服务。").arg(port));
+            }
+            fail("无法绑定 RTT 端口：" + reservation.errorString());
+        }
         port = reservation.serverPort();
         if (port == config["rtt_gdb_port"].toInt()) { fail("RTT 自动端口与 GDB 冲突，请重试或指定其他端口"); }
     }
@@ -674,11 +687,22 @@ void OpenOcdService::finish(int code, QProcess::ExitStatus exitStatus)
         status = "cancelled";
         error = operation == "rtt" ? "RTT 查看已停止" : "任务已取消；目标可能已被暂停或部分写入，请核对设备后重新操作";
     }
-    else if (status == "timed_out") { error = "OpenOCD 运行超时，已结束本次进程；请检查日志和设备状态"; }
+    else if (status == "timed_out")
+    {
+        if (error.isEmpty()) { error = "OpenOCD 运行超时，已结束本次进程；请检查日志和设备状态"; }
+    }
     else if (operation == "rtt" || exitStatus != QProcess::NormalExit || code != 0 || (operation != "version" && !completedMarker))
     {
         status = "failed";
-        if (error.isEmpty()) { error = code == 0 ? "OpenOCD 未完成全部步骤，请查看日志" : "OpenOCD 执行失败，请查看日志和退出码"; }
+        if (error.isEmpty())
+        {
+            if (operation == "rtt")
+            {
+                error = completedMarker ? "OpenOCD 已退出，RTT 会话结束。请查看连接日志。"
+                    : "OpenOCD 未能启动 RTT。请在连接日志中检查探针、控制块与端口。";
+            }
+            else { error = code == 0 ? "OpenOCD 未完成全部步骤，请查看日志" : "OpenOCD 执行失败，请查看日志和退出码"; }
+        }
     }
     else { status = "succeeded"; }
     workspace.reset();
@@ -692,6 +716,12 @@ void OpenOcdService::stop(const QString &reason)
     deadline.stop();
     if (operation == "rtt")
     {
+        if (reason == "timed_out")
+        {
+            error = rttStatus == "connecting" ? "连接 RTT 服务超时 " + rttEndpoint() + "。请核对主机和端口。"
+                : "OpenOCD 启动 RTT 超时。请在连接日志中检查探针和目标状态。";
+            appendLog(error + "\n");
+        }
         closeRtt();
         if (config["rtt_mode"] == "external")
         {

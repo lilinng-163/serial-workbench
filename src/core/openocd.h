@@ -63,11 +63,13 @@ private:
 
     QTcpSocket rttSocket;
     QTimer rttReadTimer;
+    QTimer rttConnectRetry;
     QStringDecoder rttDecoder {QStringDecoder::Utf8};
     QString rttJob;
     QString rttStatus = "idle";
     QString rttHost;
     int rttPort = 0;
+    int rttConnectAttempts = 0;
     bool rttClosing = false;
     qint64 rttSequence = 0;
     qint64 rttStartSequence = 0;
@@ -78,6 +80,7 @@ private:
     void initializeRtt();
     void resetRtt(int port);
     void connectRtt();
+    QString rttEndpoint() const;
     void receiveRtt();
     void closeRtt();
     void appendLog(const QString &text);

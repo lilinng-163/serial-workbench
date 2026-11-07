@@ -143,6 +143,82 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(!service->busy(), 2000);
     }
 
+    void delayedServerAndUnavailableEndpoint()
+    {
+        QTcpServer server;
+        QVERIFY(server.listen(QHostAddress::LocalHost));
+        const auto port = server.serverPort();
+        sw::OpenOcdService service;
+        service.configure(external(server), service.revision());
+        server.close();
+
+        service.start("rtt", service.revision());
+        QTest::qWait(550);
+        QVERIFY(service.busy());
+        QCOMPARE(service.readRtt()["status"].toString(), QString("connecting"));
+        QVERIFY(server.listen(QHostAddress::LocalHost, port));
+        QTRY_VERIFY_WITH_TIMEOUT(server.hasPendingConnections(), 2500);
+        auto socket = server.nextPendingConnection();
+        socket->write("server ready\r\n");
+        QTRY_VERIFY(raw(service.readRtt()).contains("server ready"));
+        cancel(service);
+        QVERIFY(server.isListening());
+        server.close();
+
+        service.start("rtt", service.revision());
+        QTest::qWait(300);
+        QVERIFY(service.busy());
+        cancel(service);
+        QVERIFY(server.listen(QHostAddress::LocalHost, port));
+        QTest::qWait(350);
+        QVERIFY(!server.hasPendingConnections());
+        server.close();
+
+        sw::OpenOcdDialog dialog(&service);
+        dialog.setAttribute(Qt::WA_DeleteOnClose, false);
+        dialog.show();
+        service.start("rtt", service.revision());
+        QTRY_VERIFY_WITH_TIMEOUT(!service.busy(), 6500);
+        const auto failed = service.state();
+        QVERIFY(failed["status"] == "failed" || failed["status"] == "timed_out");
+        QVERIFY(failed["error"].toString().contains(QString("127.0.0.1:%1").arg(port)));
+        QVERIFY(!failed["records"].toArray().isEmpty());
+        auto output = dialog.findChild<QTabWidget *>("openocdRttResultTabs");
+        auto logs = dialog.findChild<QPlainTextEdit *>("openocdRttLogs");
+        QCOMPARE(output->currentWidget(), static_cast<QWidget *>(logs));
+        QVERIFY(logs->toPlainText().contains(failed["error"].toString()));
+    }
+
+    void settingsFieldsShareColumn()
+    {
+        sw::OpenOcdService service;
+        sw::OpenOcdRttSettings settings;
+        settings.resize(500, 690);
+        settings.load(service.configuration());
+        settings.show();
+        auto connection = settings.findChild<QWidget *>("rttMode");
+        QVERIFY(connection);
+        const auto verifyAligned = [&](const QStringList &fields)
+        {
+            const int left = connection->mapTo(&settings, QPoint()).x();
+            for (const auto &name : fields)
+            {
+                auto field = settings.findChild<QWidget *>(name);
+                QVERIFY(field && field->isVisible());
+                QCOMPARE(field->mapTo(&settings, QPoint()).x(), left);
+            }
+        };
+        verifyAligned({"rttPort", "rttAddress", "rttSize", "rttId", "rttChannel", "rttPoll", "rttStartup", "rttGdbPort"});
+        QVERIFY(!settings.findChild<QWidget *>("rttHost")->isVisible());
+        auto externalConfig = service.configuration();
+        externalConfig["rtt_mode"] = "external";
+        externalConfig["rtt_port"] = 9090;
+        settings.load(externalConfig);
+        QApplication::processEvents();
+        verifyAligned({"rttHost", "rttPort"});
+        QVERIFY(!settings.findChild<QWidget *>("rttAddress")->isVisible());
+    }
+
     void externalUtf8AnsiCursorsAndDisconnect()
     {
         QTcpServer server;
@@ -331,6 +407,8 @@ private slots:
         dialog.findChild<QPushButton *>("openocdRttAction")->click();
         QTRY_VERIFY(server.hasPendingConnections());
         auto socket = server.nextPendingConnection();
+        auto connectionStatus = dialog.findChild<QLabel *>("rttConsoleStatus");
+        QTRY_VERIFY(connectionStatus->text().contains("等待固件输出"));
         socket->write("\x1b[32m[INFO] SEGGER RTT ready\x1b[0m\r\n\x1b[33m[WARN] temperature: 56.2 C\x1b[0m\r\n\x1b[31m[ERROR] example fault\x1b[0m\r\n");
         auto terminal = dialog.findChild<sw::TerminalView *>("rttTerminal");
         QTRY_VERIFY(terminal->text().contains("example fault"));

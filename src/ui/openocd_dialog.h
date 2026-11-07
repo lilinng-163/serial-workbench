@@ -26,6 +26,7 @@ private:
     bool syncing = false;
     qint64 logCursor = 0;
     QString displayedJob;
+    bool rttWasActive = false;
     QTabWidget *workspaceTabs;
     QWidget *flashPage;
     QWidget *rttPage;
