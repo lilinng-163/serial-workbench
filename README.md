@@ -62,7 +62,7 @@ Screenshots are captured from the application using generated example data and l
 
 **[Download the latest release →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.41 adds OpenOCD flashing tabs with independent board configurations and logs, searchable probe/target lists, JSON configuration import/export, and shared GUI/CLI/MCP control. OpenOCD and probe drivers are installed separately. [Release notes](docs/releases/0.15.41.md).
+v0.15.42 adds a full-width OpenOCD RTT console with independent connection settings, reconnects to a running RTT service after an unexpected TCP disconnect, and shares log search with MCP. The firmware table shows more segments and keeps long filenames visible. [Release notes](docs/releases/0.15.42.md).
 
 | Package | Use it when… |
 | --- | --- |
