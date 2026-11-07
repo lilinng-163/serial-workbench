@@ -88,6 +88,7 @@ private:
     bool commit();
     void refreshCatalog();
     void refreshState();
+    void resizeFirmwareTable();
     void refreshPlan();
     void run(const QString &operation);
     void cancelRun(const QString &jobId);

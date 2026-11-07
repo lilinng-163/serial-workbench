@@ -236,17 +236,18 @@ OpenOcdDialog::OpenOcdDialog(OpenOcdService *owner, QWidget *parent, bool embedd
     auto firmware = new QGroupBox("固件");
     auto firmwareLayout = new QVBoxLayout(firmware);
     firmwareLayout->setContentsMargins(12, 18, 12, 12);
-    images = new QTableWidget(0, 2);
+    images = new QTableWidget(0, 2, firmware);
     images->setObjectName("openocdImages");
-    images->setHorizontalHeaderLabels({"文件路径", "地址（BIN 必填）"});
+    images->setHorizontalHeaderLabels({"文件路径", "BIN 烧录地址"});
     images->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     images->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
-    images->setColumnWidth(1, 155);
+    images->setColumnWidth(1, 126);
+    images->setWordWrap(false);
     images->setTextElideMode(Qt::ElideMiddle);
     images->verticalHeader()->hide();
     images->setSelectionBehavior(QAbstractItemView::SelectRows);
-    images->setMinimumHeight(100);
-    images->setMaximumHeight(130);
+    connect(images->horizontalHeader(), &QHeaderView::geometriesChanged,
+        this, &OpenOcdDialog::resizeFirmwareTable, Qt::QueuedConnection);
     auto filesRow = new QHBoxLayout();
     auto add = new QPushButton("选择固件…");
     auto remove = new QPushButton("移除选中");
@@ -402,7 +403,15 @@ OpenOcdDialog::OpenOcdDialog(OpenOcdService *owner, QWidget *parent, bool embedd
     });
     for (auto spin : {speed, timeout}) { connect(spin, &QSpinBox::valueChanged, this, &OpenOcdDialog::commit); }
     for (auto check : {verify, resetRun}) { connect(check, &QCheckBox::toggled, this, &OpenOcdDialog::commit); }
-    connect(images, &QTableWidget::cellChanged, this, &OpenOcdDialog::commit);
+    connect(images, &QTableWidget::itemChanged, this, [this](QTableWidgetItem *item)
+    {
+        if (item->column() == 0)
+        {
+            const QSignalBlocker blocker(images);
+            item->setToolTip(item->text());
+        }
+        commit();
+    });
     connect(add, &QPushButton::clicked, this, [this]
     {
         const auto files = QFileDialog::getOpenFileNames(this, "选择固件", {}, "固件 (*.elf *.hex *.ihex *.s19 *.srec *.bin)");
@@ -700,12 +709,18 @@ void OpenOcdDialog::refreshCatalog()
     }
 }
 
+void OpenOcdDialog::resizeFirmwareTable()
+{
+    const int visibleFiles = qBound(3, images->rowCount(), 6);
+    const auto header = images->horizontalHeader();
+    const int fileHeight = qMax(header->height(), header->sizeHint().height())
+        + visibleFiles * images->verticalHeader()->defaultSectionSize() + 4;
+    images->setFixedHeight(fileHeight);
+}
+
 void OpenOcdDialog::refreshPlan()
 {
-    const int visibleFiles = qBound(1, images->rowCount(), 3);
-    const int fileHeight = images->horizontalHeader()->sizeHint().height()
-        + visibleFiles * images->verticalHeader()->defaultSectionSize() + 4;
-    images->setFixedHeight(qMax(76, fileHeight));
+    resizeFirmwareTable();
     const bool boardMode = mode->currentData() == "board";
     deviceForm->setRowVisible(board, boardMode);
     deviceForm->setRowVisible(adapter, !boardMode);
