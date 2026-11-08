@@ -1,5 +1,12 @@
 # 开发交接记录
 
+## 2026-11-08 — v0.15.43 已发布至 GitHub 与网站
+
+- PR #12 合入快速上手教程和发送换行选项修复。标签对应发行提交 2f4040779ad0588cebab9c3ce3a95e777e54661f，GitHub latest 为 v0.15.43。安装包、便携 ZIP、单文件 EXE 和 SHA256SUMS 的远端大小与摘要均匹配本地。
+- Windows Release 构建、版本回溯测试、正式 ZIP 和单文件启动检查通过。复用教程和换行框的实窗验证。包内 HTTP 与 STDIO 均确认 37 个 MCP 工具。
+- 通过 Serial Workbench MCP SSH 从本机上传安装包。网站下载、首页、项目页和软件更新清单均显示 v0.15.43。公网完整下载为 17227708 字节，SHA-256 为 e8409cc39df8bb5c2fbb4137e1c648d9aff7260f257bfbe777beea5eb495ddbf，与 GitHub 一致。部署 releases/20261108-manual-0-15-43-b15c68c6，并核对备案链接和校庆媒体。
+- 下载后备元数据已同步。站点构建与两项部署测试通过。发行文件位于 dist/releases/0.15.43，验证记录位于 build/release-0.15.43-verification 和 dist/website-sync/0.15.43。
+
 ## 2026-11-08 — 修复发送栏换行文字截断
 
 - 换行下拉框按选项内容调整宽度，并留出主题内边距与下拉箭头所需的最小宽度。四种发送行尾及其报文字节映射沿用原值。
