@@ -253,9 +253,6 @@ SectionEnd
 Section /o "Grok Build 使用指南 skill（当前用户）" SkillGrok
     !insertmacro InstallAgentSkill grok
 SectionEnd
-Section /o "Gemini CLI 使用指南 skill（当前用户）" SkillGemini
-    !insertmacro InstallAgentSkill gemini
-SectionEnd
 
 Section /o "Cursor 使用指南 skill（当前用户）" SkillCursor
     !insertmacro InstallAgentSkill cursor
@@ -300,7 +297,6 @@ SectionEnd
 !insertmacro MUI_DESCRIPTION_TEXT ${SkillHermes} "遵循 HERMES_HOME，安装软件/MCP/脚本使用指南，已有内容先备份。"
 !insertmacro MUI_DESCRIPTION_TEXT ${SkillOpenClaw} "遵循 OPENCLAW_STATE_DIR，安装到 managed skills，已有内容先备份。"
 !insertmacro MUI_DESCRIPTION_TEXT ${SkillGrok} "安装到当前用户 .grok/skills，已有内容先备份。"
-!insertmacro MUI_DESCRIPTION_TEXT ${SkillGemini} "安装到当前用户 .gemini/skills，已有内容先备份。"
 !insertmacro MUI_DESCRIPTION_TEXT ${SkillCursor} "可选。安装软件、MCP、脚本和 3D 使用指南到 Cursor 的用户 skill 目录；原内容先备份，安装后重载 Agent。"
 !insertmacro MUI_DESCRIPTION_TEXT ${SkillCopilot} "可选。安装软件、MCP、脚本和 3D 使用指南到 Copilot 的用户 skill 目录；原内容先备份，安装后重载 Agent。"
 !insertmacro MUI_DESCRIPTION_TEXT ${SkillWindsurf} "可选。安装软件、MCP、脚本和 3D 使用指南到 Windsurf 的用户 skill 目录；原内容先备份，安装后重载 Agent。"
@@ -356,10 +352,6 @@ Function DetectSkillAgents
     ReadINIStr $1 "$PLUGINSDIR\agents.ini" "agents" "grok"
     ${If} $1 == "1"
         !insertmacro SelectSection ${SkillGrok}
-    ${EndIf}
-    ReadINIStr $1 "$PLUGINSDIR\agents.ini" "agents" "gemini"
-    ${If} $1 == "1"
-        !insertmacro SelectSection ${SkillGemini}
     ${EndIf}
     ReadINIStr $1 "$PLUGINSDIR\agents.ini" "agents" "cursor"
     ${If} $1 == "1"

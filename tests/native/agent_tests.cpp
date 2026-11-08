@@ -25,7 +25,7 @@ class AgentTests : public QObject
 
     static void installAll(const sw::AgentEnvironment &env)
     {
-        for (const auto &command : QStringList {"codex", "claude", "opencode", "pi", "hermes", "openclaw", "grok", "gemini",
+        for (const auto &command : QStringList {"codex", "claude", "opencode", "pi", "hermes", "openclaw", "grok",
             "cursor", "code", "code-insiders", "copilot", "windsurf", "devin", "cline", "kilo", "kiro-cli", "qoder", "zed", "trae", "agy", "qwen", "kimi"})
         {
             write(env.searchPaths.first() + "/" + command + ".cmd", "installation fixture");
@@ -134,7 +134,7 @@ private slots:
         for (const auto &agent : sw::AgentConfig::discover(env)) { QVERIFY(!agent.installed()); }
         installAll(env);
         const auto clients = sw::AgentConfig::discover(env);
-        QCOMPARE(clients.size(), 26);
+        QCOMPARE(clients.size(), 25);
         for (const auto &agent : clients) { QVERIFY2(agent.installed(), qPrintable(agent.name)); }
         env.variables["CODEX_HOME"] = directory.filePath("custom-codex");
         env.variables["PI_CODING_AGENT_DIR"] = directory.filePath("custom-pi");
@@ -164,7 +164,6 @@ private slots:
         QTest::newRow("hermes") << 5 << QByteArray("model: keep\n# preserve me\nmcp_servers:\n  other:\n    url: https://other.invalid/mcp\notherSetting: 42\n");
         QTest::newRow("openclaw-json5") << 6 << QByteArray("{ // preserve me\notherSetting: 42, mcp: { servers: { other: {url: 'https://other.invalid/mcp'}, }, }, }");
         QTest::newRow("grok") << 7 << toml;
-        QTest::newRow("gemini") << 8 << json;
     }
 
     void configurations()
@@ -347,7 +346,7 @@ private slots:
             panel.setStyleSheet(theme.stylesheet());
             QApplication::processEvents();
             auto logos = panel.findChildren<QLabel *>("agentLogo");
-            QCOMPARE(logos.size(), 26);
+            QCOMPARE(logos.size(), 25);
             for (auto logo : logos)
             {
                 const auto id = logo->parent()->property("agentId").toString();
@@ -465,7 +464,7 @@ private slots:
         filter->setText("not-a-client");
         QCOMPARE(grid->count(), 0);
         filter->clear();
-        QCOMPARE(grid->count(), 26);
+        QCOMPARE(grid->count(), 25);
         if (!capture.isEmpty())
         {
             QTest::qWait(100);
@@ -484,7 +483,8 @@ private slots:
         QTemporaryDir directory;
         auto env = environment(directory);
         write(env.searchPaths.first() + "/codex.cmd", "fixture");
-        write(env.searchPaths.first() + "/gemini.cmd", "fixture");
+        write(env.searchPaths.first() + "/grok.cmd", "fixture");
+        write(env.searchPaths.first() + "/gemini.cmd", "retired client fixture");
         sw::Engine engine;
         sw::McpServer server(&engine);
         QVERIFY(server.start(0));
@@ -494,13 +494,15 @@ private slots:
         auto grid = panel.findChild<QGridLayout *>("agentGrid");
         QVERIFY(grid);
         QCOMPARE(grid->columnCount(), 2);
-        QCOMPARE(grid->count(), 26);
+        QCOMPARE(grid->count(), 25);
         for (auto logo : panel.findChildren<QLabel *>("agentLogo")) { QVERIFY(!logo->pixmap().isNull()); }
         QVERIFY(panel.findChild<QPushButton *>("configure_codex")->isEnabled());
         QVERIFY(!panel.findChild<QPushButton *>("check_pi")->isEnabled());
         QVERIFY(panel.findChild<QCheckBox *>("agentAutoStart")->isChecked());
         panel.configureAll();
-        QTRY_VERIFY(QFileInfo::exists(directory.filePath(".gemini/settings.json")));
+        QTRY_VERIFY(QFileInfo::exists(directory.filePath(".grok/config.toml")));
+        QVERIFY(!panel.findChild<QPushButton *>("configure_gemini"));
+        QVERIFY(!QFileInfo::exists(directory.filePath(".gemini/settings.json")));
         QVERIFY(QFileInfo::exists(directory.filePath(".codex/config.toml")));
         QVERIFY(!QFileInfo::exists(directory.filePath(".pi/agent/mcp.json")));
         QTRY_COMPARE(server.sessions.size(), 0);

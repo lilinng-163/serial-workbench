@@ -97,7 +97,8 @@ private slots:
             scroll->verticalScrollBar()->setValue(scroll->verticalScrollBar()->maximum());
             capture(dialog, "settings-compact");
             auto clients = dialog->findChild<QScrollArea *>("clientsScroll");
-            auto last = clients->findChild<QPushButton *>("check_gemini");
+            auto last = clients->findChild<QPushButton *>("check_kimi");
+            QVERIFY(last);
             clients->ensureWidgetVisible(last, 0, 0);
             QTRY_VERIFY(clients->viewport()->rect().contains(last->mapTo(clients->viewport(), last->rect().center())));
             mcpPages->setCurrentIndex(2);

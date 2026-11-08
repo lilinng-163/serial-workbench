@@ -85,7 +85,6 @@ qt_add_resources(workbench_ui workbench_assets
     BASE "${asset_root}"
     FILES
         "${asset_root}/agents/claude.svg"
-        "${asset_root}/agents/gemini.svg"
         "${asset_root}/agents/grok.svg"
         "${asset_root}/agents/hermes.svg"
         "${asset_root}/agents/hermes-dark.svg"

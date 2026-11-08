@@ -1,5 +1,11 @@
 # 开发交接记录
 
+## 2026-11-08 — 移除 Gemini CLI 专用接入
+
+- 移除 Gemini CLI 的 Agent 适配器、设置入口、Skill 安装目标、Windows 安装器组件和专用图标。Antigravity 保留其独立接入和目录。当前共有 25 个客户端适配入口、16 个 Skill 安装目标。
+- Windows 构建、21 项 Agent 测试、Skill 检测及设置页紧凑布局检查通过。旧 Gemini CLI 文件作为回归样本。NSIS 安装器编译成功，从便携解压包启动设置并核对 CLI 列表和已退役的导出 ID。
+- 本地测试包 dist/previews/SerialWorkbench-0.15.43-agent-list-preview-windows-x64.zip，运行 Start-Preview.cmd 进入 Agent 设置。
+
 ## 2026-11-08 — v0.15.43 已发布至 GitHub 与网站
 
 - PR #12 合入快速上手教程和发送换行选项修复。标签对应发行提交 2f4040779ad0588cebab9c3ce3a95e777e54661f，GitHub latest 为 v0.15.43。安装包、便携 ZIP、单文件 EXE 和 SHA256SUMS 的远端大小与摘要均匹配本地。

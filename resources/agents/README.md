@@ -13,7 +13,6 @@ offline and never downloaded when opening settings.
 | hermes.svg, hermes-dark.svg | https://github.com/NousResearch/hermes-agent/tree/main/assets (`icon-master.svg`, `icon-master-dark.svg`, MIT); only the outer app-tile rectangle removed, illustration and clipping retained; nested SVG viewport converted to an equivalent transform for Qt. |
 | openclaw.svg | https://openclaw.ai/favicon.svg; official gradient lobster, original paths/colors preserved. |
 | grok.svg | Grok logomark mirrored by https://github.com/lobehub/lobe-icons/blob/master/packages/static-svg/icons/grok.svg (MIT). Original mark, black/white according to theme. Official brand: https://grok.com/. |
-| gemini.svg | Full-color Gemini CLI icon from https://geminicli.com/brand-kit/ (`gemini-cli-icon_full-color.svg`), used unchanged. |
 
 Monochrome marks use their black/white variants; brand colors and proportions are
 preserved. The UI adds no background tile or border. Sources checked 2026-10-15.
