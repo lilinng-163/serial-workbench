@@ -278,7 +278,6 @@ QList<AgentClient> AgentConfig::discover(const AgentEnvironment &environment)
         {"hermes", "Hermes", "hermes.svg", environment.executable("hermes"), environment.variable("HERMES_HOME", home + "/.hermes") + "/config.yaml", "yaml", {"mcp_servers"}},
         {"openclaw", "OpenClaw", "openclaw.svg", environment.executable("openclaw"), environment.variable("OPENCLAW_CONFIG_PATH", environment.variable("OPENCLAW_STATE_DIR", home + "/.openclaw") + "/openclaw.json"), "json", {"mcp", "servers"}},
         {"grok", "Grok Build", "grok.svg", environment.executable("grok"), environment.variable("GROK_HOME", home + "/.grok") + "/config.toml", "toml", {"mcp_servers"}},
-        {"gemini", "Gemini CLI", "gemini.svg", environment.executable("gemini"), home + "/.gemini/settings.json", "json", {"mcpServers"}}
     };
     if (!agents[0].installed()) { agents[0].executable = desktopExecutable(environment, "Codex"); }
     if (agents[2].installed())
@@ -366,7 +365,7 @@ QJsonObject AgentConfig::entry(const AgentClient &agent, const QString &url, con
         return {{"command", bridge}, {"args", QJsonArray {"--url", url}}};
     }
     if (agent.id == "opencode" || agent.id == "kilo") { return {{"type", "remote"}, {"url", url}, {"enabled", true}}; }
-    if (agent.id == "gemini" || agent.id == "qwen") { return {{"httpUrl", url}}; }
+    if (agent.id == "qwen") { return {{"httpUrl", url}}; }
     if (agent.id == "antigravity") { return {{"serverUrl", url}}; }
     if (agent.id == "openclaw") { return {{"transport", "streamable-http"}, {"url", url}, {"enabled", true}}; }
     if (agent.id == "claude-code") { return {{"type", "http"}, {"url", url}}; }

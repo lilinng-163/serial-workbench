@@ -150,7 +150,7 @@ STDIO starts the background runtime automatically, without opening the desktop. 
 
 ### Connect an agent
 
-The settings page can configure supported locally installed clients, including Codex, Claude Code, Claude Desktop, OpenCode, Gemini CLI, Pi, Hermes, OpenClaw and Grok Build. It updates the Serial Workbench entry while preserving other client settings. For manual setup:
+The settings page can configure supported locally installed clients, including Codex, Claude Code, Claude Desktop, OpenCode, Pi, Hermes, OpenClaw and Grok Build. It updates the Serial Workbench entry while preserving other client settings. For manual setup:
 
 <details>
 <summary><strong>Codex</strong></summary>
@@ -218,7 +218,7 @@ Without `--url`, the bridge starts or reuses the background runtime. An explicit
 
 </details>
 
-The application provides **26 client adapters** and **17 skill installation targets**, including Cursor, VS Code / Copilot, Cline, Kilo, Kiro, Qoder, Zed, Antigravity and Qwen Code. Use the searchable Settings panel or `SerialWorkbenchCLI agents`. Each adapter offers configuration export; clients with unverified or version-dependent storage paths use manual import. `export-agent generic` covers other compatible MCP clients. See the [format and path reference](docs/agent-integration.md).
+The application provides **25 client adapters** and **16 skill installation targets**, including Cursor, VS Code / Copilot, Cline, Kilo, Kiro, Qoder, Zed, Antigravity and Qwen Code. Use the searchable Settings panel or `SerialWorkbenchCLI agents`. Each adapter offers configuration export; clients with unverified or version-dependent storage paths use manual import. `export-agent generic` covers other compatible MCP clients. See the [format and path reference](docs/agent-integration.md).
 
 ### What the agent can do
 

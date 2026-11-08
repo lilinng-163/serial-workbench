@@ -23,8 +23,6 @@ QJsonArray AgentSkill::targets(const AgentEnvironment &e)
             {"path", e.variable("OPENCLAW_STATE_DIR", e.home + "/.openclaw") + "/skills/serial-workbench"}},
         QJsonObject {{"agent", "grok"}, {"name", "Grok Build"},
             {"path", e.home + "/.grok/skills/serial-workbench"}},
-        QJsonObject {{"agent", "gemini"}, {"name", "Gemini CLI"},
-            {"path", e.home + "/.gemini/skills/serial-workbench"}},
         QJsonObject {{"agent", "cursor"}, {"name", "Cursor"}, {"path", e.home + "/.cursor/skills/serial-workbench"}},
         QJsonObject {{"agent", "copilot"}, {"name", "GitHub Copilot · CLI / VS Code"},
             {"path", e.variable("COPILOT_HOME", e.home + "/.copilot") + "/skills/serial-workbench"}},

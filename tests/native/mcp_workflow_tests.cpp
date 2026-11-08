@@ -246,14 +246,15 @@ private slots:
         auto e = environment(directory.path());
         write(directory.filePath("bin/codex.cmd"), "@echo off");
         write(directory.filePath("bin/pi.cmd"), "@echo off");
-        // A stale configuration directory must not count as an installed Agent.
+        // A retired Agent must stay absent even if its executable and config remain.
+        write(directory.filePath("bin/gemini.cmd"), "@echo off");
         write(directory.filePath(".gemini/settings.json"), "{}");
         const auto report = directory.filePath("detected.ini");
         sw::AgentSkill::writeDetection(report, e);
         QSettings detected(report, QSettings::IniFormat);
         QCOMPARE(detected.value("agents/codex").toString(), QString("1"));
         QCOMPARE(detected.value("agents/pi").toString(), QString("1"));
-        QCOMPARE(detected.value("agents/gemini").toString(), QString("0"));
+        QVERIFY(!detected.contains("agents/gemini"));
         sw::Engine engine;
         sw::McpServer mcp(&engine);
         sw::Window window(&engine, &mcp, directory.filePath("settings.json"));
@@ -264,15 +265,16 @@ private slots:
         QVERIFY(dialog);
         auto codex = dialog->findChild<QCheckBox *>("skill_codex");
         auto pi = dialog->findChild<QCheckBox *>("skill_pi");
-        auto gemini = dialog->findChild<QCheckBox *>("skill_gemini");
-        QVERIFY(codex->isChecked() && pi->isChecked() && !gemini->isChecked());
+        QVERIFY(codex && pi);
+        QVERIFY(codex->isChecked() && pi->isChecked());
+        QVERIFY(!dialog->findChild<QCheckBox *>("skill_gemini"));
         QVERIFY(!QFileInfo::exists(directory.filePath(".codex/skills/serial-workbench/SKILL.md")));
         dialog->findChild<QPushButton *>("installSelectedSkills")->click();
         QVERIFY(QFileInfo::exists(directory.filePath(".codex/skills/serial-workbench/SKILL.md")));
         QVERIFY(QFileInfo::exists(directory.filePath(".pi/agent/skills/serial-workbench/SKILL.md")));
         QVERIFY(!QFileInfo::exists(directory.filePath(".gemini/skills/serial-workbench/SKILL.md")));
         QVERIFY(!QFileInfo::exists(directory.filePath(".codex/config.toml")));
-        QCOMPARE(dialog->findChildren<QCheckBox *>().size(), 17);
+        QCOMPARE(dialog->findChildren<QCheckBox *>().size(), 16);
         dialog->findChild<QPushButton *>("installSelectedSkills")->click();
         QVERIFY(dialog->findChild<QLabel *>("skillState_codex")->text().contains("0 个备份"));
         const auto captures = qEnvironmentVariable("MCP_WORKFLOW_CAPTURE_DIR");

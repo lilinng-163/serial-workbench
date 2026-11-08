@@ -150,7 +150,7 @@ STDIO 接入可自动启动后台工作台，不必先打开界面。设置 → 
 
 ### 接入 AI 客户端
 
-设置页可配置本机已安装的 Codex、Claude Code、Claude Desktop、OpenCode、Gemini CLI、Pi、Hermes、OpenClaw 和 Grok Build。程序只更新 Serial Workbench 对应条目，保留其他客户端设置。也可手动接入：
+设置页可配置本机已安装的 Codex、Claude Code、Claude Desktop、OpenCode、Pi、Hermes、OpenClaw 和 Grok Build。程序只更新 Serial Workbench 对应条目，保留其他客户端设置。也可手动接入：
 
 <details>
 <summary><strong>Codex</strong></summary>
@@ -218,7 +218,7 @@ V1 `opencode.json` / `opencode.jsonc` 可合并以下条目：
 
 </details>
 
-当前提供 **26 个客户端适配入口**与 **17 个 skill 安装目标**，涵盖 Cursor、VS Code / Copilot、Cline、Kilo、Kiro、Qoder、Zed、Antigravity、Qwen Code 等。设置页可搜索，也可用 `SerialWorkbenchCLI agents` 查看；每个入口可导出配置，路径尚未确认或依版本变化的客户端通过导入接入。其他兼容 MCP 的客户端使用 `export-agent generic`。详见[格式与路径说明](docs/agent-integration.md)。
+当前提供 **25 个客户端适配入口**与 **16 个 skill 安装目标**，涵盖 Cursor、VS Code / Copilot、Cline、Kilo、Kiro、Qoder、Zed、Antigravity、Qwen Code 等。设置页可搜索，也可用 `SerialWorkbenchCLI agents` 查看；每个入口可导出配置，路径尚未确认或依版本变化的客户端通过导入接入。其他兼容 MCP 的客户端使用 `export-agent generic`。详见[格式与路径说明](docs/agent-integration.md)。
 
 ### AI 可以做什么
 
