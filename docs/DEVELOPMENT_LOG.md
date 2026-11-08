@@ -1,5 +1,12 @@
 # 开发交接记录
 
+## 2026-11-08 — v0.15.44 已发布至 GitHub 与网站
+
+- PR #14 合入 Gemini CLI 接入移除，发行提交为 73bb455fa314f3e7aa76f11d28ae30a5830fc729。GitHub 提供安装包、便携 ZIP、单文件 EXE 和 SHA256SUMS。
+- 正式 Windows 包已构建。按要求复用发布前的 Agent、Skill、设置页和安装器验证，本轮未重复运行测试。
+- 通过 Serial Workbench MCP SSH 从本机上传安装包，更新官网与软件更新清单。公网完整下载为 17222175 字节，SHA-256 为 da67be89f29a4e4a25eb4e3e5673d1162e69054587672cd39593637752620f4c，与 GitHub 一致。网站激活为 releases/20261108-manual-0-15-44-db677f58。
+- 发布文件位于 dist/releases/0.15.44，公网验证记录位于 dist/website-sync/0.15.44。仓库网站后备下载信息已同步。
+
 ## 2026-11-08 — 移除 Gemini CLI 专用接入
 
 - 移除 Gemini CLI 的 Agent 适配器、设置入口、Skill 安装目标、Windows 安装器组件和专用图标。Antigravity 保留其独立接入和目录。当前共有 25 个客户端适配入口、16 个 Skill 安装目标。
