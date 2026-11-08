@@ -2,6 +2,24 @@
   {
     "assets": [
       {
+        "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.43/SerialWorkbench-0.15.43-windows-x64-setup.exe",
+        "digest": "sha256:e8409cc39df8bb5c2fbb4137e1c648d9aff7260f257bfbe777beea5eb495ddbf",
+        "name": "SerialWorkbench-0.15.43-windows-x64-setup.exe",
+        "size": 17227708,
+        "state": "uploaded"
+      }
+    ],
+    "body": "# Serial Workbench 0.15.43\r\n\r\n- 左侧连接区新增离线「快速上手」教程，也可按 F1 打开。包含串口连接、收发、常见问题和波形、RTT、MCP 的入口指引。\r\n- 教程可一键打开本地演示波形，无需连接设备。\r\n- 修复发送栏换行下拉框截断，紧凑窗口中可完整显示无换行、LF、CR 和 CRLF。\r\n\r\n## English\r\n\r\n- Open the offline quick-start tutorial from the connection sidebar or by pressing F1. It covers first-time serial setup, sending and receiving, troubleshooting, and where to find waveforms, RTT, and MCP.\r\n- Start a local waveform demo from the tutorial without connecting hardware.\r\n- Fix clipped labels in the send line-ending selector. All four choices fit in the compact window layout.\r\n",
+    "draft": false,
+    "html_url": "https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.43",
+    "name": "Serial Workbench 0.15.43",
+    "prerelease": false,
+    "published_at": "2026-11-08T11:28:24Z",
+    "tag_name": "v0.15.43"
+  },
+  {
+    "assets": [
+      {
         "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.42/SerialWorkbench-0.15.42-windows-x64-setup.exe",
         "digest": "sha256:b82208aaa4eb7cab1b5360b9cbfeadbbb076d2984b31b0632fea112430e21e16",
         "name": "SerialWorkbench-0.15.42-windows-x64-setup.exe",
@@ -34,23 +52,5 @@
     "prerelease": false,
     "published_at": "2026-11-06T16:00:10Z",
     "tag_name": "v0.15.41"
-  },
-  {
-    "assets": [
-      {
-        "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.40/SerialWorkbench-0.15.40-windows-x64-setup.exe",
-        "digest": "sha256:01c4654837324a3962a317b4713e5fd583087b037ca8b02065b19aa3b519e73d",
-        "name": "SerialWorkbench-0.15.40-windows-x64-setup.exe",
-        "size": 17077313,
-        "state": "uploaded"
-      }
-    ],
-    "body": "# Serial Workbench 0.15.40\n\n- 原始文件发送可设置每块字节数和块间隔，方便适配处理速度较慢的设备。发送超时计入线路时间，修复低波特率下的提前超时。\n- 新增 XMODEM-1K CRC 发送，设备支持时可用 1024 字节块减少确认次数，短尾块使用 128 字节。原有 128 字节 CRC 模式继续可选。\n- 修复取消后立即重开时残留回调干扰新传输的问题。接收半包按数据间的空闲时间判断超时。\n\nWindows x64 提供安装包、便携 ZIP、单文件 EXE 和 SHA-256 校验文件。34 项串口传输测试通过。虚拟串口 Demo 的原始发送和 XMODEM-1K 均通过完整文件校验，后者也通过 CRC 错误重传验证。\n\n## English\n\n- Configure raw file chunk size and delay to accommodate slower receivers. Include estimated wire time in the timeout budget for low baud rates.\n- Send with XMODEM-1K CRC when the receiver supports 1024-byte blocks, with 128-byte blocks for short tails. The original 128-byte CRC mode is still available.\n- Cancel queued sends when a transfer ends and time out partial receive frames based on line inactivity.\n\nWindows x64 installer, portable ZIP, single-file EXE, and SHA-256 checksums are available. All 34 serial transfer cases passed. Virtual serial transfers preserved file integrity in both raw and XMODEM-1K modes, including recovery from a CRC error.\r\n",
-    "draft": false,
-    "html_url": "https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.40",
-    "name": "Serial Workbench 0.15.40",
-    "prerelease": false,
-    "published_at": "2026-11-05T03:39:29Z",
-    "tag_name": "v0.15.40"
   }
 ]

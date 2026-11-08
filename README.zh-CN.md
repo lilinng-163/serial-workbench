@@ -62,7 +62,7 @@
 
 **[下载最新版本 →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.43 新增离线快速上手教程与本地演示波形，并修复发送栏换行选项文字截断。[查看更新说明](docs/releases/0.15.43.md)。
+v0.15.44 移除设置页、CLI 和 Windows 安装器中的 Gemini CLI 专用接入。[查看更新说明](docs/releases/0.15.44.md)。
 
 | 文件 | 适合的使用方式 |
 | --- | --- |
