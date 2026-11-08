@@ -27,7 +27,7 @@ int main(int argc, char *argv[])
     parser.addOption({"export-agent", "Export an Agent MCP configuration without writing client files", "agent"});
     parser.addOption({"list-agents", "List Agent IDs, detection, configuration and skill destinations"});
     parser.addOption({"demo", "Show generated example data"});
-    parser.addOption({"view", "Preview waveform, json, xml, settings, dark, search, terminal, ssh, detached, floating-wave, narrow, protocol or openocd", "name"});
+    parser.addOption({"view", "Preview waveform, json, xml, settings, quick-start, dark, search, terminal, ssh, detached, floating-wave, narrow, protocol or openocd", "name"});
     parser.addOption({"screenshot", "Save window preview", "path"});
     parser.addOption({"ready-file", "Write startup timing", "path"});
     parser.addOption({"quit-after", "Close after milliseconds", "ms"});
@@ -262,6 +262,10 @@ int main(int argc, char *argv[])
         else if (view == "settings")
         {
             window.openSettings();
+        }
+        else if (view == "quick-start")
+        {
+            previewTarget = window.openQuickStart();
         }
         else if (view == "dark")
         {

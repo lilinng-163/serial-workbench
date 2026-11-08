@@ -300,6 +300,32 @@ private slots:
         window.close();
     }
 
+    void quickStartOpensLocalDemo()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer server(&engine);
+        sw::Window window(&engine, &server, directory.filePath("settings.json"));
+        window.show();
+        auto help = window.findChild<QPushButton *>("quickStartButton");
+        QVERIFY(help);
+        help->click();
+        auto dialog = window.findChild<QDialog *>("quickStartDialog");
+        QVERIFY(dialog);
+        dialog->resize(420, 320);
+        auto browser = dialog->findChild<QTextBrowser *>();
+        auto demo = dialog->findChild<QPushButton *>("quickStartDemo");
+        QVERIFY(browser && demo);
+        QTRY_VERIFY(browser->verticalScrollBar()->maximum() > 0);
+        QVERIFY(dialog->rect().contains(QRect(demo->mapTo(dialog, QPoint()), demo->size())));
+        capture(dialog, "quick-start-compact");
+        demo->click();
+        QVERIFY(window.active && window.active->instrument);
+        QCOMPARE(window.active->instrument->kind, QString("waveform"));
+        QCOMPARE(window.active->sourceKey, sw::Config::waveformDemo().key());
+        QCOMPARE(engine.channels.size(), 1);
+    }
+
     void dataFontDialogOpensWithEffectsVisible()
     {
         QTemporaryDir directory;

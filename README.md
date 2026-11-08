@@ -75,6 +75,8 @@ The installer includes the runtime libraries and MCP bridge. SSH uses the Window
 
 ## Quick start
 
+Select **快速上手** in the connection sidebar or press **F1** to open the in-app tutorial. You can launch a demo waveform without hardware.
+
 1. Install or extract the application, then launch **Serial Workbench**. It does not connect to hardware automatically.
 2. Choose **串口 / TCP 客户端 / TCP 服务端 / UDP / SSH**, fill in the connection parameters and connect.
 3. For serial/network sessions, use the receive log and send panel, or switch to an interactive terminal. **SSH opens directly in the terminal**, with no log-mode switch or serial send panel.
