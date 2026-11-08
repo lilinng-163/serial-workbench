@@ -62,7 +62,7 @@ Screenshots are captured from the application using generated example data and l
 
 **[Download the latest release →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.42 adds a full-width OpenOCD RTT console with independent connection settings, reconnects to a running RTT service after an unexpected TCP disconnect, and shares log search with MCP. The firmware table shows more segments and keeps long filenames visible. [Release notes](docs/releases/0.15.42.md).
+v0.15.43 adds an offline quick-start tutorial with a local waveform demo and fixes clipped labels in the send line-ending selector. [Release notes](docs/releases/0.15.43.md).
 
 | Package | Use it when… |
 | --- | --- |

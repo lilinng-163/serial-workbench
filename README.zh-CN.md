@@ -62,7 +62,7 @@
 
 **[下载最新版本 →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.42 新增 OpenOCD 全宽 RTT 终端，连接参数独立设置，TCP 断开后可尝试重连仍在运行的服务，日志搜索与 MCP 同步。固件表格可显示更多分段，长路径优先保留文件名。[查看更新说明](docs/releases/0.15.42.md)。
+v0.15.43 新增离线快速上手教程与本地演示波形，并修复发送栏换行选项文字截断。[查看更新说明](docs/releases/0.15.43.md)。
 
 | 文件 | 适合的使用方式 |
 | --- | --- |
