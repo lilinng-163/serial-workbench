@@ -62,7 +62,7 @@ Screenshots are captured from the application using generated example data and l
 
 **[Download the latest release →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.42 adds a full-width OpenOCD RTT console with independent connection settings, reconnects to a running RTT service after an unexpected TCP disconnect, and shares log search with MCP. The firmware table shows more segments and keeps long filenames visible. [Release notes](docs/releases/0.15.42.md).
+v0.15.43 adds an offline quick-start tutorial with a local waveform demo and fixes clipped labels in the send line-ending selector. [Release notes](docs/releases/0.15.43.md).
 
 | Package | Use it when… |
 | --- | --- |
@@ -74,6 +74,8 @@ v0.15.42 adds a full-width OpenOCD RTT console with independent connection setti
 The installer includes the runtime libraries and MCP bridge. SSH uses the Windows OpenSSH client (`ssh.exe`). The installer detects GUI/background runtimes and MCP bridges and offers to save settings, close them and continue; silent mode requires explicit `/CLOSEAPPLICATIONS` consent. Reconnect your Agent after upgrading. Installer settings are kept in `%LOCALAPPDATA%/SerialWorkbench/settings.json`; portable settings live beside the executable. See [installation and upgrades](docs/windows-installer.md).
 
 ## Quick start
+
+Select **快速上手** in the connection sidebar or press **F1** to open the in-app tutorial. You can launch a demo waveform without hardware.
 
 1. Install or extract the application, then launch **Serial Workbench**. It does not connect to hardware automatically.
 2. Choose **串口 / TCP 客户端 / TCP 服务端 / UDP / SSH**, fill in the connection parameters and connect.

@@ -2,6 +2,24 @@
   {
     "assets": [
       {
+        "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.42/SerialWorkbench-0.15.42-windows-x64-setup.exe",
+        "digest": "sha256:b82208aaa4eb7cab1b5360b9cbfeadbbb076d2984b31b0632fea112430e21e16",
+        "name": "SerialWorkbench-0.15.42-windows-x64-setup.exe",
+        "size": 17213676,
+        "state": "uploaded"
+      }
+    ],
+    "body": "# Serial Workbench 0.15.42\n\n- OpenOCD 每个板卡页现在有独立的「固件烧录」和「RTT 日志」工作区。RTT 终端占用主区域，连接参数收进独立窗口。支持 ANSI 彩色日志、弹出终端、暂停、复制和导出。\n- RTT 可由工作台启动 OpenOCD，也可连接已有 RTT 服务。TCP 意外断开后会在有限时间内重连同一服务，保留任务、日志和读取进度。连接日志区分初始化、TCP 连接和等待固件输出。\n- `Ctrl+F` 支持大小写、全词、正则及 `&&` / `||`。`search_openocd_rtt` 和界面共用筛选条件，`read_openocd_rtt` 提供原始日志和独立游标。\n- 固件表格预留三行，最多同时显示六个分段。长路径保留文件名，悬停可查看完整路径。\n\nWindows x64 提供安装包、便携 ZIP、单文件 EXE 和 SHA-256 校验文件。通过 CMSIS-DAP 在 STM32F103 上验证了彩色 RTT 日志与 MCP 搜索，断线续收使用模拟服务验证。\n\n## English\n\n- Each OpenOCD board tab has separate flashing and RTT workspaces. The RTT console fills the main area, with connection settings in a separate window. It supports ANSI colors, a pop-out console, pause, copy and export.\n- Start OpenOCD from the workbench or connect to an existing RTT service. After an unexpected TCP disconnect, the workbench retries the same service for a limited time and preserves the job, logs and read cursors. Connection diagnostics distinguish initialization, TCP connection and waiting for firmware output.\n- Use `Ctrl+F` to search with case, whole-word, regex and `&&` / `||` options. `search_openocd_rtt` shares the GUI filter, and `read_openocd_rtt` provides raw logs with independent cursors.\n- The firmware table reserves three rows and shows up to six segments at once. Long paths keep the filename visible, and hovering shows the full path.\n\nWindows x64 installer, portable ZIP, single-file EXE and SHA-256 checksums are available. Color logs and MCP search were verified on STM32F103 with CMSIS-DAP. Reconnection was tested using a simulated service.\n",
+    "draft": false,
+    "html_url": "https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.42",
+    "name": "Serial Workbench 0.15.42",
+    "prerelease": false,
+    "published_at": "2026-11-07T12:51:24Z",
+    "tag_name": "v0.15.42"
+  },
+  {
+    "assets": [
+      {
         "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.41/SerialWorkbench-0.15.41-windows-x64-setup.exe",
         "digest": "sha256:40f502c16a2c269290c48cf311539badeaadd014935bc8786c113334a484d1cf",
         "name": "SerialWorkbench-0.15.41-windows-x64-setup.exe",
@@ -34,23 +52,5 @@
     "prerelease": false,
     "published_at": "2026-11-05T03:39:29Z",
     "tag_name": "v0.15.40"
-  },
-  {
-    "assets": [
-      {
-        "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.39/SerialWorkbench-0.15.39-windows-x64-setup.exe",
-        "digest": "sha256:983e383f154e66b5e6b9bbbc323c9856544b5bc90e5775519c30e0ae36b7f16b",
-        "name": "SerialWorkbench-0.15.39-windows-x64-setup.exe",
-        "size": 17074211,
-        "state": "uploaded"
-      }
-    ],
-    "body": "# Serial Workbench 0.15.39\n\n设置的「Agent 接入」页恢复品牌配色。Antigravity 使用官方渐变，TRAE 和 VS Code Insiders 使用绿色标识，Kilo Code 使用黄黑标识，Qwen Code 和 Zed 使用品牌蓝，Kimi Code 恢复蓝色圆点，Cursor 使用官方灰阶立体标识。官方单色图标随主题选用黑色或白色。\n\n推荐 Windows x64 安装包，另有便携 ZIP、单文件 EXE 和 SHA-256 校验文件。已检查 Windows 浅色和深色主题下的图标显示。\n\n## English\n\nThe Agent settings page now displays the original brand colors for Antigravity, TRAE, VS Code Insiders, Kilo Code, Qwen Code, Zed, Kimi Code, and Cursor. Official monochrome marks adapt to the active theme. The icons were checked in light and dark themes on Windows.\n\nChoose the Windows x64 installer, portable ZIP, or single-file EXE. SHA-256 checksums are included.\r\n",
-    "draft": false,
-    "html_url": "https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.39",
-    "name": "Serial Workbench 0.15.39",
-    "prerelease": false,
-    "published_at": "2026-11-05T03:09:13Z",
-    "tag_name": "v0.15.39"
   }
 ]

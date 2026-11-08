@@ -300,6 +300,63 @@ private slots:
         window.close();
     }
 
+    void sendNewlineFitsAllLabels()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer server(&engine);
+        sw::Window window(&engine, &server, directory.filePath("settings.json"));
+        window.resize(480, 640);
+        window.show();
+        auto combo = window.active->newline;
+        auto sidebar = window.findChild<QScrollArea *>("parameterScroll");
+        QVERIFY(sidebar);
+        QTRY_VERIFY(sidebar->isHidden());
+        QVERIFY(combo->isVisible());
+        auto monitor = window.active->monitorPage;
+        QVERIFY(monitor->rect().contains(QRect(combo->mapTo(monitor, QPoint()), combo->size())));
+        for (int index = 0; index < combo->count(); ++index)
+        {
+            combo->setCurrentIndex(index);
+            QStyleOptionComboBox option;
+            option.initFrom(combo);
+            option.frame = combo->hasFrame();
+            option.currentText = combo->currentText();
+            const auto textRect = combo->style()->subControlRect(QStyle::CC_ComboBox, &option,
+                QStyle::SC_ComboBoxEditField, combo);
+            const int textWidth = combo->fontMetrics().horizontalAdvance(option.currentText);
+            QVERIFY2(textRect.width() >= textWidth, qPrintable(QString("%1: %2 px available, %3 px needed")
+                .arg(option.currentText).arg(textRect.width()).arg(textWidth)));
+        }
+        capture(&window, "send-newline-compact");
+    }
+
+    void quickStartOpensLocalDemo()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer server(&engine);
+        sw::Window window(&engine, &server, directory.filePath("settings.json"));
+        window.show();
+        auto help = window.findChild<QPushButton *>("quickStartButton");
+        QVERIFY(help);
+        help->click();
+        auto dialog = window.findChild<QDialog *>("quickStartDialog");
+        QVERIFY(dialog);
+        dialog->resize(420, 320);
+        auto browser = dialog->findChild<QTextBrowser *>();
+        auto demo = dialog->findChild<QPushButton *>("quickStartDemo");
+        QVERIFY(browser && demo);
+        QTRY_VERIFY(browser->verticalScrollBar()->maximum() > 0);
+        QVERIFY(dialog->rect().contains(QRect(demo->mapTo(dialog, QPoint()), demo->size())));
+        capture(dialog, "quick-start-compact");
+        demo->click();
+        QVERIFY(window.active && window.active->instrument);
+        QCOMPARE(window.active->instrument->kind, QString("waveform"));
+        QCOMPARE(window.active->sourceKey, sw::Config::waveformDemo().key());
+        QCOMPARE(engine.channels.size(), 1);
+    }
+
     void dataFontDialogOpensWithEffectsVisible()
     {
         QTemporaryDir directory;

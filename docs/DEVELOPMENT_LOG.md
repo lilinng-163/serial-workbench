@@ -1,5 +1,17 @@
 # 开发交接记录
 
+## 2026-11-08 — 修复发送栏换行文字截断
+
+- 换行下拉框按选项内容调整宽度，并留出主题内边距与下拉箭头所需的最小宽度。四种发送行尾及其报文字节映射沿用原值。
+- Windows Release 构建与 `sendNewlineFitsAllLabels` 通过。验证 480 像素宽窗口中四种标签完整显示，并使用解压包实窗检查 CRLF。
+- Windows 便携预览位于 `dist/previews/SerialWorkbench-0.15.42-send-newline-preview-windows-x64.zip`，解压运行 `Start-Preview.cmd`。
+
+## 2026-11-08 — 软件内快速上手教程
+
+- 左侧连接区提供「快速上手」，也可按 F1 打开。内置离线教程覆盖串口参数、收发和常见问题，并提供波形、RTT、MCP 的入口指引。「打开演示波形」使用内置数据源。
+- Windows Release 构建通过。实窗检查了默认和紧凑尺寸，`quickStartOpensLocalDemo` 验证从侧栏进入教程、窄窗口可滚动和演示仅建立本地数据源。
+- 本地预览位于 `dist/previews/SerialWorkbench-0.15.42-quick-start-preview-windows-x64.zip`，解压后运行 `Start-Preview.cmd` 直达教程。
+
 ## 2026-11-07 — v0.15.42 已发布至 GitHub 与网站
 
 - `v0.15.42` 标签指向 `f3035000c93e5847ccf93deff1f5d9d1e2cb3a98`，GitHub Release 于 2026-11-07T12:51:24Z 发布为 latest。安装包、便携 ZIP、单文件 EXE 和 SHA256SUMS 的远端大小与 SHA-256 均与本地 `dist/releases/0.15.42/` 一致。

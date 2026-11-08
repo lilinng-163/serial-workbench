@@ -831,7 +831,9 @@ Pane::Pane(Window *owner, const QString &instrumentKind, OpenOcdService *flasher
     newline = combo({"None · 无换行", "LF · \\n", "CR · \\r", "CRLF · \\r\\n"});
     newline->setCurrentIndex(3);
     newline->menuPopup = true;
-    newline->setMinimumWidth(116);
+    newline->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    newline->setMinimumWidth(170);
+    newline->setMinimumWidth(170);
     newline->setToolTip("发送时追加的换行符");
     const QStringList lineNames {"None · 不追加换行", "LF · \\n · Line Feed", "CR · \\r · Carriage Return", "CRLF · \\r\\n · Carriage Return + Line Feed"};
     for (int i = 0; i < lineNames.size(); ++i)
@@ -2025,6 +2027,13 @@ Window::Window(Engine *owner, McpServer *service, const QString &path, Window *m
     connectButton->setMinimumHeight(40);
     connect(connectButton, &QPushButton::clicked, this, &Window::connectionAction);
     side->addWidget(connectButton);
+    auto quickStart = button("快速上手", "quickStartButton");
+    quickStart->setProperty("variant", "outline");
+    quickStart->setToolTip("查看入门教程（F1）");
+    side->addWidget(quickStart);
+    connect(quickStart, &QPushButton::clicked, this, &Window::openQuickStart);
+    auto quickStartShortcut = new QShortcut(QKeySequence(Qt::Key_F1), this);
+    connect(quickStartShortcut, &QShortcut::activated, this, &Window::openQuickStart);
     auto scriptRow = horizontal();
     scriptToggle = new QCheckBox("脚本解析");
     scriptToggle->setObjectName("scriptToggle");
@@ -3931,6 +3940,49 @@ bool Window::nativeEvent(const QByteArray &type, void *message, qintptr *result)
     }
 #endif
     return QMainWindow::nativeEvent(type, message, result);
+}
+
+QDialog *Window::openQuickStart()
+{
+    auto dialog = new QDialog(this);
+    dialog->setObjectName("quickStartDialog");
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle("Serial Workbench · 快速上手");
+    dialog->setMinimumSize(420, 320);
+    dialog->setSizeGripEnabled(true);
+    dialog->resize(720, 620);
+    auto body = new QVBoxLayout(dialog);
+    auto content = new QTextBrowser();
+    content->document()->setDocumentMargin(18);
+    content->setHtml(R"(<h2>第一次使用 Serial Workbench</h2>
+        <h3>1. 手边没有设备？先试一下波形</h3>
+        <p>点下方的「打开演示波形」。曲线由软件本地生成，可以试试滚轮缩放和双击恢复视图。</p>
+        <h3>2. 连接你的第一个串口</h3>
+        <p>插入开发板或 USB 转串口。在左侧选「串口」和对应端口，按固件的设置填写波特率、数据位、校验和停止位。<b>115200、8 数据位、无校验、1 停止位</b>是常见示例。点击「建立连接」。</p>
+        <p>设备发来的内容会出现在收发页。用底部发送栏输入设备能识别的命令，并按设备协议选择换行方式。需要发送字节时勾选发送栏的 HEX 选项。</p>
+        <p><b>找不到端口</b>时，先确认系统识别了设备。<b>收到乱码</b>时，核对波特率和串口格式。<b>端口被占用</b>时，关闭其他占用它的工具。</p>
+        <h3>3. 连接成功后可以做什么</h3>
+        <p><b>筛选日志。</b>在收发页搜索框输入关键字，按需打开大小写、全词、正则或逻辑匹配。</p>
+        <p><b>查看实时波形。</b>点击「＋ → 新建控件页面 → 数值波形」并选当前连接。设备每行可发送类似 <code>@wave temperature=25.5,voltage=3.3</code> 的数据，行末加换行。</p>
+        <p><b>用 OpenOCD 看 RTT。</b>点击「＋ → 新建 OpenOCD 页」。在「固件烧录」页配置调试器和芯片，在「RTT 日志 → 连接设置」选择启动 OpenOCD 或接入已有服务。固件需启用 RTT。</p>
+        <p><b>接入 AI。</b>打开「设置 → AI / MCP → Agent 接入」，选择你的客户端并配置。需要 AI 发送或控制连接时，再打开对应权限。</p>)");
+    body->addWidget(content, 1);
+    auto actions = horizontal();
+    auto demo = button("打开演示波形", "quickStartDemo");
+    demo->setProperty("primary", true);
+    auto done = button("关闭", "outline");
+    actions->addWidget(demo);
+    actions->addStretch();
+    actions->addWidget(done);
+    body->addLayout(actions);
+    connect(done, &QPushButton::clicked, dialog, &QDialog::close);
+    connect(demo, &QPushButton::clicked, dialog, [this, dialog]
+    {
+        dialog->accept();
+        newInstrument("waveform", engine->waveformDemo());
+    });
+    dialog->open();
+    return dialog;
 }
 
 void Window::waveHelp()

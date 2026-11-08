@@ -62,7 +62,7 @@
 
 **[下载最新版本 →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.42 新增 OpenOCD 全宽 RTT 终端，连接参数独立设置，TCP 断开后可尝试重连仍在运行的服务，日志搜索与 MCP 同步。固件表格可显示更多分段，长路径优先保留文件名。[查看更新说明](docs/releases/0.15.42.md)。
+v0.15.43 新增离线快速上手教程与本地演示波形，并修复发送栏换行选项文字截断。[查看更新说明](docs/releases/0.15.43.md)。
 
 | 文件 | 适合的使用方式 |
 | --- | --- |
@@ -74,6 +74,8 @@ v0.15.42 新增 OpenOCD 全宽 RTT 终端，连接参数独立设置，TCP 断�
 安装包内含运行库与 MCP 桥。SSH 使用 Windows OpenSSH 客户端（`ssh.exe`）。安装器会检测可见窗口、后台实例与 MCP 桥接，提供保存设置后关闭并继续的选项；静默安装只有显式传入 `/CLOSEAPPLICATIONS` 才会关闭。升级后重新连接 Agent。安装版配置保存在 `%LOCALAPPDATA%/SerialWorkbench/settings.json`，便携版保存在程序目录。详见[安装与升级](docs/windows-installer.md)。
 
 ## 快速开始
+
+在左侧连接区点击 **快速上手**，或按 **F1** 打开软件内教程。没有设备时可以直接打开演示波形。
 
 1. 安装或解压后启动 **Serial Workbench**。程序不会自动连接硬件。
 2. 选择 **串口 / TCP 客户端 / TCP 服务端 / UDP / SSH**，填写连接参数后建立连接。

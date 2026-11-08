@@ -271,6 +271,7 @@ public:
     bool holdsSerialPort(const QString &name) const;
     void protocolChanged();
     void openSettings();
+    QDialog *openQuickStart();
     void openOpenOcd();
     void installUpdate(const QString &path);
     void configureClient(int index, QLabel *result);
