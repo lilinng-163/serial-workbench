@@ -300,6 +300,37 @@ private slots:
         window.close();
     }
 
+    void sendNewlineFitsAllLabels()
+    {
+        QTemporaryDir directory;
+        sw::Engine engine;
+        sw::McpServer server(&engine);
+        sw::Window window(&engine, &server, directory.filePath("settings.json"));
+        window.resize(480, 640);
+        window.show();
+        auto combo = window.active->newline;
+        auto sidebar = window.findChild<QScrollArea *>("parameterScroll");
+        QVERIFY(sidebar);
+        QTRY_VERIFY(sidebar->isHidden());
+        QVERIFY(combo->isVisible());
+        auto monitor = window.active->monitorPage;
+        QVERIFY(monitor->rect().contains(QRect(combo->mapTo(monitor, QPoint()), combo->size())));
+        for (int index = 0; index < combo->count(); ++index)
+        {
+            combo->setCurrentIndex(index);
+            QStyleOptionComboBox option;
+            option.initFrom(combo);
+            option.frame = combo->hasFrame();
+            option.currentText = combo->currentText();
+            const auto textRect = combo->style()->subControlRect(QStyle::CC_ComboBox, &option,
+                QStyle::SC_ComboBoxEditField, combo);
+            const int textWidth = combo->fontMetrics().horizontalAdvance(option.currentText);
+            QVERIFY2(textRect.width() >= textWidth, qPrintable(QString("%1: %2 px available, %3 px needed")
+                .arg(option.currentText).arg(textRect.width()).arg(textWidth)));
+        }
+        capture(&window, "send-newline-compact");
+    }
+
     void quickStartOpensLocalDemo()
     {
         QTemporaryDir directory;

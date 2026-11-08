@@ -1,5 +1,11 @@
 # 开发交接记录
 
+## 2026-11-08 — 修复发送栏换行文字截断
+
+- 换行下拉框按选项内容调整宽度，并留出主题内边距与下拉箭头所需的最小宽度。四种发送行尾及其报文字节映射沿用原值。
+- Windows Release 构建与 `sendNewlineFitsAllLabels` 通过。验证 480 像素宽窗口中四种标签完整显示，并使用解压包实窗检查 CRLF。
+- Windows 便携预览位于 `dist/previews/SerialWorkbench-0.15.42-send-newline-preview-windows-x64.zip`，解压运行 `Start-Preview.cmd`。
+
 ## 2026-11-08 — 软件内快速上手教程
 
 - 左侧连接区提供「快速上手」，也可按 F1 打开。内置离线教程覆盖串口参数、收发和常见问题，并提供波形、RTT、MCP 的入口指引。「打开演示波形」使用内置数据源。

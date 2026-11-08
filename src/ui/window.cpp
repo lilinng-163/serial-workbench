@@ -831,7 +831,9 @@ Pane::Pane(Window *owner, const QString &instrumentKind, OpenOcdService *flasher
     newline = combo({"None · 无换行", "LF · \\n", "CR · \\r", "CRLF · \\r\\n"});
     newline->setCurrentIndex(3);
     newline->menuPopup = true;
-    newline->setMinimumWidth(116);
+    newline->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    newline->setMinimumWidth(170);
+    newline->setMinimumWidth(170);
     newline->setToolTip("发送时追加的换行符");
     const QStringList lineNames {"None · 不追加换行", "LF · \\n · Line Feed", "CR · \\r · Carriage Return", "CRLF · \\r\\n · Carriage Return + Line Feed"};
     for (int i = 0; i < lineNames.size(); ++i)
