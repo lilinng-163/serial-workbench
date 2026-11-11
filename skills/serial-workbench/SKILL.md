@@ -1,6 +1,6 @@
 ---
 name: serial-workbench
-description: Use Serial Workbench CLI or MCP to share device connections, search logs, validate frame parsers, inspect telemetry-driven 3D models, configure Agent clients, and control native OpenOCD flashing and RTT sessions.
+description: Use when a task explicitly involves Serial Workbench or its existing CLI/MCP workflow. Covers shared device connections, log search, frame parsers, telemetry-driven 3D views, Agent configuration, and OpenOCD flashing/RTT.
 ---
 
 # Serial Workbench

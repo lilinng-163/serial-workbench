@@ -271,6 +271,14 @@ private slots:
         QVERIFY(!QFileInfo::exists(directory.filePath(".codex/skills/serial-workbench/SKILL.md")));
         dialog->findChild<QPushButton *>("installSelectedSkills")->click();
         QVERIFY(QFileInfo::exists(directory.filePath(".codex/skills/serial-workbench/SKILL.md")));
+        const auto codexGuide = directory.filePath(".codex/skills/serial-workbench/references/openocd.md");
+        QVERIFY(QFileInfo::exists(codexGuide));
+        QVERIFY(QFile::remove(codexGuide));
+        QCOMPARE(sw::AgentSkill::targets(e).first().toObject()["skill_state"].toString(), QString("可更新 / 修复"));
+        dialog->findChild<QPushButton *>("installSelectedSkills")->click();
+        QFile repaired(codexGuide);
+        QVERIFY(repaired.open(QIODevice::ReadOnly));
+        QCOMPARE(repaired.readAll(), sw::UsageGuide::text("openocd").toUtf8());
         QVERIFY(QFileInfo::exists(directory.filePath(".pi/agent/skills/serial-workbench/SKILL.md")));
         QVERIFY(!QFileInfo::exists(directory.filePath(".gemini/skills/serial-workbench/SKILL.md")));
         QVERIFY(!QFileInfo::exists(directory.filePath(".codex/config.toml")));
@@ -323,8 +331,15 @@ private slots:
             const auto data = target.toObject();
             const auto result = sw::AgentSkill::install(data["agent"].toString(), e);
             QCOMPARE(result["directory"], data["path"]);
-            QVERIFY(QFileInfo::exists(data["path"].toString() + "/SKILL.md"));
-            QVERIFY(QFileInfo::exists(data["path"].toString() + "/references/frame-script.md"));
+            const auto files = sw::UsageGuide::files();
+            QVERIFY(files.contains("references/openocd.md"));
+            QCOMPARE(result["files"].toArray().size(), files.size());
+            for (auto file = files.begin(); file != files.end(); ++file)
+            {
+                QFile installed(data["path"].toString() + "/" + file.key());
+                QVERIFY(installed.open(QIODevice::ReadOnly));
+                QCOMPARE(installed.readAll(), file.value());
+            }
             QVERIFY(result["backups"].toArray().isEmpty());
             QVERIFY(sw::AgentSkill::install(data["agent"].toString(), e)["backups"].toArray().isEmpty());
         }
@@ -335,10 +350,48 @@ private slots:
         QFile backup(updated["backups"].toArray().first().toString());
         QVERIFY(backup.open(QIODevice::ReadOnly));
         QCOMPARE(backup.readAll(), QByteArray("user edited skill"));
+        QVERIFY(!backup.fileName().startsWith(QFileInfo(skill).absolutePath() + "/"));
+        const auto archive = updated["backup_directory"].toString();
+        QVERIFY(QFileInfo::exists(archive + "/manifest.json"));
+        const auto legacy = skill + ".20261017-094030-238-51c9ad73.bak";
+        write(legacy, "previous customization");
+        const auto migrated = sw::AgentSkill::install("codex", e);
+        QVERIFY(!QFileInfo::exists(legacy));
+        QFile saved(migrated["backups"].toArray().first().toString());
+        QVERIFY(saved.open(QIODevice::ReadOnly));
+        QCOMPARE(saved.readAll(), QByteArray("previous customization"));
+        QVERIFY(sw::AgentSkill::install("codex", e)["backups"].toArray().isEmpty());
+        QFile state(migrated["installation_record"].toString());
+        QVERIFY(state.open(QIODevice::ReadOnly));
+        auto record = QJsonDocument::fromJson(state.readAll()).object();
+        state.close();
+        record["version"] = "99.0.0";
+        write(state.fileName(), QJsonDocument(record).toJson());
+        QVERIFY_EXCEPTION_THROWN(sw::AgentSkill::install("codex", e), std::runtime_error);
         QFile untouched(config);
         QVERIFY(untouched.open(QIODevice::ReadOnly));
         QCOMPARE(untouched.readAll(), QByteArray("# unrelated user configuration\n"));
         QVERIFY_EXCEPTION_THROWN(sw::AgentSkill::install("unsupported", e), std::runtime_error);
+    }
+
+    void skillInstallFailurePreservesCustomFiles()
+    {
+        QTemporaryDir directory;
+        const auto e = environment(directory.path());
+        const auto skill = directory.filePath(".codex/skills/serial-workbench");
+        write(skill + "/SKILL.md", "user guide");
+        write(skill + "/references", "not a directory");
+        QVERIFY_EXCEPTION_THROWN(sw::AgentSkill::install("codex", e), std::runtime_error);
+        QFile original(skill + "/SKILL.md");
+        QVERIFY(original.open(QIODevice::ReadOnly));
+        QCOMPARE(original.readAll(), QByteArray("user guide"));
+        original.close();
+        QVERIFY(QFile::remove(skill + "/references"));
+        const auto result = sw::AgentSkill::install("codex", e);
+        const auto record = result["installation_record"].toString();
+        QLockFile held(QFileInfo(record).absolutePath() + "/install.lock");
+        QVERIFY(held.tryLock(0));
+        QVERIFY_EXCEPTION_THROWN(sw::AgentSkill::install("codex", e), std::runtime_error);
     }
 
     void endpointChecksAreReadOnlyAndFollowPortChanges()

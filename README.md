@@ -62,7 +62,7 @@ Screenshots are captured from the application using generated example data and l
 
 **[Download the latest release →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.44 removes the dedicated Gemini CLI integration from Agent settings, CLI configuration and the Windows installer. [Release notes](docs/releases/0.15.44.md).
+v0.15.45 fixes incomplete skill installations and moves recoverable update backups outside Agent skill discovery directories. [Release notes](docs/releases/0.15.45.md).
 
 | Package | Use it when… |
 | --- | --- |
@@ -145,6 +145,9 @@ The installation includes `SerialWorkbenchCLI.exe`, sharing settings and connect
 New profiles are read-only. When write/control access is authorized, `start --allow-control` explicitly enables and saves it for a new instance. Use `--settings` for an isolated profile, `call TOOL --args-file request.json` for complex arguments, and `install-skill AGENT` / `configure-agent AGENT` for setup. `stop` closes all connections in the shared instance. The STDIO bridge starts or reuses the runtime automatically; fixed HTTP URLs remain available. See the [CLI guide](skills/serial-workbench/references/cli.md) for commands and exit codes.
 
 ## AI / MCP
+
+Skill installation now uses the full embedded guide manifest, including OpenOCD/RTT. Updates archive previous content outside Agent skill discovery directories. See the [Agent guide](docs/agent-integration.md).
+
 
 STDIO starts the background runtime automatically, without opening the desktop. Agent settings select this mode by default. Fixed HTTP connections remain available and require a running runtime; check the actual URL in Settings or with `SerialWorkbenchCLI status`. The HTTP examples below use the default `http://127.0.0.1:8765/mcp`.
 

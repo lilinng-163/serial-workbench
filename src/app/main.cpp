@@ -3,6 +3,7 @@
 #include "window.h"
 #include "window_chrome.h"
 #include "agent_skill.h"
+#include "usage_guide.h"
 #include "runtime.h"
 
 int main(int argc, char *argv[])
@@ -60,7 +61,8 @@ int main(int argc, char *argv[])
                     clients.append(QJsonObject {{"id", agent.id}, {"name", agent.name}, {"installed", agent.installed()},
                         {"config_path", agent.configPath}, {"manual_import", agent.manualConfig}, {"format", agent.format}});
                 }
-                result = {{"agents", clients}, {"skill_targets", sw::AgentSkill::targets()}};
+                result = {{"agents", clients}, {"skill_targets", sw::AgentSkill::targets()},
+                    {"skill_manifest", sw::UsageGuide::manifest()}};
             }
             else if (parser.isSet("install-skill")) { result = sw::AgentSkill::install(parser.value("install-skill")); }
             else

@@ -100,6 +100,13 @@ VS Code 的 Local 与 Copilot 模式分别使用 `servers` 和 `mcpServers`，�
 
 ## 3D 原生接口
 
-`list_model_views`、`open_model_view`、`get_model_state`、`configure_model_view`、`capture_model_view` 与 GUI 共用模型页面和数据来源；支持导入本机模型、配置映射、读取姿态矩阵与采用帧序号，返回原生 PNG image 内容。完整参数与验证步骤见 [3D MCP 指南](../skills/serial-workbench/references/model3d.md)。`read_usage_guide` 可选 overview / frame_script / cli / model3d / agents。
+`list_model_views`、`open_model_view`、`get_model_state`、`configure_model_view`、`capture_model_view` 与 GUI 共用模型页面和数据来源；支持导入本机模型、配置映射、读取姿态矩阵与采用帧序号，返回原生 PNG image 内容。完整参数与验证步骤见 [3D MCP 指南](../skills/serial-workbench/references/model3d.md)。`read_usage_guide` 可选 overview / frame_script / cli / model3d / agents / openocd。
 
 客户端路径和格式参考于 2026-10-27 核对；测试覆盖隔离配置的结构、备份、无关字段保留、幂等及工作台官方 MCP SDK 调用。没有逐一安装全部第三方客户端进行对话测试，不能把“配置匹配”当作客户端实际连通。图片分析还取决于 Agent/模型是否支持 MCP image 内容。后续客户端更改格式时以其官方文档和实际生效配置为准。
+
+
+Skill 安装与更新使用程序内同一份完整指南清单。CLI `agents` 返回 `skill_manifest` 中的版本和逐文件 SHA-256，便于核对打包副本。缺少任一指南时，设置页会显示“可更新 / 修复”。
+
+不同内容和旧的时间戳 `.bak` 会归档到发现目录外。Windows 默认为 `%LOCALAPPDATA%/SerialWorkbench/skill-backups/<目标目录标识>/<归档编号>`，其他平台使用 `~/.local/share/SerialWorkbench/skill-backups`。CLI 安装结果的 `backup_directory`、`backups` 给出实际位置，GUI 的更新结果悬停提示也可查看。归档中的 `manifest.json` 记录原目标和逐文件 SHA-256，原文件在 `files/` 下，按清单恢复所需文件即可。
+
+重复更新相同内容不会再生成文件备份。安装记录会阻止新版指南被较旧版本工作台覆盖。更新期间对同一目标加锁，写入失败时恢复本次已改动的文件，归档可用于人工恢复。
