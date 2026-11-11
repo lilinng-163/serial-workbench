@@ -62,7 +62,7 @@
 
 **[下载最新版本 →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.44 移除设置页、CLI 和 Windows 安装器中的 Gemini CLI 专用接入。[查看更新说明](docs/releases/0.15.44.md)。
+v0.15.45 修复 Skill 安装指南缺失，并将可恢复的更新备份归档到 Agent 发现目录之外。[查看更新说明](docs/releases/0.15.45.md)。
 
 | 文件 | 适合的使用方式 |
 | --- | --- |
@@ -145,6 +145,9 @@ printf("@wave temperature=%.2f,voltage=%.3f,rpm=%d\r\n",
 新配置默认只读；已授权发送/连接控制时可用 `start --allow-control` 开启并保存。`--settings` 选择独立配置，`call TOOL --args-file request.json` 传复杂参数，`install-skill AGENT` 和 `configure-agent AGENT` 更新接入。`stop` 会关闭共享实例的所有连接。完整命令与退出码见 [CLI 指南](skills/serial-workbench/references/cli.md)。
 
 ## AI / MCP
+
+Skill 安装使用完整内置指南清单，包含 OpenOCD/RTT。更新前的内容归档在 Agent 发现目录之外，具体路径见安装结果。[查看接入指南](docs/agent-integration.md)。
+
 
 STDIO 接入可自动启动后台工作台，不必先打开界面。设置 → AI / MCP → Agent 接入默认勾选“后台自动启动（STDIO）”。固定 HTTP 接入仍可使用，当前地址在设置或 `SerialWorkbenchCLI status` 中查看；以下 HTTP 示例需要先运行工作台。
 

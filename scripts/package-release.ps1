@@ -16,6 +16,25 @@ $project = Get-Content -LiteralPath (Join-Path $repoRoot 'CMakeLists.txt') -Raw
 $version = [regex]::Match($project, 'VERSION\s+(\d+\.\d+\.\d+)').Groups[1].Value
 if (-not $version) { throw 'Cannot read the CMake project version.' }
 
+$guideRoot = Join-Path $repoRoot 'skills/serial-workbench'
+$guideFiles = @(Get-ChildItem -LiteralPath $guideRoot -File -Recurse -Filter '*.md')
+$reportJson = & (Join-Path $packagePath 'SerialWorkbenchCLI.exe') agents
+if ($LASTEXITCODE) { throw 'Cannot read the bundled skill manifest.' }
+$manifest = ($reportJson | ConvertFrom-Json).skill_manifest
+if ($manifest.version -ne $version -or @($manifest.files.PSObject.Properties).Count -ne $guideFiles.Count)
+{
+    throw 'The runtime skill manifest does not match the release source. Rebuild before packaging.'
+}
+foreach ($guide in $guideFiles)
+{
+    $relative = [IO.Path]::GetRelativePath($guideRoot, $guide.FullName).Replace('\', '/')
+    $digest = (Get-FileHash -LiteralPath $guide.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($manifest.files.$relative -ne $digest)
+    {
+        throw "The bundled guide differs from the release source: $relative"
+    }
+}
+
 $compiler = (Get-Command $MakeNSIS -ErrorAction Stop).Source
 $qtSources = (Resolve-Path -LiteralPath $QtSourceRoot).Path
 $stageName = 'release-' + $version + '-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
@@ -30,13 +49,20 @@ foreach ($name in 'SerialWorkbench.exe', 'SerialWorkbenchMCP.exe', 'SerialWorkbe
 Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE') -Destination $payload
 Get-ChildItem -LiteralPath $packagePath -File -Filter '*.dll' | Copy-Item -Destination $payload
 
-foreach ($name in 'generic', 'iconengines', 'imageformats', 'licenses', 'networkinformation', 'platforms', 'skills', 'styles', 'tls')
+foreach ($name in 'generic', 'iconengines', 'imageformats', 'licenses', 'networkinformation', 'platforms', 'styles', 'tls')
 {
     $source = Join-Path $packagePath $name
     if (Test-Path -LiteralPath $source)
     {
         Copy-Item -LiteralPath $source -Destination $payload -Recurse
     }
+}
+foreach ($guide in $guideFiles)
+{
+    $relative = [IO.Path]::GetRelativePath($guideRoot, $guide.FullName)
+    $target = Join-Path $payload (Join-Path 'skills/serial-workbench' $relative)
+    New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
+    Copy-Item -LiteralPath $guide.FullName -Destination $target
 }
 if (-not (Test-Path -LiteralPath (Join-Path $payload 'platforms/qwindows.dll')))
 {

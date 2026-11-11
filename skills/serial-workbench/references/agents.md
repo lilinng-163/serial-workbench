@@ -27,3 +27,10 @@ skill 安装支持 Codex、Claude Code、OpenCode、Pi、Hermes、OpenClaw、Gro
 检测范围是 Windows 当前用户的常见程序/CLI、默认 VS Code 扩展目录。便携安装、自定义 VS Code Profile、WSL、远程开发主机或编辑器分支可能无法自动检测；使用导出配置，在实际运行 Agent 的环境导入。文件格式验证不代表每一个第三方版本都已经完成真实客户端连接验证。全部原生工具通过相同 MCP 协议暴露，客户端工具数量限制、图片能力和权限仍由客户端决定。
 
 项目文档 `docs/agent-integration.md` 记录默认路径、官方来源和验证范围。
+
+
+Skill 安装与更新使用程序内同一份完整指南清单。CLI `agents` 返回 `skill_manifest` 中的版本和逐文件 SHA-256，便于核对打包副本。缺少任一指南时，设置页会显示“可更新 / 修复”。
+
+不同内容和旧的时间戳 `.bak` 会归档到发现目录外。Windows 默认为 `%LOCALAPPDATA%/SerialWorkbench/skill-backups/<目标目录标识>/<归档编号>`，其他平台使用 `~/.local/share/SerialWorkbench/skill-backups`。CLI 安装结果的 `backup_directory`、`backups` 给出实际位置，GUI 的更新结果悬停提示也可查看。归档中的 `manifest.json` 记录原目标和逐文件 SHA-256，原文件在 `files/` 下，按清单恢复所需文件即可。
+
+重复更新相同内容不会再生成文件备份。安装记录会阻止新版指南被较旧版本工作台覆盖。更新期间对同一目标加锁，写入失败时恢复本次已改动的文件，归档可用于人工恢复。

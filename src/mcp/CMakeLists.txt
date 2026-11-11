@@ -13,11 +13,14 @@ target_include_directories(workbench_mcp PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(workbench_mcp PUBLIC workbench_core Qt6::Network)
 
 set(guide_root "${PROJECT_SOURCE_DIR}/skills/serial-workbench")
+file(GLOB_RECURSE guide_files CONFIGURE_DEPENDS "${guide_root}/*.md")
 qt_add_resources(workbench_mcp workbench_guides
     PREFIX "/guides"
     BASE "${guide_root}"
-    FILES "${guide_root}/SKILL.md" "${guide_root}/references/frame-script.md" "${guide_root}/references/cli.md"
-        "${guide_root}/references/model3d.md" "${guide_root}/references/agents.md"
-        "${guide_root}/references/openocd.md"
+    FILES ${guide_files}
 )
-install(DIRECTORY "${guide_root}" DESTINATION skills)
+foreach(guide IN LISTS guide_files)
+    file(RELATIVE_PATH relative "${guide_root}" "${guide}")
+    get_filename_component(directory "${relative}" DIRECTORY)
+    install(FILES "${guide}" DESTINATION "skills/serial-workbench/${directory}")
+endforeach()

@@ -276,6 +276,8 @@ void AgentPanel::configureSkills()
             {
                 const auto result = AgentSkill::install(choice.id, e);
                 choice.status->setText(QString("已更新 · %1 个备份 · 请重载 Agent").arg(result["backups"].toArray().size()));
+                choice.status->setToolTip(result["backup_directory"].toString().isEmpty()
+                    ? QString() : "可恢复备份：" + QDir::toNativeSeparators(result["backup_directory"].toString()));
             }
             catch (const std::exception &error)
             {

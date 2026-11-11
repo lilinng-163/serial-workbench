@@ -18,6 +18,7 @@ import time
 import winreg
 import zlib
 from installer_upgrade_checks import check_busy_upgrade, start_for_uninstall
+from skill_bundle_checks import source_files, check_guides, check_manifest, check_cli_updates
 
 ROOT = Path(__file__).resolve().parents[2]
 PRODUCT = "Serial Workbench Installer Test"
@@ -115,6 +116,7 @@ def main():
     parser.add_argument("--installer", type=Path, required=True)
     parser.add_argument("--expected-version", required=True)
     parser.add_argument("--makensis", default="makensis")
+    parser.add_argument("--skills-only", action="store_true", help="Only exercise skill installation and repair")
     args = parser.parse_args()
     if registration() is not None:
         raise RuntimeError("An installer-test registration already exists; refusing to overwrite it")
@@ -166,7 +168,7 @@ def main():
         windows = Path(os.environ["SystemRoot"])
         agent_bin = directory / "agent-bin"
         agent_bin.mkdir()
-        for name in ("codex", "pi", "cursor", "copilot", "windsurf", "devin", "cline", "kilo", "kiro-cli", "agy", "kimi"):
+        for name in ("codex", "claude", "opencode", "pi", "hermes", "openclaw", "grok", "cursor", "copilot", "windsurf", "devin", "cline", "kilo", "kiro-cli", "agy", "kimi"):
             (agent_bin / f"{name}.cmd").write_text("@echo off\n", encoding="utf-8")
         env["PI_CODING_AGENT_DIR"] = str(profile / "pi")
         # Keep every optional Agent destination inside this fixture, including
@@ -183,7 +185,11 @@ def main():
             str(args.payload.resolve() / "SerialWorkbenchCLI.exe"), "agents", "--settings", str(settings),
         ], env=env, capture_output=True, text=True, encoding="utf-8", timeout=25,
             creationflags=subprocess.CREATE_NO_WINDOW, check=True)
-        for target in json.loads(discovery.stdout)["skill_targets"]:
+        expected_guides = source_files(ROOT)
+        discovery_report = json.loads(discovery.stdout)
+        check_manifest(discovery_report, expected_guides)
+        check_guides(args.payload / "skills/serial-workbench", expected_guides, exact=True)
+        for target in discovery_report["skill_targets"]:
             assert Path(target["path"]).resolve().is_relative_to(profile.resolve()), target
         app = None
         try:
@@ -194,19 +200,9 @@ def main():
             compile_fixture(args, baseline_setup, baseline_version)
             install(baseline_setup, destination, env)
             skill = profile / "codex/skills/serial-workbench/SKILL.md"
-            assert skill.is_file(), "Detected Codex skill component was not selected"
-            assert (profile / "pi/skills/serial-workbench/SKILL.md").is_file(), "Detected Pi skill component was not selected"
-            assert "search_logs" in skill.read_text(encoding="utf-8")
-            assert (skill.parent / "references/frame-script.md").is_file()
-            for relative in (
-                ".cursor/skills", "copilot/skills", ".codeium/windsurf/skills",
-                "roaming/devin/skills", ".cline/skills", ".kilo/skills", ".kiro/skills",
-                ".gemini/antigravity-cli/skills", "kimi-code/skills",
-            ):
-                guide = profile / relative / "serial-workbench"
-                assert (guide / "SKILL.md").is_file(), relative
-                assert (guide / "references/model3d.md").is_file(), relative
-                assert (guide / "references/agents.md").is_file(), relative
+            for target in discovery_report["skill_targets"]:
+                assert target["installed"], target["agent"]
+                check_guides(Path(target["path"]), expected_guides)
             assert not (profile / ".cursor/mcp.json").exists()
             assert not (profile / "codex/config.toml").exists(), "Skill installation must not configure MCP"
             print("PASS detected Agent skill components install guide/references without changing MCP config", flush=True)
@@ -222,6 +218,12 @@ def main():
             assert not (destination / "settings.json").exists()
             assert all(frame in icon_resources(destination / "Uninstall.exe") for frame in frames)
             print("PASS custom Unicode installation path, registration and branded uninstaller", flush=True)
+
+            if args.skills_only:
+                check_guides(destination / "skills/serial-workbench", expected_guides, exact=True)
+                check_cli_updates(destination, settings, env, expected_guides, profile)
+                print("PASS production NSIS skill sections and installed CLI", flush=True)
+                return
 
             note = destination / "keep-user-file.txt"
             plugin_note = destination / "platforms/keep-user-file.txt"
