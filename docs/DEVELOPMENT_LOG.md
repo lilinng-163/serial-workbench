@@ -1,5 +1,12 @@
 # 开发交接记录
 
+## 2026-11-16 — v0.15.46 已发布至 GitHub 与网站
+
+- PR #18 合入开始菜单直接启动入口与升级迁移，发行提交为 d127df7058d45e86f656acdda1405269e5e6afb1。GitHub 已发布安装包、便携 ZIP、单文件 EXE 和 SHA256SUMS，四个资产的大小和 SHA-256 与本机一致。
+- Windows Release 构建和随包启动通过。复用本轮生产 NSIS 隔离实装，验证图标、快捷方式目标、旧布局迁移、保留用户文件与卸载清理；没有重复硬件或全量测试。
+- 通过 Serial Workbench MCP SSH 从本机上传安装包，更新官网和软件更新清单。公网完整下载为 17218925 字节，SHA-256 为 1827463dd59903d68e503d520fe4e421e6110ba87798288bd59c78fb55a43341，与 GitHub 一致。网站激活为 releases/20261116-manual-0-15-46-1f53763c，保留当前双项目页面。
+- 发行文件位于 dist/releases/0.15.46，公网验证位于 dist/website-sync/0.15.46，构建及实装证据位于 build/start-menu-icon-fix。原工作区未提交的网站和开发记录保持原样；暂停中的更新检测修复仍在 codex/update-startup-retry，未纳入本次发布。
+
 ## 2026-11-16 — 开始菜单直接显示软件 Logo
 
 - 原安装器创建同名菜单文件夹，Windows 的所有应用列表显示普通文件夹。改为当前用户 Programs 根目录的 Serial Workbench.lnk，图标明确引用 SerialWorkbench.exe,0。
