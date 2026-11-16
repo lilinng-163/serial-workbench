@@ -62,7 +62,7 @@ Screenshots are captured from the application using generated example data and l
 
 **[Download the latest release →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.45 fixes incomplete skill installations and moves recoverable update backups outside Agent skill discovery directories. [Release notes](docs/releases/0.15.45.md).
+v0.15.46 shows the software logo directly in the Windows Start menu and migrates legacy shortcuts. [Release notes](docs/releases/0.15.46.md).
 
 | Package | Use it when… |
 | --- | --- |
@@ -72,6 +72,8 @@ v0.15.45 fixes incomplete skill installations and moves recoverable update backu
 | `SHA256SUMS.txt` | You want to verify downloaded files with `Get-FileHash -Algorithm SHA256`. |
 
 The installer includes the runtime libraries and MCP bridge. SSH uses the Windows OpenSSH client (`ssh.exe`). The installer detects GUI/background runtimes and MCP bridges and offers to save settings, close them and continue; silent mode requires explicit `/CLOSEAPPLICATIONS` consent. Reconnect your Agent after upgrading. Installer settings are kept in `%LOCALAPPDATA%/SerialWorkbench/settings.json`; portable settings live beside the executable. See [installation and upgrades](docs/windows-installer.md).
+
+The Windows installer adds a direct Start menu app entry with the transparent logo, and migrates the older shortcut folder on upgrade.
 
 ## Quick start
 

@@ -10,6 +10,7 @@ from ctypes import wintypes
 import json
 import os
 from pathlib import Path
+import shutil
 import struct
 import subprocess
 import sys
@@ -109,6 +110,26 @@ def install(setup, destination, env):
     subprocess.run(command, env=env, check=True, timeout=40, creationflags=subprocess.CREATE_NO_WINDOW)
 
 
+def start_menu_entry(destination, env):
+    powershell = Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
+    script = f"""
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$shell = New-Object -ComObject WScript.Shell
+$path = Join-Path $shell.SpecialFolders.Item('Programs') '{PRODUCT}.lnk'
+if (-not (Test-Path -LiteralPath $path)) {{ throw 'Start menu app entry missing' }}
+$link = $shell.CreateShortcut($path)
+@{{ path=$path; target=$link.TargetPath; icon=$link.IconLocation }} | ConvertTo-Json -Compress
+"""
+    result = subprocess.run([str(powershell), "-NoProfile", "-Command", script],
+                            capture_output=True, text=True, encoding="utf-8", errors="replace", env=env,
+                            creationflags=subprocess.CREATE_NO_WINDOW)
+    assert result.returncode == 0, result.stderr
+    entry = json.loads(result.stdout)
+    assert Path(entry["target"]) == destination / "SerialWorkbench.exe", entry
+    assert entry["icon"].lower() == str(destination / "SerialWorkbench.exe").lower() + ",0", entry
+    return Path(entry["path"])
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--payload", type=Path, required=True)
@@ -117,6 +138,7 @@ def main():
     parser.add_argument("--expected-version", required=True)
     parser.add_argument("--makensis", default="makensis")
     parser.add_argument("--skills-only", action="store_true", help="Only exercise skill installation and repair")
+    parser.add_argument("--shortcuts-only", action="store_true", help="Only exercise Start menu install, migration and removal")
     args = parser.parse_args()
     if registration() is not None:
         raise RuntimeError("An installer-test registration already exists; refusing to overwrite it")
@@ -185,7 +207,9 @@ def main():
             str(args.payload.resolve() / "SerialWorkbenchCLI.exe"), "agents", "--settings", str(settings),
         ], env=env, capture_output=True, text=True, encoding="utf-8", timeout=25,
             creationflags=subprocess.CREATE_NO_WINDOW, check=True)
-        expected_guides = source_files(ROOT)
+        # Shortcut-only checks may reuse a verified release payload without
+        # rebuilding the application or retesting unrelated guide sources.
+        expected_guides = source_files(args.payload.resolve() if args.shortcuts_only else ROOT)
         discovery_report = json.loads(discovery.stdout)
         check_manifest(discovery_report, expected_guides)
         check_guides(args.payload / "skills/serial-workbench", expected_guides, exact=True)
@@ -218,6 +242,37 @@ def main():
             assert not (destination / "settings.json").exists()
             assert all(frame in icon_resources(destination / "Uninstall.exe") for frame in frames)
             print("PASS custom Unicode installation path, registration and branded uninstaller", flush=True)
+
+            if args.shortcuts_only:
+                entry = start_menu_entry(destination, env)
+                legacy = entry.parent / PRODUCT
+                assert not legacy.exists(), "Fresh install must not create a generic app folder"
+                legacy.mkdir()
+                shutil.copy2(entry, legacy / f"{PRODUCT}.lnk")
+                shutil.copy2(entry, legacy / "卸载.lnk")
+                entry.unlink()
+                compile_fixture(args, setup)
+                install(setup, destination, env)
+                entry = start_menu_entry(destination, env)
+                assert not legacy.exists(), "Upgrade must migrate and remove the empty legacy folder"
+
+                legacy.mkdir()
+                note = legacy / "user-note.txt"
+                note.write_text("preserve user content", encoding="utf-8")
+                try:
+                    shutil.copy2(entry, legacy / f"{PRODUCT}.lnk")
+                    install(setup, destination, env)
+                    assert note.read_text(encoding="utf-8") == "preserve user content"
+                    assert not (legacy / f"{PRODUCT}.lnk").exists()
+                    subprocess.run([str(destination / "Uninstall.exe"), "/S"], env=env,
+                                   check=True, timeout=50, creationflags=subprocess.CREATE_NO_WINDOW)
+                    wait_for(lambda: registration() is None and not entry.exists())
+                    assert note.is_file(), "Uninstall must preserve user content"
+                finally:
+                    note.unlink(missing_ok=True)
+                    legacy.rmdir()
+                print("PASS direct Start menu logo, legacy migration, user files and uninstall cleanup", flush=True)
+                return
 
             if args.skills_only:
                 check_guides(destination / "skills/serial-workbench", expected_guides, exact=True)

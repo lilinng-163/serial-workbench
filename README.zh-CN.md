@@ -62,7 +62,7 @@
 
 **[下载最新版本 →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.45 修复 Skill 安装指南缺失，并将可恢复的更新备份归档到 Agent 发现目录之外。[查看更新说明](docs/releases/0.15.45.md)。
+v0.15.46 在 Windows 开始菜单直接显示软件 Logo，升级时迁移旧快捷方式。[查看更新说明](docs/releases/0.15.46.md)。
 
 | 文件 | 适合的使用方式 |
 | --- | --- |
@@ -72,6 +72,8 @@ v0.15.45 修复 Skill 安装指南缺失，并将可恢复的更新备份归档�
 | `SHA256SUMS.txt` | 使用 `Get-FileHash -Algorithm SHA256` 核对下载文件。 |
 
 安装包内含运行库与 MCP 桥。SSH 使用 Windows OpenSSH 客户端（`ssh.exe`）。安装器会检测可见窗口、后台实例与 MCP 桥接，提供保存设置后关闭并继续的选项；静默安装只有显式传入 `/CLOSEAPPLICATIONS` 才会关闭。升级后重新连接 Agent。安装版配置保存在 `%LOCALAPPDATA%/SerialWorkbench/settings.json`，便携版保存在程序目录。详见[安装与升级](docs/windows-installer.md)。
+
+Windows 安装器在开始菜单直接显示透明 Logo 的启动入口，升级时迁移旧快捷方式文件夹。
 
 ## 快速开始
 
