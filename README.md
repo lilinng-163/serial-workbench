@@ -73,6 +73,8 @@ v0.15.45 fixes incomplete skill installations and moves recoverable update backu
 
 The installer includes the runtime libraries and MCP bridge. SSH uses the Windows OpenSSH client (`ssh.exe`). The installer detects GUI/background runtimes and MCP bridges and offers to save settings, close them and continue; silent mode requires explicit `/CLOSEAPPLICATIONS` consent. Reconnect your Agent after upgrading. Installer settings are kept in `%LOCALAPPDATA%/SerialWorkbench/settings.json`; portable settings live beside the executable. See [installation and upgrades](docs/windows-installer.md).
 
+The Windows installer adds a direct Start menu app entry with the transparent logo, and migrates the older shortcut folder on upgrade.
+
 ## Quick start
 
 Select **快速上手** in the connection sidebar or press **F1** to open the in-app tutorial. You can launch a demo waveform without hardware.

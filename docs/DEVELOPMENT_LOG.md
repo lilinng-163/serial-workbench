@@ -1,5 +1,13 @@
 # 开发交接记录
 
+## 2026-11-16 — 开始菜单直接显示软件 Logo
+
+- 原安装器创建同名菜单文件夹，Windows 的所有应用列表显示普通文件夹。改为当前用户 Programs 根目录的 Serial Workbench.lnk，图标明确引用 SerialWorkbench.exe,0。
+- 升级只移除旧目录中的两个已知快捷方式，再删除空目录；保留用户附加文件。卸载兼容清理新旧快捷方式。中英文 README 与安装说明同步。
+- 复用已发布的 v0.15.45 运行库，生产 NSIS 隔离实装验证通过：透明图标九种尺寸、启动目标与图标路径、旧布局迁移、用户文件保留及卸载清理。证据位于 build/start-menu-icon-fix/shortcuts-final.txt。
+- 已迁移本机当前用户的菜单入口；旧快捷方式备份在 build/start-menu-icon-fix。没有修改个人软件设置、运行程序或暂停中的更新检测修复。
+- 本次在 build/start-menu-icon-worktree 独立工作树处理；原工作区网站及开发记录未提交改动保留。
+
 ## 2026-11-11 — v0.15.45 已发布至 GitHub 与网站
 
 - PR #16 合入完整 Skill 安装、状态修复和外部备份归档，发行提交为 72d7d82f56409d97134b9464e7a35570fee3fd69。GitHub 已发布安装包、便携 ZIP、单文件 EXE 和 SHA256SUMS，四个资产的大小和摘要与本机一致。

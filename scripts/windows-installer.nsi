@@ -196,9 +196,12 @@ Section "工作台与 MCP（必需）" Application
         SetErrorLevel 4
         Quit
     ${EndIf}
-    CreateDirectory "$SMPROGRAMS\${PRODUCT_NAME}"
-    CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk" "$INSTDIR\SerialWorkbench.exe" "" "$INSTDIR\SerialWorkbench.exe" 0
-    CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\卸载.lnk" "$INSTDIR\Uninstall.exe" "" "$INSTDIR\Uninstall.exe" 0
+    ; A direct application entry shows the logo instead of a generic folder.
+    CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}.lnk" "$INSTDIR\SerialWorkbench.exe" "" "$INSTDIR\SerialWorkbench.exe" 0
+    ; Migrate only our known legacy entries; preserve any user-added files.
+    Delete "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk"
+    Delete "$SMPROGRAMS\${PRODUCT_NAME}\卸载.lnk"
+    RMDir "$SMPROGRAMS\${PRODUCT_NAME}"
     ClearErrors
     WriteRegStr HKCU "${REGISTRY_KEY}" "DisplayName" "${PRODUCT_NAME}"
     WriteRegStr HKCU "${REGISTRY_KEY}" "DisplayVersion" "${VERSION}"
@@ -427,6 +430,7 @@ Section "Uninstall"
     Call un.ReleaseMaintenance
     RMDir "$INSTDIR"
     Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
+    Delete "$SMPROGRAMS\${PRODUCT_NAME}.lnk"
     Delete "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk"
     Delete "$SMPROGRAMS\${PRODUCT_NAME}\卸载.lnk"
     RMDir "$SMPROGRAMS\${PRODUCT_NAME}"
