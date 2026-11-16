@@ -62,7 +62,7 @@ Screenshots are captured from the application using generated example data and l
 
 **[Download the latest release →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.45 fixes incomplete skill installations and moves recoverable update backups outside Agent skill discovery directories. [Release notes](docs/releases/0.15.45.md).
+v0.15.46 shows the software logo directly in the Windows Start menu and migrates legacy shortcuts. [Release notes](docs/releases/0.15.46.md).
 
 | Package | Use it when… |
 | --- | --- |

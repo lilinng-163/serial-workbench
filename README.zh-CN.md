@@ -62,7 +62,7 @@
 
 **[下载最新版本 →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.45 修复 Skill 安装指南缺失，并将可恢复的更新备份归档到 Agent 发现目录之外。[查看更新说明](docs/releases/0.15.45.md)。
+v0.15.46 在 Windows 开始菜单直接显示软件 Logo，升级时迁移旧快捷方式。[查看更新说明](docs/releases/0.15.46.md)。
 
 | 文件 | 适合的使用方式 |
 | --- | --- |
