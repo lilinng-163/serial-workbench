@@ -62,7 +62,7 @@ Screenshots are captured from the application using generated example data and l
 
 **[Download the latest release →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.46 shows the software logo directly in the Windows Start menu and migrates legacy shortcuts. [Release notes](docs/releases/0.15.46.md).
+v0.15.47 fixes Antigravity’s shared MCP and skill paths and handles empty MCP configuration files. [Release notes](docs/releases/0.15.47.md).
 
 | Package | Use it when… |
 | --- | --- |

@@ -62,7 +62,7 @@
 
 **[下载最新版本 →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.46 在 Windows 开始菜单直接显示软件 Logo，升级时迁移旧快捷方式。[查看更新说明](docs/releases/0.15.46.md)。
+v0.15.47 修复 Antigravity 的共享 MCP 与 Skill 目录，并支持初始化空 MCP 配置。[查看更新说明](docs/releases/0.15.47.md)。
 
 | 文件 | 适合的使用方式 |
 | --- | --- |
