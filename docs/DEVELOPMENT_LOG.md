@@ -1,5 +1,12 @@
 # 开发交接记录
 
+## 2026-11-23 — v0.15.47 已发布至 GitHub 与网站
+
+- PR #20 合入 Antigravity 接入修复，发行提交为 `67243113232dba88c1ec7a1ffe2896f5a1f79051`。四个 GitHub 资产的大小和 SHA-256 与本机一致。
+- 正式版 Windows 构建与打包通过，复用 22 项 Agent 测试和实际 Windows NSIS 隔离验证。
+- 通过 Serial Workbench MCP 上传本机安装包，更新官网和软件更新清单。公网完整下载为 17221312 字节，SHA-256 为 `ae48f5395e82565f724d873921f1a8cccd40ab43306b79b9137dc42dda81f00c`。首页、项目页和下载页均显示 v0.15.47。网站版本为 `releases/20261123-manual-0-15-47-e789a861`，保留双项目与备案内容。
+- 发行文件位于 `dist/releases/0.15.47`，公网验证位于 `dist/website-sync/0.15.47`。暂停中的更新检测工作留在原分支。
+
 ## 2026-11-23 — Antigravity 使用共享 MCP 配置和 Skill 路径
 
 - 使用 `~/.gemini/antigravity/`、`agy` 或桌面程序作为识别依据。三个入口依旧共用 `~/.gemini/config/mcp_config.json`，Skill 固定安装到同一根目录的 `skills/serial-workbench`，保留旧安装和内部 `config.json`。

@@ -10,8 +10,8 @@
 | 本机源码 | `E:/demo/serial`；其他机器以实际克隆目录为准 |
 | 正式主线 | `main` |
 | DeepSeek 开发分支 | `deepseek-dev` |
-| 交接基线 | 以 `v0.15.46` 标签及最新开发交接记录为准 |
-| 已发布版本 | [v0.15.46](https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.46)，2026-11-16 |
+| 交接基线 | 以 `v0.15.47` 标签及最新开发交接记录为准 |
+| 已发布版本 | [v0.15.47](https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.47)，2026-11-23 |
 | 技术栈 | C++17、Qt Widgets / Network / SerialPort / Core5Compat / Svg、CMake、Ninja |
 | 主要分发平台 | Windows x64；Docker 用于 Linux 开发构建 |
 | 用户文档 | [English](README.md) / [简体中文](README.zh-CN.md) |
