@@ -2,6 +2,24 @@
   {
     "assets": [
       {
+        "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.46/SerialWorkbench-0.15.46-windows-x64-setup.exe",
+        "digest": "sha256:1827463dd59903d68e503d520fe4e421e6110ba87798288bd59c78fb55a43341",
+        "name": "SerialWorkbench-0.15.46-windows-x64-setup.exe",
+        "size": 17218925,
+        "state": "uploaded"
+      }
+    ],
+    "body": "# Serial Workbench 0.15.46\r\n\r\n- Windows 开始菜单直接显示带透明 Logo 的软件启动入口，替代旧的同名文件夹。\r\n- 升级时迁移旧快捷方式，保留用户附加文件；卸载兼容清理新旧入口。\r\n\r\n生产 NSIS 隔离实装已验证启动目标、图标、升级迁移、用户文件保留和卸载清理。\r\n\r\n## English\r\n\r\n- Show a direct Windows Start menu application entry with the transparent logo instead of a generic folder.\r\n- Migrate legacy shortcuts on upgrade, preserve user-added files, and remove both shortcut layouts on uninstall.\r\n\r\nVerified with the production NSIS installer in an isolated installation, including shortcut targets, icons, migration and removal.\r\n",
+    "draft": false,
+    "html_url": "https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.46",
+    "name": "Serial Workbench 0.15.46",
+    "prerelease": false,
+    "published_at": "2026-11-16T15:02:27Z",
+    "tag_name": "v0.15.46"
+  },
+  {
+    "assets": [
+      {
         "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.45/SerialWorkbench-0.15.45-windows-x64-setup.exe",
         "digest": "sha256:5dbec10d7ddcb220e0b1d492e150cd8fedd74537c4bd62b12fbae7193a9fdf60",
         "name": "SerialWorkbench-0.15.45-windows-x64-setup.exe",
@@ -34,23 +52,5 @@
     "prerelease": false,
     "published_at": "2026-11-08T12:11:41Z",
     "tag_name": "v0.15.44"
-  },
-  {
-    "assets": [
-      {
-        "browser_download_url": "https://github.com/lilinng-163/serial-workbench/releases/download/v0.15.43/SerialWorkbench-0.15.43-windows-x64-setup.exe",
-        "digest": "sha256:e8409cc39df8bb5c2fbb4137e1c648d9aff7260f257bfbe777beea5eb495ddbf",
-        "name": "SerialWorkbench-0.15.43-windows-x64-setup.exe",
-        "size": 17227708,
-        "state": "uploaded"
-      }
-    ],
-    "body": "# Serial Workbench 0.15.43\r\n\r\n- 左侧连接区新增离线「快速上手」教程，也可按 F1 打开。包含串口连接、收发、常见问题和波形、RTT、MCP 的入口指引。\r\n- 教程可一键打开本地演示波形，无需连接设备。\r\n- 修复发送栏换行下拉框截断，紧凑窗口中可完整显示无换行、LF、CR 和 CRLF。\r\n\r\n## English\r\n\r\n- Open the offline quick-start tutorial from the connection sidebar or by pressing F1. It covers first-time serial setup, sending and receiving, troubleshooting, and where to find waveforms, RTT, and MCP.\r\n- Start a local waveform demo from the tutorial without connecting hardware.\r\n- Fix clipped labels in the send line-ending selector. All four choices fit in the compact window layout.\r\n",
-    "draft": false,
-    "html_url": "https://github.com/lilinng-163/serial-workbench/releases/tag/v0.15.43",
-    "name": "Serial Workbench 0.15.43",
-    "prerelease": false,
-    "published_at": "2026-11-08T11:28:24Z",
-    "tag_name": "v0.15.43"
   }
 ]

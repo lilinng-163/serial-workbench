@@ -62,7 +62,7 @@ Screenshots are captured from the application using generated example data and l
 
 **[Download the latest release →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.46 shows the software logo directly in the Windows Start menu and migrates legacy shortcuts. [Release notes](docs/releases/0.15.46.md).
+v0.15.47 fixes Antigravity’s shared MCP and skill paths and handles empty MCP configuration files. [Release notes](docs/releases/0.15.47.md).
 
 | Package | Use it when… |
 | --- | --- |
@@ -223,7 +223,7 @@ Without `--url`, the bridge starts or reuses the background runtime. An explicit
 
 </details>
 
-The application provides **25 client adapters** and **16 skill installation targets**, including Cursor, VS Code / Copilot, Cline, Kilo, Kiro, Qoder, Zed, Antigravity and Qwen Code. Use the searchable Settings panel or `SerialWorkbenchCLI agents`. Each adapter offers configuration export; clients with unverified or version-dependent storage paths use manual import. `export-agent generic` covers other compatible MCP clients. See the [format and path reference](docs/agent-integration.md).
+The application provides **25 client adapters** and **16 skill installation targets**, including Cursor, VS Code / Copilot, Cline, Kilo, Kiro, Qoder, Zed, Antigravity and Qwen Code. Use the searchable Settings panel or `SerialWorkbenchCLI agents`. Antigravity App, IDE and CLI share the global MCP and skill directories under `~/.gemini/config/`. Each adapter offers configuration export; clients with unverified or version-dependent storage paths use manual import. `export-agent generic` covers other compatible MCP clients. See the [format and path reference](docs/agent-integration.md).
 
 ### What the agent can do
 

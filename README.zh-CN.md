@@ -62,7 +62,7 @@
 
 **[下载最新版本 →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.46 在 Windows 开始菜单直接显示软件 Logo，升级时迁移旧快捷方式。[查看更新说明](docs/releases/0.15.46.md)。
+v0.15.47 修复 Antigravity 的共享 MCP 与 Skill 目录，并支持初始化空 MCP 配置。[查看更新说明](docs/releases/0.15.47.md)。
 
 | 文件 | 适合的使用方式 |
 | --- | --- |
@@ -223,7 +223,7 @@ V1 `opencode.json` / `opencode.jsonc` 可合并以下条目：
 
 </details>
 
-当前提供 **25 个客户端适配入口**与 **16 个 skill 安装目标**，涵盖 Cursor、VS Code / Copilot、Cline、Kilo、Kiro、Qoder、Zed、Antigravity、Qwen Code 等。设置页可搜索，也可用 `SerialWorkbenchCLI agents` 查看；每个入口可导出配置，路径尚未确认或依版本变化的客户端通过导入接入。其他兼容 MCP 的客户端使用 `export-agent generic`。详见[格式与路径说明](docs/agent-integration.md)。
+当前提供 **25 个客户端适配入口**与 **16 个 skill 安装目标**，涵盖 Cursor、VS Code / Copilot、Cline、Kilo、Kiro、Qoder、Zed、Antigravity、Qwen Code 等。设置页可搜索，也可用 `SerialWorkbenchCLI agents` 查看；Antigravity 桌面端、IDE 和 CLI 的 MCP 与 Skill 统一使用 `~/.gemini/config/`。每个入口可导出配置，路径尚未确认或依版本变化的客户端通过导入接入。其他兼容 MCP 的客户端使用 `export-agent generic`。详见[格式与路径说明](docs/agent-integration.md)。
 
 ### AI 可以做什么
 

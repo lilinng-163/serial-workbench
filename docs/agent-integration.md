@@ -24,7 +24,7 @@
 | Qoder | `~/.qoder/settings.json` | `mcpServers` / `type: http` | [MCP](https://docs.qoder.com/cli/mcp-reference) |
 | Zed | `%APPDATA%/Zed/settings.json` | `context_servers` / `url`；STDIO 为 command 字符串和 args | [MCP](https://zed.dev/docs/ai/mcp) |
 | TRAE | 在客户端导入 | `mcpServers`，导出 STDIO 或 Streamable HTTP | [MCP](https://docs.trae.ai/ide/model-context-protocol) |
-| Antigravity | `~/.gemini/config/mcp_config.json` | `mcpServers` / `serverUrl` | [MCP](https://www.antigravity.google/docs/mcp) |
+| Antigravity App / IDE / CLI | `~/.gemini/config/mcp_config.json` | `mcpServers` / `command` 或 `url`，检查兼容 `serverUrl` | [MCP](https://antigravity.google/docs/cli/mcp/) |
 | Qwen Code | `~/.qwen/settings.json` | `mcpServers` / `httpUrl`（url 表示旧 SSE） | [MCP](https://qwenlm.github.io/qwen-code-docs/en/users/features/mcp/) |
 | Kimi Code | `$KIMI_CODE_HOME/mcp.json`，默认 `~/.kimi-code/mcp.json`；兼容已有 `~/.kimi/mcp.json` | `mcpServers` / `url`；新旧版本无法判定时导出 | [MCP](https://moonshotai.github.io/kimi-code/en/customization/mcp) |
 | Continue | 项目的 `.continue/mcpServers/`，用户选择位置导入 JSON | Claude/Cursor 兼容 JSON；HTTP type 为 streamable-http | [MCP](https://docs.continue.dev/customize/deep-dives/mcp) |
@@ -60,7 +60,7 @@ OpenCode 已有 `mcp.servers` 时保留 V2 结构；新建配置通过已安装 
 | Cline | `~/.cline/skills/serial-workbench` | — |
 | Kilo | `~/.kilo/skills/serial-workbench` | — |
 | Kiro | `~/.kiro/skills/serial-workbench` | — |
-| Antigravity | App / IDE：`~/.gemini/config/skills/serial-workbench`；检测到 agy CLI 时：`~/.gemini/antigravity-cli/skills/serial-workbench` | 两者并用时可在另一端手动导入 |
+| Antigravity App / IDE / CLI | `~/.gemini/config/skills/serial-workbench` | 同一个全局目录，`agy` 检测结果不影响安装路径 |
 | Kimi Code | `~/.kimi-code/skills/serial-workbench`；已有旧 MCP 配置时用 `~/.kimi/skills/serial-workbench` | 新版 `KIMI_CODE_HOME` |
 
 目录规则参考 [Claude Code skills](https://code.claude.com/docs/en/skills)、[OpenCode skills](https://opencode.ai/docs/skills/)、[Pi skills](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/skills.md)；Codex 跟随本机 CODEX_HOME 的 skills 目录。其他 Agent 可直接调用 `read_usage_guide` 获取指南，不假设客户端会扫描某个未经确认的目录。复制 skill 后重载 Agent；skill 不会自动建立 MCP 连接。

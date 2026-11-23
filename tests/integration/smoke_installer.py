@@ -19,7 +19,7 @@ import time
 import winreg
 import zlib
 from installer_upgrade_checks import check_busy_upgrade, start_for_uninstall
-from skill_bundle_checks import source_files, check_guides, check_manifest, check_cli_updates
+from skill_bundle_checks import call as call_cli, source_files, check_guides, check_manifest, check_cli_updates
 
 ROOT = Path(__file__).resolve().parents[2]
 PRODUCT = "Serial Workbench Installer Test"
@@ -190,8 +190,12 @@ def main():
         windows = Path(os.environ["SystemRoot"])
         agent_bin = directory / "agent-bin"
         agent_bin.mkdir()
-        for name in ("codex", "claude", "opencode", "pi", "hermes", "openclaw", "grok", "cursor", "copilot", "windsurf", "devin", "cline", "kilo", "kiro-cli", "agy", "kimi"):
+        for name in ("codex", "claude", "opencode", "pi", "hermes", "openclaw", "grok", "cursor", "copilot", "windsurf", "devin", "cline", "kilo", "kiro-cli", "kimi"):
             (agent_bin / f"{name}.cmd").write_text("@echo off\n", encoding="utf-8")
+        (profile / ".gemini/antigravity").mkdir(parents=True)
+        antigravity_config = profile / ".gemini/config/config.json"
+        antigravity_config.parent.mkdir()
+        antigravity_config.write_bytes(b'{"permissions":{"fixture":true}}\n')
         env["PI_CODING_AGENT_DIR"] = str(profile / "pi")
         # Keep every optional Agent destination inside this fixture, including
         # overrides inherited from the developer's real environment.
@@ -227,6 +231,10 @@ def main():
             for target in discovery_report["skill_targets"]:
                 assert target["installed"], target["agent"]
                 check_guides(Path(target["path"]), expected_guides)
+            check_guides(profile / ".gemini/config/skills/serial-workbench", expected_guides, exact=True)
+            assert not (profile / ".gemini/antigravity-cli/skills").exists()
+            assert not (profile / ".gemini/config/mcp_config.json").exists()
+            assert antigravity_config.read_bytes() == b'{"permissions":{"fixture":true}}\n'
             assert not (profile / ".cursor/mcp.json").exists()
             assert not (profile / "codex/config.toml").exists(), "Skill installation must not configure MCP"
             print("PASS detected Agent skill components install guide/references without changing MCP config", flush=True)
@@ -277,6 +285,18 @@ def main():
             if args.skills_only:
                 check_guides(destination / "skills/serial-workbench", expected_guides, exact=True)
                 check_cli_updates(destination, settings, env, expected_guides, profile)
+                cli = destination / "SerialWorkbenchCLI.exe"
+                mcp_config = antigravity_config.with_name("mcp_config.json")
+                mcp_config.write_bytes(b"")
+                call_cli(cli, settings, env, "configure-agent", "antigravity")
+                mcp_bytes = mcp_config.read_bytes()
+                assert not mcp_bytes.startswith(b"\xef\xbb\xbf")
+                saved = json.loads(mcp_bytes)["mcpServers"]["serial-workbench"]
+                assert set(saved) == {"command", "args"}
+                assert Path(saved["command"]) == destination / "SerialWorkbenchMCP.exe"
+                assert saved["args"][0] == "--settings" and Path(saved["args"][1]) == settings
+                assert antigravity_config.read_bytes() == b'{"permissions":{"fixture":true}}\n'
+                print("PASS installed CLI initializes empty Antigravity MCP configuration", flush=True)
                 print("PASS production NSIS skill sections and installed CLI", flush=True)
                 return
 

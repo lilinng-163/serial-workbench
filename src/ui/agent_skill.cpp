@@ -52,6 +52,13 @@ void writeFile(const QString &path, const QByteArray &bytes)
         fail("skill 写入失败：" + path);
     }
 }
+
+bool sameGuide(const QString &agent, QByteArray installed, QByteArray bundled)
+{
+    if (installed == bundled) { return true; }
+    if (agent != "antigravity") { return false; }
+    return installed.replace("\r\n", "\n") == bundled.replace("\r\n", "\n");
+}
 }
 
 QJsonArray AgentSkill::targets(const AgentEnvironment &e)
@@ -80,7 +87,8 @@ QJsonArray AgentSkill::targets(const AgentEnvironment &e)
         QJsonObject {{"agent", "cline"}, {"name", "Cline"}, {"path", e.home + "/.cline/skills/serial-workbench"}},
         QJsonObject {{"agent", "kilo"}, {"name", "Kilo Code"}, {"path", e.home + "/.kilo/skills/serial-workbench"}},
         QJsonObject {{"agent", "kiro"}, {"name", "Kiro"}, {"path", e.home + "/.kiro/skills/serial-workbench"}},
-        QJsonObject {{"agent", "antigravity"}, {"name", "Antigravity App / IDE"}, {"path", e.home + "/.gemini/config/skills/serial-workbench"}},
+        QJsonObject {{"agent", "antigravity"}, {"name", "Antigravity · App / IDE / CLI"},
+            {"path", e.antigravityConfigRoot() + "/skills/serial-workbench"}},
         QJsonObject {{"agent", "kimi"}, {"name", "Kimi Code"},
             {"path", e.variable("KIMI_CODE_HOME", e.home + "/.kimi-code") + "/skills/serial-workbench"}}
     };
@@ -89,21 +97,16 @@ QJsonArray AgentSkill::targets(const AgentEnvironment &e)
     for (int index = 0; index < result.size(); ++index)
     {
         auto target = result[index].toObject();
+        const auto id = target["agent"].toString();
         bool installed = false;
         for (const auto &agent : agents)
         {
-            if (agent.id != target["agent"].toString()) { continue; }
+            if (agent.id != id) { continue; }
             installed = agent.installed();
             if (agent.id == "kimi" && agent.configPath == e.home + "/.kimi/mcp.json")
             {
                 // Legacy Kimi prioritizes its own skills directory.
                 target["path"] = e.home + "/.kimi/skills/serial-workbench";
-            }
-            if (agent.id == "antigravity" && !e.executable("agy").isEmpty()
-                && agent.executable == e.executable("agy"))
-            {
-                target["name"] = "Antigravity CLI";
-                target["path"] = e.home + "/.gemini/antigravity-cli/skills/serial-workbench";
             }
         }
         bool present = false;
@@ -112,7 +115,7 @@ QJsonArray AgentSkill::targets(const AgentEnvironment &e)
         {
             QFile installedFile(target["path"].toString() + "/" + file.key());
             present = present || installedFile.exists();
-            current = installedFile.open(QIODevice::ReadOnly) && installedFile.readAll() == file.value() && current;
+            current = current && installedFile.open(QIODevice::ReadOnly) && sameGuide(id, installedFile.readAll(), file.value());
         }
         target["installed"] = installed;
         target["skill_state"] = current ? "已是最新" : present ? "可更新 / 修复" : "未安装";
@@ -187,6 +190,8 @@ QJsonObject AgentSkill::install(const QString &agent, const AgentEnvironment &en
     QMap<QString, QByteArray> originals;
     QMap<QString, QByteArray> changed;
     QJsonArray installed;
+    auto state = UsageGuide::manifest();
+    auto installedHashes = state["files"].toObject();
     for (auto file = files.begin(); file != files.end(); ++file)
     {
         const auto path = QDir(directory).filePath(file.key());
@@ -195,7 +200,14 @@ QJsonObject AgentSkill::install(const QString &agent, const AgentEnvironment &en
         if (QFileInfo::exists(path))
         {
             const auto previous = readFile(path);
-            if (previous == file.value()) { continue; }
+            if (sameGuide(agent, previous, file.value()))
+            {
+                if (previous != file.value())
+                {
+                    installedHashes[file.key()] = QString::fromLatin1(QCryptographicHash::hash(previous, QCryptographicHash::Sha256).toHex());
+                }
+                continue;
+            }
             originals[file.key()] = previous;
         }
         changed[file.key()] = file.value();
@@ -240,8 +252,8 @@ QJsonObject AgentSkill::install(const QString &agent, const AgentEnvironment &en
             if (!QFile::remove(path)) { fail("无法移出旧 skill 备份：" + path); }
             removed.append(QDir(directory).relativeFilePath(path));
         }
-        auto state = UsageGuide::manifest();
         state["directory"] = directory;
+        state["files"] = installedHashes;
         writeFile(statePath, QJsonDocument(state).toJson());
     }
     catch (const std::exception &exception)

@@ -1,5 +1,12 @@
 # 开发交接记录
 
+## 2026-11-23 — Antigravity 使用共享 MCP 配置和 Skill 路径
+
+- 使用 `~/.gemini/antigravity/`、`agy` 或桌面程序作为识别依据。三个入口依旧共用 `~/.gemini/config/mcp_config.json`，Skill 固定安装到同一根目录的 `skills/serial-workbench`，保留旧安装和内部 `config.json`。
+- MCP 只读检查把缺失、零字节和纯空白配置标为尚未配置；显式配置可初始化文件，并保留其他服务。默认仍为 STDIO。HTTP 输出 `url`，状态兼容 `serverUrl`，明确拒绝旧式 `/sse`。Skill 状态比较兼容 LF/CRLF，安装与备份继续按真实字节记录。
+- Windows Release 构建、22 项 Agent 测试和实际 NSIS 隔离安装通过。验证无 agy 的桌面数据目录检测、共享目录六份指南、安装后 CLI 初始化空 MCP 文件、内部状态文件字节不变。Antigravity 客户端自身的实际握手未验证，Plugin 打包未启用。
+- 预览安装包与 SHA-256 位于 `dist/previews/antigravity`，日志位于 `build/antigravity-native/agent-tests.txt` 和 `build/antigravity-installer-tests.txt`。从 v0.15.46 主线隔离修复，尚未正式发布。
+
 ## 2026-11-16 — v0.15.46 已发布至 GitHub 与网站
 
 - PR #18 合入开始菜单直接启动入口与升级迁移，发行提交为 d127df7058d45e86f656acdda1405269e5e6afb1。GitHub 已发布安装包、便携 ZIP、单文件 EXE 和 SHA256SUMS，四个资产的大小和 SHA-256 与本机一致。

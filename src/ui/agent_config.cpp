@@ -319,7 +319,9 @@ QList<AgentClient> AgentConfig::discover(const AgentEnvironment &environment)
         {"qoder", "Qoder · CLI / Desktop", "qoder.svg", editorExecutable(environment, "qoder", "Qoder", "Qoder"), home + "/.qoder/settings.json", "json", {"mcpServers"}},
         {"zed", "Zed", "zed.svg", editorExecutable(environment, "zed", "Zed", "Zed"), environment.appData + "/Zed/settings.json", "json", {"context_servers"}},
         {"trae", "TRAE", "trae.png", editorExecutable(environment, "trae", "Trae", "Trae"), "", "json", {"mcpServers"}, false, true},
-        {"antigravity", "Google Antigravity", "antigravity.png", editorExecutable(environment, "agy", "Antigravity", "Antigravity"), home + "/.gemini/config/mcp_config.json", "json", {"mcpServers"}},
+        {"antigravity", "Google Antigravity", "antigravity.png", editorExecutable(environment, "agy", "Antigravity", "Antigravity"),
+            environment.antigravityConfigRoot() + "/mcp_config.json", "json", {"mcpServers"}, false, false,
+            QFileInfo(home + "/.gemini/antigravity").isDir()},
         {"qwen", "Qwen Code", "qwen-color.svg", environment.executable("qwen"), home + "/.qwen/settings.json", "json", {"mcpServers"}},
         {"kimi", "Kimi Code", "kimi.png", environment.executable("kimi"), environment.variable("KIMI_CODE_HOME", home + "/.kimi-code") + "/mcp.json", "json", {"mcpServers"}},
         {"continue", "Continue", "continue.svg", extensionExecutable(environment, "Continue.continue"), "", "json", {"mcpServers"}, false, true}
@@ -366,7 +368,18 @@ QJsonObject AgentConfig::entry(const AgentClient &agent, const QString &url, con
     }
     if (agent.id == "opencode" || agent.id == "kilo") { return {{"type", "remote"}, {"url", url}, {"enabled", true}}; }
     if (agent.id == "qwen") { return {{"httpUrl", url}}; }
-    if (agent.id == "antigravity") { return {{"serverUrl", url}}; }
+    if (agent.id == "antigravity")
+    {
+        const QUrl endpoint(url, QUrl::StrictMode);
+        auto path = endpoint.path();
+        while (path.endsWith('/')) { path.chop(1); }
+        if (!endpoint.isValid() || endpoint.host().isEmpty() || (endpoint.scheme() != "http" && endpoint.scheme() != "https")
+            || path.endsWith("/sse", Qt::CaseInsensitive))
+        {
+            fail("Antigravity 远程接入需要 Streamable HTTP 地址（如 /mcp），不支持旧版 /sse 地址");
+        }
+        return {{"url", url}};
+    }
     if (agent.id == "openclaw") { return {{"transport", "streamable-http"}, {"url", url}, {"enabled", true}}; }
     if (agent.id == "claude-code") { return {{"type", "http"}, {"url", url}}; }
     if (agent.id == "copilot") { return {{"type", "http"}, {"url", url}, {"tools", QJsonArray {"*"}}}; }
@@ -489,6 +502,21 @@ QString AgentConfig::updated(const AgentClient &agent, const QString &original, 
     const auto root = parseJsonc(text);
     auto section = agent.section;
     auto value = entry(agent, url, bridge, settings);
+    if (agent.id == "antigravity")
+    {
+        const auto saved = root["mcpServers"].toObject()["serial-workbench"].toObject();
+        if (url.isEmpty() && saved["command"].isString())
+        {
+            if (saved["env"].isObject()) { value["env"] = saved["env"]; }
+            if (QDir::isAbsolutePath(saved["cwd"].toString())) { value["cwd"] = saved["cwd"]; }
+        }
+        else if (!url.isEmpty() && !saved.contains("command"))
+        {
+            const auto previousUrl = saved.contains("url") ? saved["url"] : saved["serverUrl"];
+            // Authentication headers belong to the prior endpoint.
+            if (previousUrl == url && saved["headers"].isObject()) { value["headers"] = saved["headers"]; }
+        }
+    }
     if (agent.id == "opencode" && agent.modernOpenCode && !root["mcp"].toObject().isEmpty()
         && !root["mcp"].toObject().contains("servers"))
     {
@@ -506,10 +534,16 @@ QString AgentConfig::updated(const AgentClient &agent, const QString &original, 
 
 static QString readConfig(const AgentClient &agent)
 {
+    if (agent.id == "antigravity" && QFileInfo(agent.configPath).isSymLink())
+    {
+        fail("Antigravity MCP 配置文件是链接，未读取或修改目标文件");
+    }
     QFile file(agent.configPath);
     if (!file.exists()) { return agent.format == "json" ? "{}" : ""; }
     if (!file.open(QIODevice::ReadOnly)) { fail("无法读取配置：" + file.errorString()); }
-    return QString::fromUtf8(file.readAll());
+    const auto bytes = file.readAll();
+    if (file.error() != QFile::NoError) { fail("无法读取配置：" + file.errorString()); }
+    return QString::fromUtf8(bytes);
 }
 
 QString AgentConfig::check(const AgentClient &agent, const QString &url, const QString &bridge, const QString &settings)
@@ -518,6 +552,7 @@ QString AgentConfig::check(const AgentClient &agent, const QString &url, const Q
     if (!agent.installed()) { fail("未检测到已安装的 " + agent.name); }
     if (!QFileInfo::exists(agent.configPath)) { return "尚未配置"; }
     const auto text = readConfig(agent);
+    if (agent.id == "antigravity" && text.trimmed().isEmpty()) { return "尚未配置"; }
     if (agent.format != "json")
     {
         // Replacing with the same managed entry must make no semantic change.
@@ -526,12 +561,30 @@ QString AgentConfig::check(const AgentClient &agent, const QString &url, const Q
         return fkyaml::node::deserialize(next.toStdString()) == fkyaml::node::deserialize(text.toStdString()) ? "配置地址一致" : "需要更新配置";
     }
     auto node = parseJsonc(text);
+    if (agent.id == "antigravity" && node.contains("mcpServers") && !node["mcpServers"].isObject())
+    {
+        fail("Antigravity 的 mcpServers 必须是 JSON 对象");
+    }
     for (const auto &key : agent.section) { node = node[key].toObject(); }
     const bool v2 = agent.id == "opencode" && (agent.modernOpenCode || node.contains("servers"));
     if (v2) { node = node["servers"].toObject(); }
-    const auto saved = node["serial-workbench"].toObject();
+    auto saved = node["serial-workbench"].toObject();
+    if (agent.id == "antigravity" && !node.contains("serial-workbench")) { return "尚未配置"; }
     if (saved["disabled"].toBool() || (saved.contains("enabled") && !saved["enabled"].toBool())) { return "服务已禁用，需要更新配置"; }
     auto expected = entry(agent, url, bridge, settings);
+    if (agent.id == "antigravity")
+    {
+        if (url.isEmpty())
+        {
+            if (saved.contains("url") || saved.contains("serverUrl")) { return "需要更新配置"; }
+            if (!saved.contains("args")) { saved["args"] = QJsonArray(); }
+        }
+        else
+        {
+            if (saved.contains("command")) { return "需要更新配置"; }
+            if (!saved.contains("url") && saved["serverUrl"].isString()) { saved["url"] = saved["serverUrl"]; }
+        }
+    }
     if (v2) { expected.remove("enabled"); expected["disabled"] = false; }
     for (auto item = expected.begin(); item != expected.end(); ++item)
     {
@@ -544,12 +597,17 @@ QString AgentConfig::configure(const AgentClient &agent, const QString &url, con
 {
     if (agent.manualConfig || agent.configPath.isEmpty()) { fail("此客户端需导入配置，请使用导出配置 / export-agent"); }
     if (!agent.installed()) { fail("未检测到已安装的 " + agent.name); }
-    if (QFileInfo::exists(agent.configPath) && check(agent, url, bridge, settings) == "配置地址一致")
+    const auto alreadyConfigured = "配置已一致，文件校验通过。请重载客户端配置。\n" + agent.configPath;
+    if (agent.id != "antigravity" && QFileInfo::exists(agent.configPath) && check(agent, url, bridge, settings) == "配置地址一致")
     {
-        return "配置已一致，文件校验通过。请重载客户端配置。\n" + agent.configPath;
+        return alreadyConfigured;
     }
     const auto original = readConfig(agent);
     const auto text = updated(agent, original, url, bridge, settings);
+    if (agent.id == "antigravity" && !original.trimmed().isEmpty() && parseJsonc(original) == parseJsonc(text))
+    {
+        return alreadyConfigured;
+    }
     if (!QDir().mkpath(QFileInfo(agent.configPath).absolutePath())) { fail("无法创建配置目录"); }
     if (text != original)
     {
