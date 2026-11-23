@@ -18,7 +18,9 @@ SerialWorkbenchCLI.exe export-agent generic
 
 Windsurf 旧版、TRAE 和 Continue 提供配置导出：在对应客户端的 MCP 配置入口导入，避免假定版本相关的内部存储路径。其他支持本地 STDIO 或 Streamable HTTP 的客户端使用通用导出；仅支持云端连接的服务不能直接访问电脑的 localhost。
 
-VS Code 的 `servers` 与 Copilot 的 `mcpServers` 是不同入口；新版 Copilot 模式选择 Copilot 卡片，Local 模式选择 VS Code 卡片。Devin 和旧 Windsurf 分开。Cline 新版共享目录与旧扩展目录分开，避免把配置写到已经废弃的位置。Kilo 新版使用 `mcp` 和 command 数组。Antigravity HTTP 使用 serverUrl，Qwen 使用 httpUrl，Cline 使用 type=streamableHttp。Continue 可把导出的 JSON 放入项目 .continue/mcpServers/；不要覆盖已有文件。
+VS Code 的 `servers` 与 Copilot 的 `mcpServers` 是不同入口；新版 Copilot 模式选择 Copilot 卡片，Local 模式选择 VS Code 卡片。Devin 和旧 Windsurf 分开。Cline 新版共享目录与旧扩展目录分开，避免把配置写到已经废弃的位置。Kilo 新版使用 `mcp` 和 command 数组。Qwen 使用 httpUrl，Cline 使用 type=streamableHttp。Continue 可把导出的 JSON 放入项目 .continue/mcpServers/；不要覆盖已有文件。
+
+Antigravity App、IDE 和 agy 共用 `~/.gemini/config/mcp_config.json` 和 `~/.gemini/config/skills/serial-workbench/`。默认使用 STDIO；远程模式写 `url`，检查也识别旧配置的 `serverUrl`，使用 Streamable HTTP `/mcp`，不使用旧式 `/sse`。已有空文件可直接配置。修改只针对 `mcpServers.serial-workbench`；Antigravity 内部的 `config.json` 由客户端维护。
 
 skill 安装支持 Codex、Claude Code、OpenCode、Pi、Hermes、OpenClaw、Grok Build、Cursor、Copilot、Windsurf、Devin、Cline、Kilo、Kiro、Antigravity、Kimi Code；其他客户端通过 `read_usage_guide` 读取同一套指南，或在客户端支持的 UI 中导入打包的 skill。不伪造未确认的 skill 目录。skill 与 MCP 连接分别配置，安装指南不会自动授予 AI 控制权限。
 

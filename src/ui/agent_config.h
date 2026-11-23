@@ -16,6 +16,7 @@ struct AgentEnvironment
     static AgentEnvironment current();
     QString variable(const QString &name, const QString &fallback) const;
     QString executable(const QString &name) const;
+    QString antigravityConfigRoot() const { return home + "/.gemini/config"; }
 };
 
 struct AgentClient
@@ -29,7 +30,8 @@ struct AgentClient
     QStringList section;
     bool modernOpenCode = false;
     bool manualConfig = false;
-    bool installed() const { return !executable.isEmpty(); }
+    bool hasApplicationData = false;
+    bool installed() const { return !executable.isEmpty() || hasApplicationData; }
 };
 
 class AgentConfig

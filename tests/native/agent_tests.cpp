@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "agent_panel.h"
+#include "agent_skill.h"
+#include "usage_guide.h"
 #include "window.h"
 #include <QtTest>
 
@@ -86,7 +88,6 @@ private slots:
                 QCOMPARE(local["args"].toArray(), QJsonArray({"--settings", profile}));
             }
             if (agent.id == "qwen") { QCOMPARE(remote["httpUrl"].toString(), url); }
-            else if (agent.id == "antigravity") { QCOMPARE(remote["serverUrl"].toString(), url); }
             else { QCOMPARE(remote["url"].toString(), url); }
             if (agent.id.startsWith("vscode"))
             {
@@ -124,6 +125,119 @@ private slots:
             QVERIFY(bytes.contains("// untouched"));
             QVERIFY(bytes.contains("\"unrelated\":42"));
         }
+    }
+
+    void antigravityUsesSharedConfiguration()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const auto env = environment(directory);
+        const auto findAntigravity = [&env]
+        {
+            for (const auto &agent : sw::AgentConfig::discover(env))
+            {
+                if (agent.id == "antigravity") { return agent; }
+            }
+            return sw::AgentClient();
+        };
+        const auto read = [](const QString &path)
+        {
+            QFile file(path);
+            if (!file.open(QIODevice::ReadOnly)) { qFatal("Fixture read failed"); }
+            return file.readAll();
+        };
+        const auto internal = directory.filePath(".gemini/config/config.json");
+        const QByteArray internalBytes("{\"permissions\":{\"keep\":true}}\n");
+        write(internal, internalBytes);
+        QVERIFY(!findAntigravity().installed());
+        QVERIFY(QDir().mkpath(directory.filePath(".gemini/antigravity")));
+        auto agent = findAntigravity();
+        QVERIFY(agent.installed());
+        QVERIFY(agent.executable.isEmpty());
+        QCOMPARE(agent.configPath, directory.filePath(".gemini/config/mcp_config.json"));
+
+        const auto bridge = directory.filePath("bridge with spaces.exe");
+        const auto settings = directory.filePath("profile with spaces.json");
+        const QString url = "http://127.0.0.1:8103/mcp";
+        write(bridge, "fixture");
+        QCOMPARE(sw::AgentConfig::check(agent, url, bridge), "尚未配置");
+        for (const auto &bytes : {QByteArray(), QByteArray(" \r\n\t ")})
+        {
+            write(agent.configPath, bytes);
+            QCOMPARE(sw::AgentConfig::check(agent, {}, bridge, settings), "尚未配置");
+            QCOMPARE(sw::AgentConfig::check(agent, url, bridge), "尚未配置");
+            QCOMPARE(read(agent.configPath), bytes);
+            sw::AgentConfig::configure(agent, {}, bridge, settings);
+            const auto written = read(agent.configPath);
+            QVERIFY(!written.startsWith(QByteArray::fromHex("efbbbf")));
+            const auto servers = QJsonDocument::fromJson(written).object()["mcpServers"].toObject();
+            const QJsonObject expected {{"command", bridge}, {"args", QJsonArray {"--settings", settings}}};
+            QCOMPARE(servers["serial-workbench"].toObject(), expected);
+        }
+
+        const QJsonObject other {{"serverUrl", "https://other.invalid/mcp"}, {"timeoutSeconds", 600}};
+        QJsonObject old {{"serverUrl", url}, {"headers", QJsonObject {{"X-Local", "keep"}}}};
+        const auto saveEntry = [&](const QJsonObject &entry)
+        {
+            const QJsonObject root {{"unrelated", 42}, {"mcpServers", QJsonObject {{"other", other}, {"serial-workbench", entry}}}};
+            write(agent.configPath, QJsonDocument(root).toJson());
+        };
+        saveEntry(old);
+        QCOMPARE(sw::AgentConfig::check(agent, url, bridge), "配置地址一致");
+        old["url"] = "https://stale.invalid/mcp";
+        saveEntry(old);
+        QCOMPARE(sw::AgentConfig::check(agent, url, bridge), "需要更新配置");
+        old.remove("url");
+        saveEntry(old);
+        sw::AgentConfig::configure(agent, url, bridge);
+        const auto normalizedBytes = read(agent.configPath);
+        auto normalized = QJsonDocument::fromJson(normalizedBytes).object();
+        const auto servers = normalized["mcpServers"].toObject();
+        QCOMPARE(normalized["unrelated"].toInt(), 42);
+        QCOMPARE(servers["other"].toObject(), other);
+        const QJsonObject expected {{"url", url}, {"headers", old["headers"]}};
+        QCOMPARE(servers["serial-workbench"].toObject(), expected);
+        sw::AgentConfig::configure(agent, url, bridge);
+        QCOMPARE(read(agent.configPath), normalizedBytes);
+        QVERIFY_EXCEPTION_THROWN(sw::AgentConfig::configure(agent, "http://localhost/sse/", bridge), std::exception);
+        QCOMPARE(read(agent.configPath), normalizedBytes);
+        write(agent.configPath, "{broken");
+        QVERIFY_EXCEPTION_THROWN(sw::AgentConfig::configure(agent, url, bridge), std::exception);
+        QCOMPARE(read(agent.configPath), QByteArray("{broken"));
+
+        write(directory.filePath("bin/agy.cmd"), "@echo off\r\n");
+        agent = findAntigravity();
+        QVERIFY(agent.executable.endsWith("agy.cmd"));
+        const auto targetPath = directory.filePath(".gemini/config/skills/serial-workbench");
+        const auto oldTarget = directory.filePath(".gemini/antigravity-cli/skills/serial-workbench/SKILL.md");
+        write(oldTarget, "user content");
+        const auto installed = sw::AgentSkill::install("antigravity", env);
+        QCOMPARE(installed["directory"].toString(), targetPath);
+        QCOMPARE(installed["files"].toArray().size(), sw::UsageGuide::files().size());
+        const auto contents = sw::UsageGuide::files();
+        auto skill = contents["SKILL.md"];
+        skill.replace("\r\n", "\n");
+        QVERIFY(skill.startsWith("---\nname: serial-workbench\n"));
+        QVERIFY(skill.contains("\ndescription: Use when"));
+        const auto referencePath = targetPath + "/references/openocd.md";
+        const auto originalReference = read(referencePath);
+        auto reference = originalReference;
+        if (reference.contains("\r\n")) { reference.replace("\r\n", "\n"); }
+        else { reference.replace("\n", "\r\n"); }
+        QVERIFY(reference != originalReference);
+        write(referencePath, reference);
+        for (const auto &value : sw::AgentSkill::targets(env))
+        {
+            const auto target = value.toObject();
+            if (target["agent"] != "antigravity") { continue; }
+            QCOMPARE(target["path"].toString(), targetPath);
+            QCOMPARE(target["skill_state"].toString(), "已是最新");
+        }
+        QVERIFY(sw::AgentSkill::install("antigravity", env)["backups"].toArray().isEmpty());
+        QCOMPARE(read(referencePath), reference);
+        QCOMPARE(read(oldTarget), QByteArray("user content"));
+        QCOMPARE(read(internal), internalBytes);
+        QVERIFY(!QFileInfo::exists(directory.filePath(".gemini/config/plugins")));
     }
 
     void installedDetectionIgnoresConfigResidue()
