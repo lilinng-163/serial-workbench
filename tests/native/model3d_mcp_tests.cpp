@@ -85,10 +85,12 @@ private slots:
         sw::Engine engine;
         sw::McpServer mcp(&engine);
         sw::Window window(&engine, &mcp, directory.filePath("import.json"));
+        const auto previous = window.active;
         QVERIFY_EXCEPTION_THROWN(mcp.call("open_model_view", {{"file_path", mesh()}}), std::exception);
         engine.allowControl = true;
         QVERIFY_EXCEPTION_THROWN(mcp.call("open_model_view", {{"file_path", "relative.stl"}}), std::exception);
         const auto opened = mcp.call("open_model_view", {{"file_path", mesh()}}).toObject();
+        QCOMPARE(window.active, previous);
         const auto id = opened["view_id"].toString();
         QVERIFY(!id.isEmpty());
         QTRY_VERIFY_WITH_TIMEOUT(!get(mcp, id)["loading"].toBool(), 5000);
@@ -210,6 +212,20 @@ private slots:
             QTest::qWait(150);
             QVERIFY(window.screen()->grabWindow(window.winId()).save(destination + "/mcp-gui.png"));
         }
+    }
+
+    void opensVisibleModelTab()
+    {
+        if (QGuiApplication::platformName() == "offscreen") { QSKIP("Requires a desktop window"); }
+        sw::Engine engine;
+        sw::McpServer mcp(&engine);
+        sw::Window window(&engine, &mcp, directory.filePath("visible.json"));
+        engine.allowControl = true;
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        const auto opened = mcp.call("open_model_view", {{"file_path", mesh()}}).toObject();
+        QCOMPARE(window.active->searchViewId, opened["view_id"].toString());
+        QTRY_VERIFY(!get(mcp, window.active->searchViewId)["loading"].toBool());
     }
 };
 

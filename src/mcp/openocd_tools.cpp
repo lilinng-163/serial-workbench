@@ -43,6 +43,7 @@ QJsonObject McpServer::openOcdTool(const QString &name, const QJsonObject &argum
     {
         if (arguments.contains("configuration") && !arguments["configuration"].isObject()) { fail("configuration 必须是对象"); }
         if (arguments.contains("title") && (!arguments["title"].isString() || arguments["title"].toString().size() > 200)) { fail("title 应为最多 200 个字符的字符串"); }
+        if (arguments.contains("activate") && !arguments["activate"].isBool()) { fail("activate 必须为布尔值"); }
         if (openOcdViewHandler) { return openOcdViewHandler(name, arguments); }
         return engine->createOpenOcdView(arguments["title"].toString(), arguments["configuration"].toObject())->state();
     }
@@ -162,9 +163,8 @@ QJsonArray McpServer::openOcdTools() const
             {"annotations", QJsonObject {{"readOnlyHint", read}, {"destructiveHint", !read}, {"openWorldHint", !read}}}});
     };
     add("list_openocd_views", "List independent OpenOCD board pages and their exact view_id, title, probe serial, target and job status. Separate pages can run in parallel using distinct explicit adapter serial numbers. Requires OpenOCD read access; never choose the first page implicitly when there are multiple.", {}, {}, true);
-    add("create_openocd_view", "Create a native workbench OpenOCD tab with its own configuration, job and logs. Requires OpenOCD access and AI control. Optional configuration uses the same fields as configure_openocd.patch. Does not connect or flash. activate=false keeps the current GUI tab. Returns view_id/revision for subsequent calls.",
-        {{"title", string}, {"configuration", QJsonObject {{"type", "object"}, {"additionalProperties", false}, {"properties", patchProperties}}}, {"activate", QJsonObject {{"type", "boolean"}, {"default", false}}}}, {}, false);
-    add("close_openocd_view", "Close only the named idle OpenOCD board page and remove its saved profile. An active job must finish or be cancelled first. Other board jobs and serial connections continue. Requires OpenOCD access and AI control.", {}, {"view_id"}, false);
+    add("create_openocd_view", "Create a native workbench OpenOCD tab with its own configuration, job and logs. Requires OpenOCD access and AI control. Optional configuration uses the same fields as configure_openocd.patch. Does not connect or flash. A visible workbench shows the new tab by default; activate=false keeps the current tab. Returns view_id/revision for subsequent calls.",
+        {{"title", string}, {"configuration", QJsonObject {{"type", "object"}, {"additionalProperties", false}, {"properties", patchProperties}}}, {"activate", QJsonObject {{"type", "boolean"}}}}, {}, false);
     add("list_openocd_configs", "List board/interface/target .cfg files from the selected OpenOCD distribution, without launching it or accessing hardware. Requires the separate OpenOCD access switch. Empty scripts_dir auto-detects next to the executable. Does not claim that a listed chip/probe is hardware-verified.",
         {{"executable", string}, {"scripts_dir", string}}, {}, true);
     add("get_openocd_state", "Read the shared GUI/MCP OpenOCD configuration, revision, active job, exit status and bounded incremental log. Keep next_cursor independently per reader. Check gap/job_id; succeeded requires zero exit code and all requested steps completed. Requires OpenOCD access.",

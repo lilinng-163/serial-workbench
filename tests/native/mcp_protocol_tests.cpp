@@ -118,6 +118,8 @@ private slots:
         for (const auto &tool : mcp.tools())
         {
             const auto value = tool.toObject();
+            QVERIFY(value["name"] != "read_all_events");
+            QVERIFY(value["name"] != "close_openocd_view");
             if (value["name"] == "read_events")
             {
                 QVERIFY(value["inputSchema"].toObject()["required"].toArray().contains("channel_id"));

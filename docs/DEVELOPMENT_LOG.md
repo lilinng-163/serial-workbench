@@ -1,5 +1,11 @@
 # 开发交接记录
 
+## 2026-11-28 — 精简 MCP 默认工具并同步新建标签
+
+- MCP 工具列表从 37 个减为 35 个，移出全局历史读取 `read_all_events` 和关闭板卡页 `close_openocd_view`。已有脚本按名称调用时沿用原权限和行为。Agent 指南使用准确的连接 ID，并提供后台实例识别方法。
+- 桌面工作台可见时，MCP 导入 3D 模型、新建 OpenOCD 页或首次挂载 OpenOCD 页会切到新标签。OpenOCD 新建页传 `activate=false` 可保留当前标签。后台实例仍可创建页面而不弹窗。
+- Windows Release 构建、四组相关 CTest 及真实 Windows 窗口的 3D 和 OpenOCD 标签测试通过。部署 Qt 运行库后，使用隔离配置通过 CLI / STDIO 后台启动、回环收发与图形界面接续测试。改动位于独立开发工作树。
+
 ## 2026-11-23 — v0.15.47 已发布至 GitHub 与网站
 
 - PR #20 合入 Antigravity 接入修复，发行提交为 `67243113232dba88c1ec7a1ffe2896f5a1f79051`。四个 GitHub 资产的大小和 SHA-256 与本机一致。

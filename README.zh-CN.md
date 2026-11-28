@@ -62,7 +62,7 @@
 
 **[下载最新版本 →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.47 修复 Antigravity 的共享 MCP 与 Skill 目录，并支持初始化空 MCP 配置。[查看更新说明](docs/releases/0.15.47.md)。
+v0.15.48 精简 Agent 可发现的 MCP 工具，并让桌面工作台显示通过 MCP 新建的 3D 模型和 OpenOCD 标签。[查看更新说明](docs/releases/0.15.48.md)。
 
 | 文件 | 适合的使用方式 |
 | --- | --- |
@@ -230,7 +230,7 @@ V1 `opencode.json` / `opencode.jsonc` 可合并以下条目：
 | 目标 | MCP 工具 |
 | --- | --- |
 | 发现会话与端口 | `get_status`、`list_connections`、`list_serial_ports` |
-| 读取设备原始输出 | `read_events` 读取指定连接，`read_all_events` 读取混合历史 |
+| 读取设备原始输出 | 用 `read_events` 和准确的 `channel_id` 读取指定连接 |
 | 查看解析结果 | `read_waveform`、`read_structured`、`read_script_results` |
 | 搜索界面显示内容 | `list_search_views`、`search_logs`，与 GUI 共用大小写、全词、正则和逻辑开关 |
 | 读取或试解析串口脚本 | `get_frame_script`、`validate_frame_script`，离线试解析不改变正在使用的脚本 |

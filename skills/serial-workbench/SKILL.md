@@ -11,7 +11,9 @@ description: Use when a task explicitly involves Serial Workbench or its existin
 
 先调用 `get_status` 或 `list_connections`，按用户指定的协议、串口号或主机、连接状态选择准确的 `id`。列表也包含断开但仍保留历史的连接，第一项不一定是当前设备。不要把示例 ID、COM 名称或上次任务的 ID 当成本次连接 ID。
 
-`read_events` 必须传非空 `channel_id`。缺失或无效 ID 会报错，不会默认读取其他连接。结果的 `channel_id`、`protocol`、`connection_state` 用于核对来源。只有明确需要所有连接的混合历史时才使用 `read_all_events`；其中可能包含旧 SSH 记录。
+需要用户在桌面看到 MCP 操作时，先用 `get_status` 核对 `background` 和 `process.pid`。若 `background=true`，当前连接的是后台实例，用户打开同一设置对应的工作台后可接续。
+
+`read_events` 必须传非空 `channel_id`。缺失或无效 ID 会报错。结果的 `channel_id`、`protocol`、`connection_state` 用于核对来源。需要对照多条连接时，分别读取并记录各自的游标。
 
 - 回看目标连接历史：`read_events(channel_id=目标ID, after=0, limit=200)`。
 - 只看随后新到的数据：先保存 `get_status.latest_cursor`，再以它作为 `after`，可加 `wait_ms=5000`；这不包含保存游标前的数据。

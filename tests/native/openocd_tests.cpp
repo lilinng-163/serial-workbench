@@ -516,11 +516,14 @@ private slots:
         sw::Window window(&engine, &mcp, path);
         window.show();
         const auto handle = window.winId();
+        const auto receivePage = window.active;
         mcp.setProtocolEnabled("openocd", true);
         engine.allowControl = true;
         const auto firstId = engine.openocd->viewId;
         mcp.call("configure_openocd", {{"view_id", firstId}, {"revision", engine.openocd->revision()}, {"title", "Board A"}, {"patch", fixture()}});
         auto first = engine.openOcdView(firstId);
+        QCOMPARE(window.active, pageFor(window, firstId));
+        window.showPane(receivePage);
         first->configure({{"adapter_serial", "PROBE-A"}}, first->revision());
         auto config = fixture();
         config["adapter_serial"] = "PROBE-B";
@@ -530,12 +533,12 @@ private slots:
         auto firstPage = pageFor(window, firstId);
         auto secondPage = pageFor(window, secondId);
         QVERIFY(firstPage && secondPage && firstPage != secondPage);
+        QCOMPARE(window.active, secondPage);
         QCOMPARE(window.winId(), handle);
         QCOMPARE(mcp.call("list_openocd_views", {}).toObject()["views"].toArray().size(), 2);
         QVERIFY_EXCEPTION_THROWN(mcp.call("get_openocd_state", {}), std::runtime_error);
         QVERIFY_EXCEPTION_THROWN(mcp.call("configure_openocd", {{"revision", first->revision()}, {"patch", QJsonObject {}}}), std::runtime_error);
         QVERIFY_EXCEPTION_THROWN(mcp.call("close_openocd_view", {}), std::runtime_error);
-        auto receivePage = window.active;
         auto parameters = window.findChild<QScrollArea *>("parameterScroll");
         QVERIFY(parameters->isVisible());
         const auto parameterGeometry = parameters->geometry();
