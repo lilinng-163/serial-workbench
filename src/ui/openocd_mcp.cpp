@@ -25,7 +25,8 @@ void Window::installOpenOcdMcp()
         {
             OpenOcdService validation;
             validation.restore(arguments["configuration"].toObject());
-            auto pane = guard->newInstrument("openocd", nullptr, arguments["activate"].toBool(false));
+            const bool activate = arguments["activate"].toBool(guard->isVisible());
+            auto pane = guard->newInstrument("openocd", nullptr, activate);
             if (!pane) { fail("无法创建 OpenOCD 页面"); }
             auto view = pane->instrument->flasherService;
             view->configure(arguments["configuration"].toObject(), view->revision());
@@ -42,7 +43,10 @@ void Window::installOpenOcdMcp()
         auto view = guard->engine->openOcdView(arguments["view_id"].toString());
         if (action == "ensure_openocd_view")
         {
-            guard->newInstrument("openocd", nullptr, false, {}, view->viewId);
+            if (!guard->newInstrument("openocd", nullptr, guard->isVisible(), {}, view->viewId))
+            {
+                fail("无法创建 OpenOCD 页面");
+            }
             guard->saveSettings();
             return view->state();
         }

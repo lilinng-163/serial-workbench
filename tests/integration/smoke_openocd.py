@@ -21,11 +21,12 @@ async def check(url, bridge, config, rtt_fixture=None):
         async with ClientSession(read, write) as client:
             await client.initialize()
             tools = {item.name: item for item in (await client.list_tools()).tools}
-            assert len(tools) == 37
+            assert len(tools) == 35
+            assert "close_openocd_view" not in tools
             assert all(name in tools for name in (
                 "get_openocd_state", "read_openocd_rtt", "search_openocd_rtt", "list_openocd_configs", "configure_openocd",
                 "preview_openocd", "start_openocd", "cancel_openocd",
-                "list_openocd_views", "create_openocd_view", "close_openocd_view",
+                "list_openocd_views", "create_openocd_view",
                 "export_openocd_configuration", "import_openocd_configuration"))
             state = unpack(await client.call_tool("get_openocd_state"))
             view_id = state["view_id"]

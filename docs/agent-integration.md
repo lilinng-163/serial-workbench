@@ -69,6 +69,8 @@ OpenCode 已有 `mcp.servers` 时保留 V2 结构；新建配置通过已安装 
 
 先 `list_connections` 选准确 channel_id，再 `list_search_views(channel_id)` 取得本次 GUI 的 view_id。`search_logs(channel_id, view_id, filter={text, case_sensitive, whole_word, regex, logical})` 同步搜索框和开关；省略 filter 则沿用 GUI 条件。结果是 GUI 显示缓存中的匹配行/解析记录，保留暂停、清空、HEX/编码及缓存范围，不等于完整原始历史。读取非活动页面时会刷新该页面的显示缓存，不切换用户的当前标签；暂停/冻结仍有效。
 
+Agent 工具列表推荐使用 `read_events(channel_id)` 读取指定连接，在工作台关闭空闲的 OpenOCD 页。已有脚本仍可按名称调用 `read_all_events` 和 `close_openocd_view`。
+
 使用 offset/limit/snapshot 分页；显示变化后从 0 重试，更新 filter 时不传旧 snapshot。文本截断查看 truncated，原始字节及更早历史仍通过 read_events 的独立游标读取。SSH 保持交互终端，通过 read_events 读取输出，不强行切成日志页。
 
 `get_frame_script(channel_id)` 返回代码、enabled、revision 与错误。`validate_frame_script(code, sample_chunks=[HEX,...])` 离线编译和试解析，支持跨块缓存，不发送数据、不修改在线状态。`set_frame_script(channel_id, code, enabled, expected_revision)` 需要串口开放、AI 控制权限、最新 revision，且没有传文件或 GUI 未保存编辑。应用后 GUI、持久化脚本与编辑器同步，仅处理新收到的数据。原始报文与其他读取者不受试解析影响。

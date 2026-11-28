@@ -67,14 +67,14 @@ RTT 的 MCP 流程：
 
 先读 `get_status.protocol_access.openocd`。用户在 **设置 → AI / MCP → 向 AI 开放 → OpenOCD** 开启访问后，才能读取配置、枚举、预览和读取日志；修改、启动、取消还需要 `allow_ai_control=true`。这些开关不限制本地 GUI。
 
-1. `list_openocd_views` 列出各页的 `view_id`、名称、探针序列号、目标和状态。`create_openocd_view(title?, configuration?, activate=false)` 新建 GUI 页并返回 `view_id`；不会启动任务。后台实例会同步创建页面，稍后打开 GUI 可直接接续。
+1. `list_openocd_views` 列出各页的 `view_id`、名称、探针序列号、目标和状态。`create_openocd_view(title?, configuration?, activate?)` 新建页面并返回 `view_id`。工作台窗口可见时默认切到新页，传入 `activate=false` 可保留当前页。后台实例创建页面后可在打开工作台时接续。
 2. `get_openocd_state(view_id)` 获取该页共用 `configuration` 与当前 `revision`。所有修改、启动、取消和关闭操作**必须显式提供 `view_id`**；只读工具仅在恰好一页时允许省略。不要用活动标签推测目标板。
 3. `list_openocd_configs(view_id, executable?, scripts_dir?)` 枚举该发行包的 `boards`、`interfaces` 和 `targets`；只读，不启动进程。
 4. `configure_openocd(view_id, revision, patch, title?)` 修改该页 GUI 同一份配置。`images` 整体替换，格式为 `[{"path":"固件完整路径","address":"0x实际地址"}]`。运行期间不能修改，过期 revision 会被拒绝。
 5. `preview_openocd(view_id, operation="flash")` 检查本机文件并返回 Tcl 和步骤，不启动程序。`version` 只运行 `--version`；`connect` 会初始化并暂停目标，显式选择 reset 时也复位，不写闪存；`flash` 擦写固件。
 6. 仅在用户授权对应操作后，`start_openocd(view_id, operation, revision)` 启动该页异步任务。使用刚预览的 revision，配置改变时重新读取/预览。多个硬件任务需先为各页配置不同的探针序列号，不自动关闭或重开串口。
 7. `get_openocd_state(view_id, after=游标, limit=100)` 跟踪结果，按页面和读者分别保存 `next_cursor`，检查 `job_id`、`gap` 和 `has_more`。
-8. `cancel_openocd(view_id, job_id)` 只取消匹配页的当前任务。`close_openocd_view(view_id)` 仅关闭空闲页。取消/超时只结束进程，可能留下暂停或部分写入的目标，需要查看日志后处理。
+8. `cancel_openocd(view_id, job_id)` 取消指定页面的当前任务。取消或超时后，查看日志确认目标是否仍暂停或仅写入了部分内容。任务结束后可在工作台上关闭空闲页。
 
 `export_openocd_configuration(view_id)` 只读返回与 GUI 导出文件一致的 JSON 对象，不向磁盘写文件。`import_openocd_configuration(view_id, revision, document)` 接收该对象，与 GUI 导入共用同一校验和应用逻辑，要求 OpenOCD 访问和 AI 控制权限。导入后重新读取 `get_openocd_state` 核对目标、探针、固件和当前 revision，再预览；硬件操作仍需用户授权。
 

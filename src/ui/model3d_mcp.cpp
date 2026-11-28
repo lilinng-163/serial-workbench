@@ -85,7 +85,7 @@ void Window::installModelMcp()
             const auto path = modelPath(arguments["file_path"]);
             auto channel = arguments.contains("channel_id") ? source() : nullptr;
             if (views.size() >= 32) { fail("3D 页面数量已达 32，请先在 GUI 关闭不需要的页面"); }
-            auto pane = guard->newInstrument("model3d", channel, false);
+            auto pane = guard->newInstrument("model3d", channel, guard->isVisible());
             if (!pane) { fail("无法创建 3D 页面"); }
             pane->setChannel(channel);
             pane->instrument->model->loadFile(path);

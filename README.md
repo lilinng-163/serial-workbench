@@ -62,7 +62,7 @@ Screenshots are captured from the application using generated example data and l
 
 **[Download the latest release →](https://github.com/lilinng-163/serial-workbench/releases/latest)**
 
-v0.15.47 fixes Antigravity’s shared MCP and skill paths and handles empty MCP configuration files. [Release notes](docs/releases/0.15.47.md).
+v0.15.48 simplifies MCP tool discovery and shows new 3D model and OpenOCD tabs in the desktop workbench. [Release notes](docs/releases/0.15.48.md).
 
 | Package | Use it when… |
 | --- | --- |
@@ -230,7 +230,7 @@ The application provides **25 client adapters** and **16 skill installation targ
 | Goal | MCP tools |
 | --- | --- |
 | Discover sessions and ports | `get_status`, `list_connections`, `list_serial_ports` |
-| Read raw device output | `read_events` for one connection; `read_all_events` for mixed history |
+| Read raw device output | `read_events` with the exact `channel_id` for the connection you want |
 | Inspect parsed data | `read_waveform`, `read_structured`, `read_script_results` |
 | Search the GUI display | `list_search_views`, `search_logs` — share case, whole-word, regex and logical switches with the GUI |
 | Inspect or test a serial parser | `get_frame_script`, `validate_frame_script` — offline tests leave the live parser unchanged |
